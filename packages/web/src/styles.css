@@ -139,8 +139,48 @@ body {
 .msg-body th, .msg-body td { border: 1px solid var(--border); padding: 6px 10px; font-size: 13px; text-align: left; }
 .msg-body th { background: var(--bg); font-weight: 600; }
 
-.cursor-blink { animation: blink 1s infinite; }
-@keyframes blink { 50% { opacity: 0; } }
+/* ── 流式光标（细线，非黑方块） ── */
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--accent);
+  border-radius: 1px;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: cursor-fade 1s ease-in-out infinite;
+}
+@keyframes cursor-fade {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ── 等待指示器（首字符延迟期间的三点跳动） ── */
+.msg-thinking-dots {
+  display: flex;
+  gap: 5px;
+  padding: 8px 4px;
+  align-items: center;
+}
+.thinking-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: thinking-bounce 1.4s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinking-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+
+/* SVG spinner（替代 Unicode 字符） */
+.ico-spinner {
+  animation: spin 1s linear infinite;
+}
 
 /* ── Tool 行内摘要（Codex 风格：无边框，图标+文字） ── */
 .msg-tools { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
@@ -165,7 +205,29 @@ body {
 }
 .tool-exp { color: var(--text-light); font-size: 9px; margin-left: 2px; }
 
-.tool-running .tool-ico { color: var(--accent); animation: spin 1.2s linear infinite; }
+/* ── Skill 加载行（闪电风格，暖色强调） ── */
+.msg-skills { display: flex; flex-direction: column; gap: 2px; margin: 2px 0; }
+.skill-row {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 2px 6px 2px 0; border-radius: 4px;
+  font-size: 12.5px; transition: background 0.1s;
+}
+.skill-row-ico {
+  font-size: 11px; flex-shrink: 0; width: 14px; text-align: center;
+  color: var(--accent); line-height: 1;
+}
+.skill-row-text {
+  font-family: "JetBrains Mono", monospace; font-size: 12px;
+  color: var(--text-light);
+}
+.skill-row-text strong {
+  color: var(--accent); font-weight: 600;
+}
+.skill-row-done {
+  font-size: 10px; color: var(--success); margin-left: 3px;
+}
+
+.tool-running .tool-ico { color: var(--accent); }
 .tool-error .tool-ico { color: #ef4444; }
 .tool-error .tool-verb-text { color: #ef4444; }
 .tool-thinking .tool-verb-text { color: #8B7B68; }
@@ -1704,6 +1766,36 @@ body {
   white-space: nowrap;
 }
 .token-stats strong { color: var(--text); }
+
+/* ── Skill 实时使用通知 ── */
+.skill-active-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(90deg, #F5F0EA, #FFF8F0);
+  border: 1px solid #E8D5C4;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #6B5D4F;
+  animation: skill-slide-in 0.3s ease;
+}
+@keyframes skill-slide-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.skill-active-icon { font-size: 14px; }
+.skill-active-text strong { color: #C96342; }
+.skill-active-pulse {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #C96342;
+  animation: skill-pulse 1.2s ease infinite;
+}
+@keyframes skill-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+}
 
 /* ============================================================
    任务摘要卡（TaskSummaryCard）— Codex 风格结构化状态

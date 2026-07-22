@@ -9,6 +9,12 @@ export interface Message {
   isStreaming?: boolean;
   thinking?: string;        // 思考过程
   tools?: ToolExecution[];  // 该消息关联的工具调用
+  skillsUsed?: SkillUsage[]; // 该消息中加载的 Skills
+}
+
+export interface SkillUsage {
+  name: string;
+  path: string;
 }
 
 export interface ToolExecution {
@@ -55,10 +61,11 @@ interface SessionChatState {
   skillsNotified: boolean;
   modelInfo: ModelInfo | null;
   usage: UsageInfo | null;
+  activeSkill: { name: string; path: string } | null;
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
@@ -73,6 +80,7 @@ interface ChatStore {
   loadMessages: (id: string, messages: Message[]) => void;
   clearSession: (id: string) => void;
   setUsage: (id: string, usage: UsageInfo) => void;
+  setActiveSkill: (id: string, skill: { name: string; path: string } | null) => void;
 
   addUserMessage: (id: string, text: string) => void;
   startAssistantMessage: (id: string) => void;
@@ -81,6 +89,7 @@ interface ChatStore {
   finishAssistantMessage: (id: string) => void;
   addToolStart: (id: string, exec: Partial<ToolExecution> & { toolCallId: string }) => void;
   updateToolEnd: (id: string, toolCallId: string, result: unknown, isError: boolean) => void;
+  addSkillUsed: (id: string, skill: SkillUsage) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -100,15 +109,27 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   removeSession: (id) => set((s) => { const n = { ...s.sessions }; delete n[id]; return { sessions: n }; }),
 
-  loadMessages: (id, messages) => set((s) => ({
-    sessions: { ...s.sessions, [id]: { ...empty(), messages, agentCreated: s.sessions[id]?.agentCreated || false } },
-  })),
+  loadMessages: (id, messages) => set((s) => {
+    const existing = s.sessions[id];
+    if (!existing) {
+      // 新会话：初始化完整状态
+      return { sessions: { ...s.sessions, [id]: { ...empty(), messages } } };
+    }
+    // 已有会话：只更新消息，保留所有运行时状态（isGenerating, skills, modelInfo, usage 等）
+    // 这保证切换会话时不会丢失正在进行的流式状态
+    return { sessions: { ...s.sessions, [id]: { ...existing, messages } } };
+  }),
 
   clearSession: (id) => set((s) => ({ sessions: { ...s.sessions, [id]: empty() } })),
 
   setUsage: (id, usage) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, usage } } };
+  }),
+
+  setActiveSkill: (id, skill) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, activeSkill: skill } } };
   }),
 
   addUserMessage: (id, text) => set((s) => {
@@ -162,7 +183,7 @@ export const useChatStore = create<ChatStore>((set) => ({
         msgs.pop();
       }
     }
-    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs, isGenerating: false } } };
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs, isGenerating: false, activeSkill: null } } };
   }),
 
   addToolStart: (id, exec) => set((s) => {
@@ -179,6 +200,19 @@ export const useChatStore = create<ChatStore>((set) => ({
     const last = msgs[msgs.length - 1];
     if (last?.role === "assistant" && last.tools) {
       msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === toolCallId ? { ...t, output: result, isError, status: isError ? "error" : "done" } : t) };
+    }
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+  }),
+
+  addSkillUsed: (id, skill) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    const msgs = [...sess.messages]; const last = msgs[msgs.length - 1];
+    if (last?.role === "assistant") {
+      const existing = last.skillsUsed || [];
+      // 去重：同名的 skill 不重复添加
+      if (!existing.some(sk => sk.name === skill.name)) {
+        msgs[msgs.length - 1] = { ...last, skillsUsed: [...existing, skill] };
+      }
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),

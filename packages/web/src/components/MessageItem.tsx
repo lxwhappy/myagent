@@ -4,7 +4,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import type { Message, ToolExecution } from "../stores/chat";
+import type { Message, ToolExecution, SkillUsage } from "../stores/chat";
 import { MermaidBlock } from "./MermaidBlock";
 import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
@@ -28,12 +28,30 @@ export function MessageItem({ msg }: { msg: Message }) {
         <ThinkingRow thinking={msg.thinking} streaming={msg.isStreaming} />
       )}
 
+      {/* Skill 加载 — 每个一行，闪电图标 */}
+      {msg.skillsUsed && msg.skillsUsed.length > 0 && (
+        <div className="msg-skills">
+          {msg.skillsUsed.map(sk => (
+            <SkillRow key={sk.name} skill={sk} streaming={msg.isStreaming} />
+          ))}
+        </div>
+      )}
+
       {/* 工具调用 — 每个一行，无边框 */}
       {msg.tools && msg.tools.length > 0 && (
         <div className="msg-tools">
           {msg.tools.map(t => (
             <ToolRow key={t.toolCallId} tool={t} />
           ))}
+        </div>
+      )}
+
+      {/* 等待指示器：流式开始但还没有任何内容（首字符延迟期间） */}
+      {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
+        <div className="msg-thinking-dots">
+          <span className="thinking-dot" />
+          <span className="thinking-dot" />
+          <span className="thinking-dot" />
         </div>
       )}
 
@@ -60,7 +78,7 @@ export function MessageItem({ msg }: { msg: Message }) {
         >
           {msg.content || ""}
         </ReactMarkdown>
-        {msg.isStreaming && <span className="cursor-blink">▊</span>}
+        {msg.isStreaming && <span className="stream-cursor" />}
       </div>
 
       {/* 任务摘要卡 — 仅在有工具调用且流结束后显示 */}
@@ -81,7 +99,22 @@ function ToolRow({ tool }: { tool: ToolExecution }) {
   return (
     <div className={`tool-row${running ? " tool-running" : ""}${errored ? " tool-error" : ""}`}>
       <button className="tool-row-head" onClick={() => setOpen(!open)}>
-        <span className="tool-ico">{running ? "◐" : errored ? "✕" : "✓"}</span>
+        <span className="tool-ico">
+          {running ? (
+            <svg className="ico-spinner" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" opacity="0.25" />
+              <path d="M6 1.5A4.5 4.5 0 1 1 1.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          ) : errored ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </span>
         <span className="tool-summary-text">
           <span className="tool-verb-text">{verbForTool(tool.tool)}</span>
           {summary && <span className="tool-arg"> {summary}</span>}
@@ -108,19 +141,58 @@ function ToolRow({ tool }: { tool: ToolExecution }) {
   );
 }
 
-// ── 思考行：图标 + "thinking"，点击展开 ──
+// ── 思考行：SVG spinner + "thinking"，点击展开 ──
 function ThinkingRow({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="tool-row tool-thinking">
       <button className="tool-row-head" onClick={() => setOpen(!open)}>
-        <span className="tool-ico">{streaming ? "◐" : "✓"}</span>
+        <span className="tool-ico">
+          {streaming ? (
+            <svg className="ico-spinner" width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" opacity="0.25" />
+              <path d="M6 1.5A4.5 4.5 0 1 1 1.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </span>
         <span className="tool-summary-text">
           <span className="tool-verb-text">thinking</span>
         </span>
         {open && <span className="tool-exp">▾</span>}
       </button>
       {open && <pre className="tool-row-thinking-body">{thinking}</pre>}
+    </div>
+  );
+}
+
+// ── Skill 加载行：闪电图标 + skill 名称 ──
+function SkillRow({ skill, streaming }: { skill: SkillUsage; streaming?: boolean }) {
+  return (
+    <div className="skill-row">
+      <span className="skill-row-ico">
+        {streaming ? (
+          <svg className="ico-spinner" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" opacity="0.25" />
+            <path d="M6 1.5A4.5 4.5 0 1 1 1.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M7 1L3 7H6L5 11L9 5H6L7 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15" />
+          </svg>
+        )}
+      </span>
+      <span className="skill-row-text">
+        加载 Skill <strong>{skill.name}</strong>
+      </span>
+      {!streaming && (
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ color: "var(--success)" }}>
+          <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
     </div>
   );
 }

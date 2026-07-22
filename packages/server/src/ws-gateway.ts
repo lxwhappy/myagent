@@ -32,11 +32,19 @@ export function setupWSGateway(app: FastifyInstance) {
             let agent = conn.getAgent(chatSessionId);
             // Agent 不存在时自动创建（处理 server 重启/WS 重连等场景）
             if (!agent) {
+              console.log(`[ws] auto-creating agent for ${chatSessionId?.slice(0, 8)}`);
               await conn.createAgent(chatSessionId, { cwd: payload.cwd, provider: payload.provider, model: payload.model });
               agent = conn.getAgent(chatSessionId);
             }
             if (!agent) { socket.send(JSON.stringify({ type: "error", chatSessionId, payload: { message: "Failed to create agent" } })); return; }
-            await agent.prompt(payload.message, { images: payload.images });
+            console.log(`[ws] prompt from ${chatSessionId?.slice(0, 8)}: ${String(payload.message).slice(0, 60)}`);
+            try {
+              await agent.prompt(payload.message, { images: payload.images });
+              console.log(`[ws] prompt completed for ${chatSessionId?.slice(0, 8)}`);
+            } catch (err: any) {
+              console.error(`[ws] prompt error for ${chatSessionId?.slice(0, 8)}:`, err?.message);
+              socket.send(JSON.stringify({ type: "error", chatSessionId, payload: { message: `Agent error: ${err?.message ?? "Unknown"}` } }));
+            }
             break;
           }
 

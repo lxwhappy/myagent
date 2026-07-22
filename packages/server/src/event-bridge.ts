@@ -56,13 +56,26 @@ export class EventBridge {
           break;
         }
 
-        case "tool_execution_start":
+        case "tool_execution_start": {
+          const toolName = (event as any).toolName;
+          const args = (event as any).args;
+          // 检测 skill 使用：read 工具读取 SKILL.md 文件
+          if (toolName === "read" && args) {
+            const filePath = typeof args === "string" ? args : (args.path || args.filePath || "");
+            if (typeof filePath === "string" && /SKILL\.md$/i.test(filePath)) {
+              // 提取 skill 名称（路径最后一级目录名）
+              const parts = filePath.replace(/\/SKILL\.md$/i, "").split("/");
+              const skillName = parts[parts.length - 1];
+              send("skill_used", { name: skillName, path: filePath });
+            }
+          }
           send("tool_execution_start", {
             toolCallId: (event as any).toolCallId,
-            tool: (event as any).toolName,
-            input: (event as any).args,
+            tool: toolName,
+            input: args,
           });
           break;
+        }
         case "tool_execution_update":
           send("tool_execution_update", {
             toolCallId: (event as any).toolCallId,

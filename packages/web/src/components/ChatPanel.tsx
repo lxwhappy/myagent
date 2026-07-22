@@ -6,7 +6,7 @@ import { useWorkspaceStore } from "../stores/workspace";
 import { MessageItem } from "./MessageItem";
 
 export function ChatPanel() {
-  const { messages, connected, skills, skillsNotified: storeNotified, modelInfo, usage } = useChat();
+  const { messages, connected, skills, skillsNotified: storeNotified, modelInfo, usage, activeSkill } = useChat();
   const wsStore = useWorkspaceStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [dismissedSkills, setDismissedSkills] = useState(false);
@@ -175,6 +175,15 @@ export function ChatPanel() {
               </div>
               <button className="skills-dismiss" onClick={() => setDismissedSkills(true)}>✕</button>
             </div>
+          </div>
+        )}
+
+        {/* Skill 实时使用通知 */}
+        {activeSkill && (
+          <div className="skill-active-notice">
+            <span className="skill-active-pulse" />
+            <span className="skill-active-icon">📖</span>
+            <span className="skill-active-text">正在加载 Skill: <strong>{activeSkill.name}</strong></span>
           </div>
         )}
 

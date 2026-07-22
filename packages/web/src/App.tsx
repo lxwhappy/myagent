@@ -26,9 +26,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/workspaces").then(r => r.json()).then(d => {
-      wsStore.setWorkspaces(d.workspaces || []);
-    });
+    fetch("/api/workspaces").then(r => r.json()).then(async (d) => {
+      const wss = d.workspaces || [];
+      wsStore.setWorkspaces(wss);
+      // 首次打开：自动选中第一个工作空间 + 加载/创建会话
+      if (wss.length > 0 && !useWorkspaceStore.getState().activeId) {
+        const first = wss[0];
+        wsStore.setActive(first.id);
+        wsStore.toggleWsExpanded(first.id);
+        // 加载该工作空间的会话列表
+        await sessions.loadSessions(first.id);
+        const wsSessions = useWorkspaceStore.getState().sessionsByWs[first.id] || [];
+        if (wsSessions.length > 0) {
+          // 选中最近的会话
+          const recent = wsSessions[0];
+          wsStore.setActiveSession(recent.id);
+          loadSession(recent.id, recent.id);
+        } else {
+          // 没有会话则自动创建一个
+          const chatSession = await sessions.createSession(first.id);
+          createChatSession(chatSession.id, first.path);
+        }
+      }
+    }).catch(e => console.error("Failed to load workspaces:", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectWorkspace = async (wsId: string) => {
