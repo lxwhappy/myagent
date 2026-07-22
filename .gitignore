@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Build outputs
+*.tsbuildinfo
+
+# Data (内存存储，不需要提交)
+data/
+
+# Output files
+output/
