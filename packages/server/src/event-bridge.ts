@@ -1,12 +1,14 @@
-import type { WebSocket } from "ws";
+// event-bridge.ts — Agent 事件 → event-bus 桥接
+//
+// 将 AgentSession 的事件转换为前端可用的格式，通过 event-bus 广播。
+
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { emit } from "./event-bus.js";
 
 export class EventBridge {
-  bind(chatSessionId: string, session: AgentSession, ws: WebSocket): () => void {
+  bind(chatSessionId: string, session: AgentSession): () => void {
     const send = (type: string, payload?: unknown) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ type, chatSessionId, payload, ts: Date.now() }));
-      }
+      emit({ type, chatSessionId, payload, ts: Date.now() });
     };
 
     const sendUsage = () => {
@@ -27,43 +29,33 @@ export class EventBridge {
             percent: ctx.percent,
           } : null,
         });
-      } catch (e) {
-        // 忽略 stats 获取失败
-      }
+      } catch {}
     };
 
     const handler = (event: AgentSessionEvent) => {
       switch (event.type) {
         case "agent_start": send("agent_start"); break;
         case "agent_end": send("agent_end"); sendUsage(); break;
-        case "message_start": break; // 忽略，agent_start 已创建消息
-        case "message_end": break;   // 忽略，agent_end 会 finish
+        case "message_start": break;
+        case "message_end": break;
 
         case "message_update": {
           const ae = (event as any).assistantMessageEvent;
           if (!ae) break;
-
-          // 只处理 text_delta — 真正的增量文本
           if (ae.type === "text_delta" && typeof ae.delta === "string") {
             send("message_update", { delta: ae.delta });
-          }
-          // thinking_delta — 思考过程增量
-          else if (ae.type === "thinking_delta" && typeof ae.delta === "string") {
+          } else if (ae.type === "thinking_delta" && typeof ae.delta === "string") {
             send("thinking_delta", { delta: ae.delta });
           }
-          // toolcall 事件全部忽略（不混入正文）
-          // text_start/text_end/thinking_start/thinking_end/toolcall_* 全部忽略
           break;
         }
 
         case "tool_execution_start": {
           const toolName = (event as any).toolName;
           const args = (event as any).args;
-          // 检测 skill 使用：read 工具读取 SKILL.md 文件
           if (toolName === "read" && args) {
             const filePath = typeof args === "string" ? args : (args.path || args.filePath || "");
             if (typeof filePath === "string" && /SKILL\.md$/i.test(filePath)) {
-              // 提取 skill 名称（路径最后一级目录名）
               const parts = filePath.replace(/\/SKILL\.md$/i, "").split("/");
               const skillName = parts[parts.length - 1];
               send("skill_used", { name: skillName, path: filePath });

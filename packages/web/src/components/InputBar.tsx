@@ -1,12 +1,19 @@
-// components/InputBar.tsx — 输入框 + 历史导航(↑↓) + 斜线 Skills 选择器
+// components/InputBar.tsx — 输入框 + 历史导航(↑↓) + Skills 选择器 + Draft 持久化 + 图片上传
 
-import { useRef, useState, useEffect, useMemo, type KeyboardEvent } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback, type KeyboardEvent } from "react";
 import { useChat } from "../hooks/useChat";
 import { useChatStore, type SkillInfo } from "../stores/chat";
+import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
 
 const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
 const MAX_HISTORY = 50;
+
+export interface AttachedImage {
+  data: string;    // base64 (no prefix)
+  mimeType: string;
+  previewUrl: string;
+}
 
 // ── 输入历史管理（localStorage 持久化）──
 function loadHistory(): string[] {
@@ -22,41 +29,140 @@ function saveHistory(items: string[]) {
 
 function addToHistory(text: string) {
   const items = loadHistory();
-  // 去重：如果最后一条相同就不加
   if (items[0] === text) return;
-  // 移除已有的相同条目
   const filtered = items.filter(t => t !== text);
   filtered.unshift(text);
-  const trimmed = filtered.slice(0, MAX_HISTORY);
-  saveHistory(trimmed);
+  saveHistory(filtered.slice(0, MAX_HISTORY));
+}
+
+function imageToBase64(file: File): Promise<AttachedImage> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1];
+      resolve({ data: base64, mimeType: file.type, previewUrl: URL.createObjectURL(file) });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export function InputBar() {
-  const { sendMessage, abort, isGenerating, connected, skills } = useChat();
-  const [text, setText] = useState("");
+  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId } = useChat();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Draft 持久化：会话切换时恢复草稿 ──
+  const draftKey = activeChatSessionId ?? "__default";
+  const [text, setText] = useState(() => getDraft(draftKey));
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+
+  // 会话切换时加载对应 draft
+  useEffect(() => {
+    setText(getDraft(draftKey));
+    setAttachedImages([]);
+    requestAnimationFrame(() => {
+      if (taRef.current) {
+        taRef.current.style.height = "auto";
+        const next = Math.min(taRef.current.scrollHeight, MAX_HEIGHT);
+        taRef.current.style.height = `${next}px`;
+      }
+    });
+  }, [draftKey]);
+
+  // 输入变化时自动保存 draft
+  useEffect(() => {
+    setDraft(draftKey, text);
+  }, [draftKey, text]);
 
   // ── 历史导航状态 ──
   const historyRef = useRef<string[]>(loadHistory());
-  const histIndexRef = useRef<number>(-1); // -1 = 不在浏览历史模式
-  const draftRef = useRef<string>(""); // 浏览历史前的草稿
+  const histIndexRef = useRef<number>(-1);
+  const draftBeforeHistRef = useRef<string>("");
 
   // ── Skills 选择器状态 ──
   const [skillPicker, setSkillPicker] = useState<{
     visible: boolean;
-    query: string;     // / 后面的搜索词
-    startIndex: number; // / 在文本中的位置
-    activeIndex: number; // 高亮项
+    query: string;
+    startIndex: number;
+    activeIndex: number;
   }>({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
 
+  // ── 图片处理 ──
+  const processImageFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    const newImages = await Promise.all(imageFiles.map(imageToBase64));
+    setAttachedImages(prev => [...prev, ...newImages]);
+  }, []);
+
+  const removeImage = useCallback((index: number) => {
+    setAttachedImages(prev => {
+      const next = [...prev];
+      const [removed] = next.splice(index, 1);
+      if (removed && removed.previewUrl.startsWith("blob:")) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
+  }, []);
+
+  // ── 粘贴图片 ──
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData.files);
+    if (files.length > 0) {
+      e.preventDefault();
+      processImageFiles(files);
+    }
+  }, [processImageFiles]);
+
+  // ── 拖拽图片 ──
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragCounterRef.current++;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    processImageFiles(files);
+  }, [processImageFiles]);
+
   const handleSend = () => {
-    if (!text.trim() || isGenerating) return;
+    if ((!text.trim() && attachedImages.length === 0) || isGenerating) return;
     addToHistory(text.trim());
     historyRef.current = loadHistory();
     histIndexRef.current = -1;
-    sendMessage(text);
+    // 发送时附带图片
+    const images = attachedImages.length > 0
+      ? attachedImages.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }))
+      : undefined;
+    sendMessage(text, images);
+    // 清理
     setText("");
+    clearDraft(draftKey);
+    attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); });
+    setAttachedImages([]);
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
     if (taRef.current) taRef.current.style.height = "auto";
   };
@@ -78,38 +184,27 @@ export function InputBar() {
     const matched = q
       ? all.filter(s => s.name.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q))
       : all;
-    return matched.slice(0, 8); // 最多显示 8 个
+    return matched.slice(0, 8);
   }, [skillPicker.visible, skillPicker.query, skills]);
 
-  // ── 检测 / 触发 skills 选择器 ──
   const checkSlashTrigger = (value: string, cursorPos: number) => {
-    // 找到 cursor 前面最近的 / 且 / 前面是行首或空格
     const before = value.slice(0, cursorPos);
     const slashMatch = before.match(/(?:^|\s)\/(\S*)$/);
     if (slashMatch) {
-      const slashIndex = before.lastIndexOf("/"); // 精确找到那个 /
-      setSkillPicker({
-        visible: true,
-        query: slashMatch[1],
-        startIndex: slashIndex,
-        activeIndex: 0,
-      });
+      const slashIndex = before.lastIndexOf("/");
+      setSkillPicker({ visible: true, query: slashMatch[1], startIndex: slashIndex, activeIndex: 0 });
     } else {
       if (skillPicker.visible) setSkillPicker(prev => ({ ...prev, visible: false }));
     }
   };
 
-  // ── 插入选中的 skill ──
   const insertSkill = (skill: SkillInfo) => {
     const before = text.slice(0, skillPicker.startIndex);
     const after = text.slice(skillPicker.startIndex + 1 + skillPicker.query.length);
-    // 插入格式：/skill-name + 空格
     const insertion = `/${skill.name} `;
     const newText = before + insertion + after;
     setText(newText);
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
-
-    // 聚焦并移动光标到末尾
     requestAnimationFrame(() => {
       const el = taRef.current;
       if (!el) return;
@@ -122,62 +217,30 @@ export function InputBar() {
 
   // ── 键盘处理 ──
   const handleKey = (e: KeyboardEvent) => {
-    // 中文输入法组合中不处理
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
 
-    // ── Skills 选择器激活时优先处理 ──
     if (skillPicker.visible && filteredSkills.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSkillPicker(prev => ({ ...prev, activeIndex: (prev.activeIndex + 1) % filteredSkills.length }));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSkillPicker(prev => ({ ...prev, activeIndex: (prev.activeIndex - 1 + filteredSkills.length) % filteredSkills.length }));
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        insertSkill(filteredSkills[skillPicker.activeIndex]);
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
-        return;
-      }
+      if (e.key === "ArrowDown") { e.preventDefault(); setSkillPicker(prev => ({ ...prev, activeIndex: (prev.activeIndex + 1) % filteredSkills.length })); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setSkillPicker(prev => ({ ...prev, activeIndex: (prev.activeIndex - 1 + filteredSkills.length) % filteredSkills.length })); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertSkill(filteredSkills[skillPicker.activeIndex]); return; }
+      if (e.key === "Escape") { e.preventDefault(); setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 }); return; }
     }
 
-    // ── 历史导航（↑↓），仅当 skills 选择器未激活时 ──
     if (e.key === "ArrowUp" && !e.shiftKey) {
       const history = historyRef.current;
       if (history.length === 0) return;
       const el = taRef.current;
       if (!el) return;
-
-      // 仅在光标位于最顶行时触发历史
       const cursorAtStart = el.selectionStart === 0 && el.selectionEnd === 0;
-      // 或者 scrollHeight === clientHeight（单行）时总是触发
       const singleLine = el.scrollHeight <= el.clientHeight;
-
       if (cursorAtStart || singleLine) {
         e.preventDefault();
-        // 第一次按↑：保存当前草稿，跳到最新
-        if (histIndexRef.current === -1) {
-          draftRef.current = text;
-          histIndexRef.current = 0;
-        } else if (histIndexRef.current < history.length - 1) {
-          histIndexRef.current++;
-        } else {
-          return; // 已到最老
-        }
+        if (histIndexRef.current === -1) { draftBeforeHistRef.current = text; histIndexRef.current = 0; }
+        else if (histIndexRef.current < history.length - 1) histIndexRef.current++;
+        else return;
         const item = history[histIndexRef.current];
         setText(item);
-        requestAnimationFrame(() => {
-          el.setSelectionRange(item.length, item.length);
-          autoGrow();
-        });
+        requestAnimationFrame(() => { el.setSelectionRange(item.length, item.length); autoGrow(); });
         return;
       }
     }
@@ -185,66 +248,37 @@ export function InputBar() {
     if (e.key === "ArrowDown" && !e.shiftKey) {
       const el = taRef.current;
       if (!el) return;
-      if (histIndexRef.current === -1) return; // 不在历史模式
-
+      if (histIndexRef.current === -1) return;
       const fullHeight = el.scrollHeight > el.clientHeight;
-      // 多行时，仅光标在最后一行才触发
-      if (fullHeight) {
-        // 简单判断：光标在末尾附近
-        if (el.selectionStart < text.length - 1) return;
-      }
-
+      if (fullHeight && el.selectionStart < text.length - 1) return;
       e.preventDefault();
       const history = historyRef.current;
       if (histIndexRef.current > 0) {
         histIndexRef.current--;
         const item = history[histIndexRef.current];
         setText(item);
-        requestAnimationFrame(() => {
-          el.setSelectionRange(item.length, item.length);
-          autoGrow();
-        });
+        requestAnimationFrame(() => { el.setSelectionRange(item.length, item.length); autoGrow(); });
       } else {
-        // 回到草稿
         histIndexRef.current = -1;
-        setText(draftRef.current);
-        requestAnimationFrame(() => {
-          const len = draftRef.current.length;
-          el.setSelectionRange(len, len);
-          autoGrow();
-        });
+        setText(draftBeforeHistRef.current);
+        requestAnimationFrame(() => { el.setSelectionRange(draftBeforeHistRef.current.length, draftBeforeHistRef.current.length); autoGrow(); });
       }
       return;
     }
 
-    // ── Enter 发送 ──
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-      return;
-    }
-
-    // 其他按键退出历史模式
-    if (histIndexRef.current !== -1 && e.key.length === 1) {
-      histIndexRef.current = -1;
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); return; }
+    if (histIndexRef.current !== -1 && e.key.length === 1) histIndexRef.current = -1;
   };
 
-  // ── 输入变化时检查 / 触发 ──
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setText(val);
     autoGrow();
-    // 退出历史浏览
-    if (histIndexRef.current !== -1) {
-      histIndexRef.current = -1;
-    }
-    // 检查 / 触发
+    if (histIndexRef.current !== -1) histIndexRef.current = -1;
     const cursorPos = e.target.selectionStart ?? val.length;
     checkSlashTrigger(val, cursorPos);
   };
 
-  // ── 点击外部关闭 skills 选择器 ──
   useEffect(() => {
     if (!skillPicker.visible) return;
     const handler = (e: MouseEvent) => {
@@ -256,26 +290,55 @@ export function InputBar() {
     return () => document.removeEventListener("mousedown", handler);
   }, [skillPicker.visible]);
 
-  // 当 filteredSkills 变化时重置 activeIndex
   useEffect(() => {
-    if (skillPicker.visible) {
-      setSkillPicker(prev => ({ ...prev, activeIndex: 0 }));
-    }
+    if (skillPicker.visible) setSkillPicker(prev => ({ ...prev, activeIndex: 0 }));
   }, [skillPicker.query]);
+
+  // 组件卸载时清理图片 preview URLs
+  useEffect(() => {
+    return () => { attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); }); };
+  }, []);
 
   return (
     <div className="input-bar">
-      <div className="input-wrap" ref={wrapRef}>
+      <div
+        className={`input-wrap${isDragging ? " input-dragging" : ""}`}
+        ref={wrapRef}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* 图片预览栏 */}
+        {attachedImages.length > 0 && (
+          <div className="image-preview-bar">
+            {attachedImages.map((img, i) => (
+              <div key={i} className="image-preview-item">
+                <img src={img.previewUrl} alt="" />
+                <button className="image-preview-remove" onClick={() => removeImage(i)}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={taRef}
           className="input-textarea"
           value={text}
           onChange={handleChange}
           onKeyDown={handleKey}
-          placeholder={connected ? "给 MyAgent 发消息…  (↑ 历史记录, / 引用 Skills)" : "正在连接…"}
+          onPaste={handlePaste}
+          placeholder={connected ? "给 MyAgent 发消息…  (↑ 历史, / Skills, 拖拽图片)" : "正在连接…"}
           disabled={!connected}
           rows={1}
         />
+
+        {/* 拖拽提示 */}
+        {isDragging && (
+          <div className="input-drag-overlay">
+            <span>松开以添加图片</span>
+          </div>
+        )}
 
         {/* Skills 选择器弹出层 */}
         {skillPicker.visible && filteredSkills.length > 0 && (
@@ -294,56 +357,60 @@ export function InputBar() {
                 <span className="skill-picker-icon">⚡</span>
                 <div className="skill-picker-text">
                   <span className="skill-picker-name">{skill.name}</span>
-                  {skill.description && (
-                    <span className="skill-picker-desc">{skill.description}</span>
-                  )}
+                  {skill.description && <span className="skill-picker-desc">{skill.description}</span>}
                 </div>
               </button>
             ))}
           </div>
         )}
 
-        {/* Skills 选择器空结果 */}
         {skillPicker.visible && filteredSkills.length === 0 && (
           <div className="skill-picker">
             <div className="skill-picker-empty">没有匹配的 Skill</div>
           </div>
         )}
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => { if (e.target.files) processImageFiles(Array.from(e.target.files)); e.target.value = ""; }}
+        />
+
         {isGenerating ? (
-          <button
-            className="input-abort"
-            onClick={abort}
-            type="button"
-            aria-label="停止"
-          >
+          <button className="input-abort" onClick={abort} type="button" aria-label="停止">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <rect x="3" y="3" width="10" height="10" rx="1.5" />
             </svg>
           </button>
         ) : (
-          <button
-            className="input-send"
-            onClick={handleSend}
-            disabled={!text.trim() || !connected}
-            type="button"
-            aria-label="发送"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          <div className="input-actions">
+            <button
+              className="input-attach"
+              onClick={() => fileInputRef.current?.click()}
+              type="button"
+              aria-label="添加图片"
+              title="添加图片"
             >
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-          </button>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+            <button
+              className="input-send"
+              onClick={handleSend}
+              disabled={(!text.trim() && attachedImages.length === 0) || !connected}
+              type="button"
+              aria-label="发送"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
     </div>

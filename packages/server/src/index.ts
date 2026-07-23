@@ -1,14 +1,11 @@
-// ============================================================
 // index.ts — 服务端入口
 //
-// 启动 Fastify HTTP + WebSocket 服务
-// ============================================================
+// 启动 Fastify HTTP + SSE 服务
 
 import Fastify from "fastify";
-import websocket from "@fastify/websocket";
 import cors from "@fastify/cors";
 import { config } from "./config.js";
-import { setupWSGateway } from "./ws-gateway.js";
+import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";
 import { setupSettingsRoutes } from "./settings-routes.js";
 import { mcpManager } from "./mcp-manager.js";
@@ -18,10 +15,9 @@ async function main() {
 
   // 插件
   await app.register(cors, { origin: config.corsOrigin });
-  await app.register(websocket);
 
-  // WebSocket 网关
-  setupWSGateway(app);
+  // SSE + REST API
+  setupSSEGateway(app);
 
   // Workspace 文件浏览 API
   setupWorkspaceRoutes(app);
@@ -36,8 +32,8 @@ async function main() {
   try {
     await app.listen({ port: config.port, host: config.host });
     console.log(`\n  MyAgent Server running at http://${config.host}:${config.port}`);
-    console.log(`  WebSocket:   ws://${config.host}:${config.port}/ws`);
-    console.log(`  Health:      http://${config.host}:${config.port}/health\n`);
+    console.log(`  SSE:          http://${config.host}:${config.port}/api/events`);
+    console.log(`  Health:       http://${config.host}:${config.port}/health\n`);
 
     // 启动后异步连接 MCP servers（不阻塞启动）
     mcpManager.connectAll().then(({ connected, failed }) => {

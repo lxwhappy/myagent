@@ -6,12 +6,18 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",  // 允许 Tailscale/LAN 访问
     proxy: {
-      "/ws": {
-        target: "ws://localhost:3000",
-        ws: true,
-      },
       "/api": {
         target: "http://localhost:3000",
+        // SSE 需要禁用缓冲
+        configure: (proxy) => {
+          proxy.on("proxyRes", (proxyRes) => {
+            // 对 /api/events 的 SSE 响应不缓冲
+            if (proxyRes.headers["content-type"]?.includes("text/event-stream")) {
+              proxyRes.headers["cache-control"] = "no-cache";
+              proxyRes.headers["x-accel-buffering"] = "no";
+            }
+          });
+        },
       },
     },
   },

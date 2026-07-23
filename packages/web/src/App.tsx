@@ -8,7 +8,7 @@ import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
 import { useSessions } from "./hooks/useSessions";
-import { wsClient } from "./services/ws-client";
+import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
 import "./styles.css";
 
@@ -83,7 +83,7 @@ export default function App() {
   const handleDeleteSession = async (e: React.MouseEvent, wsId: string, sid: string) => {
     e.stopPropagation();
     await sessions.deleteSession(wsId, sid);
-    wsClient.send({ type: "destroy_agent", chatSessionId: sid });
+    sseClient.destroyAgent(sid);
   };
 
   const handleSelectDir = async (path: string, name: string) => {

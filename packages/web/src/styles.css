@@ -384,6 +384,41 @@ body {
 .input-abort { background: #ef4444; color: #fff; }
 .input-abort:hover { opacity: 0.85; }
 
+/* ── 输入框：附件按钮 + 图片预览 ── */
+.input-actions { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px; flex-shrink: 0; }
+.input-attach {
+  width: 28px; height: 28px; border: none; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+  background: transparent; color: var(--text-light);
+}
+.input-attach:hover { background: var(--bg-hover); color: var(--text); }
+
+.image-preview-bar {
+  display: flex; gap: 6px; padding: 6px 6px 0 6px; flex-wrap: wrap;
+}
+.image-preview-item {
+  position: relative; width: 48px; height: 48px;
+  border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--border);
+}
+.image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+.image-preview-remove {
+  position: absolute; top: 0; right: 0;
+  width: 16px; height: 16px; border: none; border-radius: 0 0 0 4px;
+  background: rgba(0,0,0,0.6); color: #fff; font-size: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.image-preview-remove:hover { background: rgba(239,68,68,0.85); }
+
+.input-dragging { border-color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 5%, var(--bg-panel)); }
+.input-drag-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent); font-size: 14px; font-weight: 500;
+  border-radius: var(--radius); pointer-events: none; z-index: 10;
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 7px; }
 ::-webkit-scrollbar-track { background: transparent; }

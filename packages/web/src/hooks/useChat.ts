@@ -3,8 +3,9 @@
 // 用 requestAnimationFrame 渐进释放，让用户看到平滑的流式效果。
 
 import { useEffect, useCallback } from "react";
-import { wsClient } from "../services/ws-client";
+import { sseClient } from "../services/sse-client";
 import { useChatStore } from "../stores/chat";
+import { playCompletionSound } from "../hooks/useAudio";
 
 let eventsBound = false;
 
@@ -103,9 +104,9 @@ export function useChat() {
   useEffect(() => {
     if (eventsBound) return;
     eventsBound = true;
-    wsClient.connect();
+    sseClient.connect();
 
-    wsClient.onMessage((msg) => {
+    sseClient.onMessage((msg) => {
       const chat = useChatStore.getState();
       (window as any).__chatStore = useChatStore;
       const sid = msg.chatSessionId;
@@ -120,9 +121,14 @@ export function useChat() {
           if (sid) chat.startAssistantMessage(sid);
           break;
 
-        // agent 回合结束：收尾 + 持久化
+        // agent 回合结束：收尾 + 持久化 + 提示音
         case "agent_end":
-          if (sid) { flushAllDeltas(sid); chat.finishAssistantMessage(sid); saveReply(sid); }
+          if (sid) {
+            flushAllDeltas(sid);
+            chat.finishAssistantMessage(sid);
+            saveReply(sid);
+            playCompletionSound();
+          }
           break;
 
         // message_start/end：回合内不建新消息
@@ -183,18 +189,18 @@ export function useChat() {
   const createChatSession = useCallback((chatSessionId: string, cwd?: string) => {
     useChatStore.getState().ensureSession(chatSessionId);
     useChatStore.getState().setActiveChatSession(chatSessionId);
-    wsClient.send({ type: "create_agent", chatSessionId, payload: { cwd } });
+    sseClient.createAgent(chatSessionId, { cwd });
   }, []);
 
   const switchToSession = useCallback((chatSessionId: string) => {
     useChatStore.getState().setActiveChatSession(chatSessionId);
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
+  const sendMessage = useCallback(async (text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>) => {
+    if (!text.trim() && !images?.length) return;
     // 防重复：相同内容在 800ms 内只处理一次（应对输入法/双击等时序竞态）
     const now = Date.now();
-    if (text === lastSentText && now - lastSentTime < 800) {
+    if (text === lastSentText && !images && now - lastSentTime < 800) {
       console.warn("[chat] duplicate send suppressed:", text.slice(0, 30));
       return;
     }
@@ -224,7 +230,7 @@ export function useChat() {
         wsState.setActiveSession(sessionData.id);
         useChatStore.getState().ensureSession(sessionData.id);
         useChatStore.getState().setActiveChatSession(sessionData.id);
-        wsClient.send({ type: "create_agent", chatSessionId: sessionData.id, payload: { cwd: targetWs.path } });
+        sseClient.createAgent(sessionData.id, { cwd: targetWs.path });
         sid = sessionData.id;
         if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
         (window as any).__chatToAppSession[sessionData.id] = sessionData.id;
@@ -252,12 +258,12 @@ export function useChat() {
         ws.updateSession(ws.activeSessionId, { title });
       }
     }
-    wsClient.send({ type: "prompt", chatSessionId: sid!, payload: { message: text } });
+    sseClient.prompt(sid!, text, images);
   }, []);
 
   const abort = useCallback(() => {
     const sid = useChatStore.getState().activeChatSessionId;
-    if (sid) wsClient.send({ type: "abort", chatSessionId: sid });
+    if (sid) sseClient.abort(sid);
   }, []);
 
   const loadSession = useCallback(async (chatSessionId: string, appSessionId: string) => {
@@ -282,7 +288,7 @@ export function useChat() {
       // 重新读取 store（前面的 set 已更新 state，旧 chat 引用是 stale 的）
       const fresh = useChatStore.getState();
       const sess = fresh.sessions[chatSessionId];
-      if (sess && !sess.agentCreated) wsClient.send({ type: "create_agent", chatSessionId, payload: {} });
+      if (sess && !sess.agentCreated) sseClient.createAgent(chatSessionId);
       fresh.setActiveChatSession(chatSessionId);
     } catch (e) { console.error("Failed to load session:", e); }
   }, []);
