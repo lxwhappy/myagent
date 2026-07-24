@@ -1,21 +1,34 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useWorkspace, type FileItem } from "../hooks/useWorkspace";
-import { Splitter } from "./Splitter";
+import { useWorkspace } from "../hooks/useWorkspace";
+import type { FileItem } from "../hooks/workspace-types";
+import { Icon } from "./Icon";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChatStore } from "../stores/chat";
 import { getSessionStats } from "../utils/sessionStats";
+import { useWorkspaceStore } from "../stores/workspace";
 
-export function WorkspaceDrawer() {
+// ════════════════════════════════════════════════════════
+// 侧边栏"文件"Tab：文件树 + 搜索 + 文件/变更切换
+// ════════════════════════════════════════════════════════
+export function SidebarFileTree({ onOpenFile }: { onOpenFile: () => void }) {
   const ws = useWorkspace();
+  const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([""]));
   const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
   const [activeTab, setActiveTab] = useState<"files" | "changes">("files");
-
-  // 切换工作空间时重置全部内部状态
   const prevWsId = useRef<string | null>(ws.activeId);
+
+  // 统一的文件打开逻辑：加载文件内容 + 通知 App 打开右侧面板
+  const handleOpenFile = useCallback((path: string) => {
+    if (activeWs) {
+      ws.openFile(activeWs.id, path);
+      onOpenFile();
+    }
+  }, [activeWs, ws, onOpenFile]);
+
   useEffect(() => {
     if (prevWsId.current !== ws.activeId) {
       prevWsId.current = ws.activeId;
@@ -26,9 +39,6 @@ export function WorkspaceDrawer() {
     }
   }, [ws.activeId]);
 
-  const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
-
-  // 搜索防抖
   useEffect(() => {
     if (!ws.activeId || !ws.searchQuery) { setSearchResults(null); return; }
     const timer = setTimeout(async () => {
@@ -46,115 +56,60 @@ export function WorkspaceDrawer() {
     });
   }, []);
 
-  const handleRemoveWs = async () => {
-    if (!activeWs) return;
-    if (confirm(`删除工作空间 "${activeWs.name}"？（不会删除文件，仅从列表移除）`)) {
-      await ws.removeWorkspace(activeWs.id);
-    }
-  };
+  if (!activeWs) {
+    return <div className="ws-empty-hint">先选择工作空间</div>;
+  }
 
   return (
-    <div className="ws-drawer">
-      {/* ── 顶部工具栏 ── */}
-      <div className="ws-toolbar">
-        <span className="ws-title">📁 {activeWs?.name ?? "工作空间"}</span>
-        <button className="ws-btn-icon" onClick={handleRemoveWs} title="移除工作空间">🗑</button>
-        <button className="ws-btn-icon" onClick={() => ws.toggleDrawer()} title="收起">✕</button>
+    <div className="sidebar-file-panel">
+      {/* Tab: 文件 / 变更 */}
+      <div className="sb-file-tabs">
+        <button className={`sb-file-tab ${activeTab === "files" ? "active" : ""}`} onClick={() => setActiveTab("files")}>
+          <Icon name="i-folder" size={14} /> 文件
+        </button>
+        <button className={`sb-file-tab ${activeTab === "changes" ? "active" : ""}`} onClick={() => setActiveTab("changes")}>
+          <Icon name="i-edit" size={14} /> 变更
+          <ChangesBadge />
+        </button>
       </div>
 
-      {/* ── 主体：预览(左，仅有文件时显示) | 目录树(右) ── */}
-      <div className="ws-body">
-        {/* 文件预览 — 只有选中文件时才显示 */}
-        {ws.currentFile && (
-          <>
-            <div className="ws-preview-section" style={{ width: ws.previewWidth }}>
-              {ws.loading ? (
-                <div className="ws-loading">加载中...</div>
-              ) : (
-                <div className="ws-file-viewer">
-                  <div className="ws-file-header">
-                    <span>{ws.currentFile.path.split("/").pop()}</span>
-                    <span className="ws-file-size">{formatSize(ws.currentFile.size)}</span>
-                  </div>
-                  <div className="ws-file-content">
-                    {ws.currentFile.language === "markdown" ? (
-                      <MarkdownPreview content={ws.currentFile.content} />
-                    ) : (
-                      <SyntaxHighlighter
-                        language={ws.currentFile.language}
-                        style={oneDark}
-                        showLineNumbers
-                        customStyle={{ margin: 0, fontSize: "12px" }}
-                      >
-                        {ws.currentFile.content}
-                      </SyntaxHighlighter>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 中间分隔条：拖拽只调目录树宽度 */}
-            <Splitter onResize={delta => ws.setTreeWidth(ws.treeWidth - delta)} />
-          </>
-        )}
-
-        {/* 目录树（含搜索）— 固定宽度，无预览时占满 */}
-        <div className="ws-tree-section" style={{ width: ws.treeWidth }}>
-          {/* Tab 切换：文件 / 变更 */}
-          <div className="ws-tabs">
-            <button
-              className={`ws-tab ${activeTab === "files" ? "ws-tab-active" : ""}`}
-              onClick={() => setActiveTab("files")}
-            >
-              文件
-            </button>
-            <button
-              className={`ws-tab ${activeTab === "changes" ? "ws-tab-active" : ""}`}
-              onClick={() => setActiveTab("changes")}
-            >
-              变更
-              <ChangesBadge />
-            </button>
-          </div>
-
-          {activeTab === "changes" ? (
-            <ChangesPanel wsId={activeWs?.id} openFile={(p) => activeWs && ws.openFile(activeWs.id, p)} />
-          ) : (
-          <>
-          {/* 搜索框：只在树面板上方 */}
-          <div className="ws-search-bar">
+      {activeTab === "changes" ? (
+        <ChangesPanel wsId={activeWs.id} openFile={handleOpenFile} />
+      ) : (
+        <>
+          {/* 搜索框 */}
+          <div className="sb-file-search">
+            <Icon name="i-search" size={13} className="sb-file-search-icon" />
             <input
               type="text"
-              className="ws-search-input"
-              placeholder="🔍 筛选文件..."
+              placeholder="筛选文件..."
               value={ws.searchQuery}
               onChange={e => ws.setSearchQuery(e.target.value)}
             />
           </div>
 
           {/* 搜索结果 or 目录树 */}
-          <div className="ws-tree-list">
+          <div className="sb-file-list">
             {searchResults ? (
-            <div className="ws-search-results">
-              {searchResults.length === 0 ? (
-                <div className="ws-empty-hint">无匹配文件</div>
-              ) : (
-                searchResults.map(item => (
-                  <div
-                    key={item.path}
-                    className={`tree-item ${ws.currentFile?.path === item.path ? "tree-item-active" : ""}`}
-                    onClick={() => item.type === "file" && activeWs && ws.openFile(activeWs.id, item.path)}
-                  >
-                    <span className="tree-icon">{item.type === "dir" ? "📁" : getIcon(item.ext)}</span>
-                    <span className="tree-name">{item.name}</span>
-                    <span className="tree-path">{item.path}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          ) : (
-            activeWs && (
+              <div className="sb-search-results">
+                {searchResults.length === 0 ? (
+                  <div className="sb-file-empty">无匹配文件</div>
+                ) : (
+                  searchResults.map(item => (
+                    <div
+                      key={item.path}
+                      className={`file-node ${ws.currentFile?.path === item.path ? "active" : ""}`}
+                      onClick={() => item.type === "file" && handleOpenFile(item.path)}
+                    >
+                      {item.type === "dir"
+                        ? <Icon name="i-folder" size={15} className="file-node-icon folder" />
+                        : <Icon name="i-file" size={15} className="file-node-icon" />}
+                      <span className="file-node-name">{item.name}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
               <FileTree
                 key={activeWs.id}
                 wsId={activeWs.id}
@@ -162,88 +117,60 @@ export function WorkspaceDrawer() {
                 expandedDirs={expandedDirs}
                 toggleDir={toggleDir}
                 listDir={ws.listDir}
-                openFile={p => ws.openFile(activeWs.id, p)}
+                openFile={handleOpenFile}
                 currentPath={ws.currentFile?.path}
               />
-            )
-          )}
+            )}
           </div>
-          </>
-          )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
 
-// ── 变更徽标（显示变更文件数量） ──
+// ── 变更徽标 ──
 function ChangesBadge() {
   const activeChatId = useChatStore(s => s.activeChatSessionId);
   const messages = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.messages : undefined);
   if (!messages) return null;
   const stats = getSessionStats(messages);
   if (stats.filesChanged.length === 0) return null;
-  return <span className="ws-tab-badge">{stats.filesChanged.length}</span>;
+  return <span className="sb-file-tab-badge">{stats.filesChanged.length}</span>;
 }
 
-// ── 变更面板：显示本次会话修改的文件 ──
+// ── 变更面板 ──
 function ChangesPanel({ wsId, openFile }: { wsId?: string; openFile: (path: string) => void }) {
   const activeChatId = useChatStore(s => s.activeChatSessionId);
   const messages = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.messages : undefined);
 
-  if (!messages || messages.length === 0) {
-    return <div className="ws-empty-hint">本次会话暂无活动</div>;
-  }
+  if (!messages || messages.length === 0) return <div className="sb-file-empty">本次会话暂无活动</div>;
 
   const stats = getSessionStats(messages);
-
   if (stats.filesChanged.length === 0) {
     return (
-      <div className="ws-changes-empty">
-        <div className="ws-changes-empty-icon">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <path d="M16 8v8M16 20v.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="16" cy="16" r="12" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
-          </svg>
-        </div>
+      <div className="sb-file-empty">
+        <Icon name="i-activity" size={24} />
         <p>本次会话暂无文件变更</p>
-        <span>Agent 编辑的文件会显示在这里</span>
       </div>
     );
   }
 
   return (
-    <div className="ws-changes">
-      {/* 统计摘要 */}
-      <div className="ws-changes-summary">
-        <div className="ws-changes-stat">
-          <span className="ws-changes-stat-value">{stats.filesChanged.length}</span>
-          <span className="ws-changes-stat-label">文件</span>
-        </div>
-        <div className="ws-changes-stat">
-          <span className="ws-changes-stat-value">{stats.edits}</span>
-          <span className="ws-changes-stat-label">编辑</span>
-        </div>
-        <div className="ws-changes-stat">
-          <span className="ws-changes-stat-value">{stats.commands}</span>
-          <span className="ws-changes-stat-label">命令</span>
-        </div>
+    <div className="sb-changes-panel">
+      <div className="sb-changes-stats">
+        <div className="sb-changes-stat"><span className="sb-changes-stat-value">{stats.filesChanged.length}</span><span>文件</span></div>
+        <div className="sb-changes-stat"><span className="sb-changes-stat-value">{stats.edits}</span><span>编辑</span></div>
+        <div className="sb-changes-stat"><span className="sb-changes-stat-value">{stats.commands}</span><span>命令</span></div>
       </div>
-
-      {/* 文件列表 */}
-      <div className="ws-changes-list">
+      <div className="sb-changes-list">
         {stats.filesChanged.map(f => (
-          <div
-            key={f.path}
-            className="ws-change-item"
-            onClick={() => wsId && openFile(f.path)}
-          >
-            <span className={`ws-change-dot ${f.lastStatus === "error" ? "dot-error" : "dot-edited"}`} />
-            <div className="ws-change-info">
-              <span className="ws-change-name">{f.name}</span>
-              <span className="ws-change-path">{f.path}</span>
+          <div key={f.path} className="sb-change-item" onClick={() => wsId && openFile(f.path)}>
+            <span className={`sb-change-dot ${f.lastStatus === "error" ? "error" : "done"}`} />
+            <div className="sb-change-info">
+              <span className="sb-change-name">{f.name}</span>
+              <span className="sb-change-path">{f.path}</span>
             </div>
-            {f.edits > 1 && <span className="ws-change-count">{f.edits}</span>}
+            {f.edits > 1 && <span className="sb-change-count">{f.edits}</span>}
           </div>
         ))}
       </div>
@@ -277,7 +204,7 @@ function FileTree({
   }, [wsId, basePath, loaded, listDir]);
 
   if (depth === 0 || expanded) load();
-  if (!loaded) return <div style={{ paddingLeft: depth * 14 + 12 }} className="tree-loading">...</div>;
+  if (!loaded) return <div style={{ paddingLeft: depth * 14 + 12 }} className="sb-file-loading">...</div>;
 
   return (
     <>
@@ -288,12 +215,23 @@ function FileTree({
         return (
           <div key={item.path}>
             <div
-              className={`tree-item ${isActive ? "tree-item-active" : ""}`}
+              className={`file-node ${isActive ? "active" : ""} ${isDir ? "folder" : ""}`}
               style={{ paddingLeft: depth * 14 + 8 }}
               onClick={() => isDir ? toggleDir(item.path) : openFile(item.path)}
             >
-              <span className="tree-icon">{isDir ? (isOpen ? "📂" : "📁") : getIcon(item.ext)}</span>
-              <span className="tree-name">{item.name}</span>
+              {isDir ? (
+                <span className={`file-chevron ${isOpen ? "open" : ""}`}>
+                  <Icon name="i-chevron" size={12} />
+                </span>
+              ) : (
+                <span className="file-chevron-spacer" />
+              )}
+              {isDir ? (
+                <Icon name={isOpen ? "i-folder-open" : "i-folder"} size={15} className="file-node-icon folder" />
+              ) : (
+                <Icon name="i-file" size={15} className="file-node-icon" />
+              )}
+              <span className="file-node-name">{item.name}</span>
             </div>
             {isDir && isOpen && (
               <FileTree
@@ -310,35 +248,72 @@ function FileTree({
   );
 }
 
-function formatSize(b: number) {
-  if (b < 1024) return `${b}B`;
-  if (b < 1048576) return `${(b / 1024).toFixed(1)}KB`;
-  return `${(b / 1048576).toFixed(1)}MB`;
-}
+// ════════════════════════════════════════════════════════
+// 右侧预览面板：只显示文件内容
+// ════════════════════════════════════════════════════════
+export function FilePreviewPane() {
+  const ws = useWorkspace();
+  const wsStore = useWorkspaceStore();
 
-function getIcon(ext: string) {
-  const m: Record<string, string> = {
-    ".ts": "📘", ".tsx": "📘", ".js": "📄", ".json": "🔧",
-    ".css": "🎨", ".html": "🌐", ".md": "📝", ".py": "🐍",
-    ".go": "🐹", ".sh": "⚙️", ".yaml": "⚙️", ".yml": "⚙️",
+  const close = () => {
+    ws.closeFile();
+    wsStore.setDrawerOpen(false);
   };
-  return m[ext] ?? "📄";
+
+  if (!ws.currentFile) {
+    return (
+      <div className="preview-pane">
+        <div className="preview-empty">
+          <Icon name="i-code" size={48} />
+          <div className="preview-empty-text">从左侧文件树选择文件<br />即可在此预览代码</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="preview-pane">
+      <div className="preview-head">
+        <Icon name="i-file" size={16} className="preview-file-icon" />
+        <span className="preview-filename">{ws.currentFile.path.split("/").pop()}</span>
+        <span className="preview-lang">{ws.currentFile.language}</span>
+        <div className="preview-spacer" />
+        <div className="preview-actions">
+          <button className="preview-btn" onClick={close} title="关闭预览">
+            <Icon name="i-x" size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="preview-body">
+        {ws.fileLoading ? (
+          <div className="preview-empty">加载中...</div>
+        ) : ws.currentFile.language === "markdown" ? (
+          <MarkdownPreview content={ws.currentFile.content} />
+        ) : (
+          <SyntaxHighlighter
+            language={ws.currentFile.language}
+            style={oneDark}
+            showLineNumbers
+            customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)" }}
+          >
+            {ws.currentFile.content}
+          </SyntaxHighlighter>
+        )}
+      </div>
+    </div>
+  );
 }
 
-// ── Markdown 预览（解析 YAML frontmatter → 元数据卡片 + 正文） ──
+// ── Markdown 预览 ──
 function MarkdownPreview({ content }: { content: string }) {
-  // 解析 frontmatter：文件开头是 --- ... --- 包裹的 YAML 块
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?/);
   const hasFrontmatter = !!fmMatch;
   const frontmatterText = fmMatch?.[1] ?? "";
   const bodyContent = hasFrontmatter ? content.slice(fmMatch![0].length) : content;
-
-  // 把 YAML frontmatter 解析为 key-value 对
   const fmPairs = hasFrontmatter ? parseSimpleYaml(frontmatterText) : [];
 
   return (
     <div className="ws-md-preview">
-      {/* frontmatter 元数据卡片 */}
       {fmPairs.length > 0 && (
         <div className="ws-frontmatter">
           {fmPairs.map(({ key, value }) => (
@@ -349,28 +324,21 @@ function MarkdownPreview({ content }: { content: string }) {
           ))}
         </div>
       )}
-      {/* 正文 Markdown */}
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{bodyContent}</ReactMarkdown>
     </div>
   );
 }
 
-// 简易 YAML 解析：提取顶层 key: value（够用，不需要完整 YAML 解析器）
 function parseSimpleYaml(text: string): Array<{ key: string; value: string }> {
   const pairs: Array<{ key: string; value: string }> = [];
   const lines = text.split("\n");
   let i = 0;
-
   while (i < lines.length) {
     const line = lines[i];
-    // 匹配 key: value 或 key: |（多行值）
     const match = line.match(/^(\w[\w-]*)\s*:\s*(.*)$/);
     if (!match) { i++; continue; }
-
     let key = match[1];
     let value = match[2].trim();
-
-    // 多行值（key: | 或 key: >）
     if (value === "|" || value === ">") {
       const multiline: string[] = [];
       i++;
@@ -380,17 +348,12 @@ function parseSimpleYaml(text: string): Array<{ key: string; value: string }> {
       }
       value = multiline.join(" ").trim();
     } else if (value.startsWith("[")) {
-      // 数组格式 [a, b, c]：原样保留
-      // 继续读取直到匹配的 ]
       while (i + 1 < lines.length && !lines[i].includes("]") && lines[i + 1]?.trim().startsWith("[")) {
         i++;
         value += " " + lines[i].trim();
       }
     }
-
-    // 跳过嵌套对象（如 metadata: 缩进块）
     if (!value && i + 1 < lines.length && (lines[i + 1].startsWith("  ") || lines[i + 1].startsWith("\t"))) {
-      // 收集缩进行作为简短摘要
       const nested: string[] = [];
       i++;
       while (i < lines.length && (lines[i].startsWith("  ") || lines[i].startsWith("\t"))) {
@@ -401,9 +364,7 @@ function parseSimpleYaml(text: string): Array<{ key: string; value: string }> {
     } else {
       i++;
     }
-
     if (value) pairs.push({ key, value });
   }
-
   return pairs;
 }

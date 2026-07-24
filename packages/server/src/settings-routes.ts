@@ -7,6 +7,7 @@ import { getModels, getProviders, getModel } from "@earendil-works/pi-ai/compat"
 import { config } from "./config.js";
 import { mcpManager } from "./mcp-manager.js";
 import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
+import { todoStore } from "./tools/index.js";
 
 export function setupSettingsRoutes(app: FastifyInstance) {
   // ── 模型列表 ──
@@ -166,6 +167,44 @@ export function setupSettingsRoutes(app: FastifyInstance) {
       return { ok: false, error: "body must be { mcpServers: {...} }" };
     }
     mcpManager.writeConfig(cfg);
+    return { ok: true };
+  });
+
+  // ── TODO: 获取会话的 todo 列表 ──
+  app.get("/api/todos/:chatSessionId", async (req: any) => {
+    const { chatSessionId } = req.params;
+    const todos = await todoStore.list(chatSessionId);
+    return { todos };
+  });
+
+  // ── TODO: 添加任务 ──
+  app.post("/api/todos/:chatSessionId", async (req: any) => {
+    const { chatSessionId } = req.params;
+    const { content, priority } = req.body || {};
+    if (!content) return { ok: false, error: "content required" };
+    const item = await todoStore.add(chatSessionId, content, priority || "medium");
+    return { ok: true, todo: item };
+  });
+
+  // ── TODO: 更新任务 ──
+  app.patch("/api/todos/:chatSessionId/:id", async (req: any) => {
+    const { chatSessionId, id } = req.params;
+    const updated = await todoStore.update(chatSessionId, id, req.body || {});
+    if (!updated) return { ok: false, error: "todo not found" };
+    return { ok: true, todo: updated };
+  });
+
+  // ── TODO: 删除任务 ──
+  app.delete("/api/todos/:chatSessionId/:id", async (req: any) => {
+    const { chatSessionId, id } = req.params;
+    const ok = await todoStore.remove(chatSessionId, id);
+    return { ok };
+  });
+
+  // ── TODO: 清空 ──
+  app.delete("/api/todos/:chatSessionId", async (req: any) => {
+    const { chatSessionId } = req.params;
+    await todoStore.clear(chatSessionId);
     return { ok: true };
   });
 }

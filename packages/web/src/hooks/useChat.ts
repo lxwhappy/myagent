@@ -5,6 +5,7 @@
 import { useEffect, useCallback } from "react";
 import { sseClient } from "../services/sse-client";
 import { useChatStore } from "../stores/chat";
+import { useWorkspaceStore } from "../stores/workspace";
 import { playCompletionSound } from "../hooks/useAudio";
 
 let eventsBound = false;
@@ -113,7 +114,10 @@ export function useChat() {
 
       switch (msg.type) {
         case "agent_created":
-          if (sid) chat.setAgentCreated(sid, msg.payload?.skills, msg.payload?.model);
+          if (sid) {
+            chat.setAgentCreated(sid, msg.payload?.skills, msg.payload?.model);
+            if (msg.payload?.todos) chat.setTodos(sid, msg.payload.todos);
+          }
           break;
 
         // agent 回合开始：创建唯一一条 assistant 消息
@@ -166,6 +170,10 @@ export function useChat() {
             chat.setActiveSkill(sid, msg.payload);
             chat.addSkillUsed(sid, msg.payload);
           }
+          break;
+
+        case "todo_update":
+          if (sid && msg.payload?.todos) chat.setTodos(sid, msg.payload.todos);
           break;
 
         case "error":
@@ -266,7 +274,7 @@ export function useChat() {
     if (sid) sseClient.abort(sid);
   }, []);
 
-  const loadSession = useCallback(async (chatSessionId: string, appSessionId: string) => {
+  const loadSession = useCallback(async (chatSessionId: string, appSessionId: string, forceCwd?: string) => {
     try {
       // 正在生成的会话：内存中的状态比服务端更新，直接切换不重载
       const existing = useChatStore.getState().sessions[chatSessionId];
@@ -288,7 +296,14 @@ export function useChat() {
       // 重新读取 store（前面的 set 已更新 state，旧 chat 引用是 stale 的）
       const fresh = useChatStore.getState();
       const sess = fresh.sessions[chatSessionId];
-      if (sess && !sess.agentCreated) sseClient.createAgent(chatSessionId);
+      if (sess && (!sess.agentCreated || forceCwd)) {
+        const cwd = forceCwd ?? (() => {
+          const ws = useWorkspaceStore.getState();
+          const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
+          return activeWs?.path;
+        })();
+        sseClient.createAgent(chatSessionId, { cwd });
+      }
       fresh.setActiveChatSession(chatSessionId);
     } catch (e) { console.error("Failed to load session:", e); }
   }, []);
@@ -304,6 +319,7 @@ export function useChat() {
     modelInfo: activeSession?.modelInfo ?? null,
     usage: activeSession?.usage ?? null,
     activeSkill: activeSession?.activeSkill ?? null,
+    todos: activeSession?.todos ?? [],
     connected: store.connected,
     activeChatSessionId: activeId,
     createChatSession,

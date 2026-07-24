@@ -1,9 +1,11 @@
 // components/InputBar.tsx — 输入框 + 历史导航(↑↓) + Skills 选择器 + Draft 持久化 + 图片上传
+// (PiAgent Design System)
 
 import { useRef, useState, useEffect, useMemo, useCallback, type KeyboardEvent } from "react";
 import { useChat } from "../hooks/useChat";
 import { useChatStore, type SkillInfo } from "../stores/chat";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
+import { Icon } from "./Icon";
 
 const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
@@ -299,11 +301,14 @@ export function InputBar() {
     return () => { attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); }); };
   }, []);
 
+  const canSend = (text.trim().length > 0 || attachedImages.length > 0) && connected && !isGenerating;
+
   return (
     <div className="input-bar">
       <div
-        className={`input-wrap${isDragging ? " input-dragging" : ""}`}
+        className={`input-wrapper${isDragging ? " input-dragging" : ""}`}
         ref={wrapRef}
+        style={isDragging ? { borderColor: "var(--accent)" } : undefined}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -311,34 +316,80 @@ export function InputBar() {
       >
         {/* 图片预览栏 */}
         {attachedImages.length > 0 && (
-          <div className="image-preview-bar">
+          <div className="attachments">
             {attachedImages.map((img, i) => (
-              <div key={i} className="image-preview-item">
-                <img src={img.previewUrl} alt="" />
-                <button className="image-preview-remove" onClick={() => removeImage(i)}>✕</button>
+              <div key={i} className="attach-chip" style={{ padding: "2px", background: "transparent" }}>
+                <img src={img.previewUrl} alt="" style={{ width: 36, height: 36, borderRadius: "var(--radius-sm)", objectFit: "cover" }} />
+                <button
+                  className="attach-remove"
+                  onClick={() => removeImage(i)}
+                  type="button"
+                  aria-label="移除图片"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
+                >
+                  <Icon name="i-x" size={12} />
+                </button>
               </div>
             ))}
           </div>
         )}
 
-        <textarea
-          ref={taRef}
-          className="input-textarea"
-          value={text}
-          onChange={handleChange}
-          onKeyDown={handleKey}
-          onPaste={handlePaste}
-          placeholder={connected ? "给 MyAgent 发消息…  (↑ 历史, / Skills, 拖拽图片)" : "正在连接…"}
-          disabled={!connected}
-          rows={1}
-        />
+        <div className="input-row">
+          {/* 附件按钮 */}
+          <button
+            className="input-attach"
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+            aria-label="添加图片"
+            title="添加图片"
+          >
+            <Icon name="i-paperclip" size={18} />
+          </button>
 
-        {/* 拖拽提示 */}
-        {isDragging && (
-          <div className="input-drag-overlay">
-            <span>松开以添加图片</span>
-          </div>
-        )}
+          <textarea
+            ref={taRef}
+            className="input"
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKey}
+            onPaste={handlePaste}
+            placeholder={connected ? "给 MyAgent 发消息…" : "正在连接…"}
+            disabled={!connected}
+            rows={1}
+          />
+
+          {/* 拖拽提示 */}
+          {isDragging && (
+            <div className="input-drag-overlay">
+              <span>松开以添加图片</span>
+            </div>
+          )}
+
+          {/* 发送 / 停止 */}
+          {isGenerating ? (
+            <button
+              className="btn-send"
+              onClick={abort}
+              type="button"
+              aria-label="停止"
+              title="停止生成"
+              style={{ background: "var(--danger)", color: "#fff" }}
+            >
+              <Icon name="i-x" size={16} />
+            </button>
+          ) : (
+            <button
+              className="btn-send"
+              onClick={handleSend}
+              disabled={!canSend}
+              type="button"
+              aria-label="发送"
+              title="发送"
+            >
+              <Icon name="i-send" size={16} />
+            </button>
+          )}
+        </div>
 
         {/* Skills 选择器弹出层 */}
         {skillPicker.visible && filteredSkills.length > 0 && (
@@ -378,40 +429,22 @@ export function InputBar() {
           style={{ display: "none" }}
           onChange={(e) => { if (e.target.files) processImageFiles(Array.from(e.target.files)); e.target.value = ""; }}
         />
+      </div>
 
-        {isGenerating ? (
-          <button className="input-abort" onClick={abort} type="button" aria-label="停止">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <rect x="3" y="3" width="10" height="10" rx="1.5" />
-            </svg>
-          </button>
-        ) : (
-          <div className="input-actions">
-            <button
-              className="input-attach"
-              onClick={() => fileInputRef.current?.click()}
-              type="button"
-              aria-label="添加图片"
-              title="添加图片"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-              </svg>
-            </button>
-            <button
-              className="input-send"
-              onClick={handleSend}
-              disabled={(!text.trim() && attachedImages.length === 0) || !connected}
-              type="button"
-              aria-label="发送"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
-          </div>
-        )}
+      {/* 键盘快捷键提示行 */}
+      <div className="input-hint">
+        <span>
+          <kbd>Enter</kbd> 发送
+        </span>
+        <span>
+          <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行
+        </span>
+        <span>
+          <kbd>↑</kbd> / <kbd>↓</kbd> 历史
+        </span>
+        <span>
+          <kbd>/</kbd> 选择 Skill
+        </span>
       </div>
     </div>
   );

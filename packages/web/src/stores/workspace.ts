@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { FileContent } from "../hooks/workspace-types";
 
 export interface Workspace {
   id: string;
@@ -29,6 +30,8 @@ interface WorkspaceState {
   previewWidth: number;
   treeWidth: number;
   searchQuery: string;
+  currentFile: FileContent | null;
+  fileLoading: boolean;
 
   setWorkspaces: (ws: Workspace[]) => void;
   addWorkspace: (ws: Workspace) => void;
@@ -47,6 +50,8 @@ interface WorkspaceState {
   setPreviewWidth: (w: number) => void;
   setTreeWidth: (w: number) => void;
   setSearchQuery: (q: string) => void;
+  setCurrentFile: (f: FileContent | null) => void;
+  setFileLoading: (v: boolean) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -60,6 +65,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   previewWidth: 280,
   treeWidth: 220,
   searchQuery: "",
+  currentFile: null,
+  fileLoading: false,
 
   setWorkspaces: (ws) => set({ workspaces: ws }),
   addWorkspace: (ws) => set((s) => ({ workspaces: [...s.workspaces.filter(w => w.id !== ws.id), ws] })),
@@ -69,7 +76,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   })),
   setActive: (id) => set((s) => ({
     activeId: id,
-    drawerOpen: id ? true : false,
     expandedWs: id ? new Set([...s.expandedWs, id]) : s.expandedWs,
   })),
   setSessions: (wsId, sessions) => set((s) => ({
@@ -110,4 +116,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setPreviewWidth: (w) => set({ previewWidth: Math.max(100, Math.min(900, w)) }),
   setTreeWidth: (w) => set({ treeWidth: Math.max(140, Math.min(500, w)) }),
   setSearchQuery: (q) => set({ searchQuery: q }),
+  setCurrentFile: (f) => set({ currentFile: f }),
+  setFileLoading: (v) => set({ fileLoading: v }),
 }));

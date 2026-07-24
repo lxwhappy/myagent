@@ -56,7 +56,7 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay show" onClick={onCancel}>
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
         {/* 标题栏 */}
         <div className="modal-header">

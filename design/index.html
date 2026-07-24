@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PiAgent Design System — 组件预览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./tokens.css">
+<link rel="stylesheet" href="./components.css">
+<style>
+/* Preview page specific styles (not part of the design system) */
+.preview-page { display: block !important; height: auto !important; overflow: visible !important; }
+body.preview-page { overflow-y: auto; }
+.preview-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  text-align: center;
+}
+.preview-header h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: var(--tracking-display);
+  margin-bottom: var(--space-2);
+}
+.preview-header p { color: var(--muted); font-size: var(--text-base); }
+.preview-content { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-6) var(--space-20); }
+.preview-section { margin-bottom: var(--space-12); }
+.preview-section-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+.demo-row { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.demo-label { font-size: var(--text-xs); color: var(--muted); width: 100px; flex-shrink: 0; font-family: var(--font-mono); }
+.demo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-5); margin-bottom: var(--space-4); }
+.color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); }
+.color-swatch { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); }
+.color-swatch-top { height: 64px; }
+.color-swatch-bottom { padding: var(--space-2) var(--space-3); background: var(--surface); }
+.color-swatch-name { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; }
+.color-swatch-value { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.type-sample { margin-bottom: var(--space-3); }
+.type-sample-label { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); margin-bottom: var(--space-1); }
+.mockup-frame { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--elev-raised); }
+.mockup-frame .sidebar { min-width: 240px; max-width: 240px; }
+.token-preview { font-family: var(--font-mono); font-size: var(--text-sm); }
+</style>
+</head>
+<body class="preview-page">
+
+<!-- Icon sprite -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+<symbol id="i-paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></symbol>
+<symbol id="i-tool" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-git" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="12" r="3"/><line x1="6" y1="9" x2="6" y2="15"/></symbol>
+</svg>
+
+<!-- Header -->
+<div class="preview-header">
+  <h1>PiAgent Design System</h1>
+  <p>AI Agent Web Console 组件库 — Neutral Modern 色彩体系 · 19 个组件模块 · 28 个图标</p>
+</div>
+
+<div class="preview-content">
+
+<!-- ═══ 色彩 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">色彩令牌</div>
+  <div class="color-grid">
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--bg)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--bg</div><div class="color-swatch-value">#FAFAFA</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--surface)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--surface</div><div class="color-swatch-value">#FFFFFF</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--fg)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--fg</div><div class="color-swatch-value">#111111</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--muted)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--muted</div><div class="color-swatch-value">#6B6B6B</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--border)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--border</div><div class="color-swatch-value">#E5E5E5</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--accent)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--accent</div><div class="color-swatch-value">#2F6FEB</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--accent-tint)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--accent-tint</div><div class="color-swatch-value">mix w90%</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--success)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--success</div><div class="color-swatch-value">#17A34A</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--warn)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--warn</div><div class="color-swatch-value">#EAB308</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--danger)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--danger</div><div class="color-swatch-value">#DC2626</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--code-bg)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--code-bg</div><div class="color-swatch-value">#1E1E2E</div></div></div>
+    <div class="color-swatch"><div class="color-swatch-top" style="background:var(--code-fg)"></div><div class="color-swatch-bottom"><div class="color-swatch-name">--code-fg</div><div class="color-swatch-value">#CDD6F4</div></div></div>
+  </div>
+</div>
+
+<!-- ═══ 字体 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">字体层级</div>
+  <div class="demo-card">
+    <div class="type-sample"><div class="type-sample-label">text-2xl · 32px / weight 700</div><div style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;letter-spacing:var(--tracking-display)">PiAgent Console</div></div>
+    <div class="type-sample"><div class="type-sample-label">text-xl · 24px / weight 600</div><div style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:600">SSE 流式对话引擎</div></div>
+    <div class="type-sample"><div class="type-sample-label">text-lg · 20px / weight 600</div><div style="font-size:var(--text-lg);font-weight:600">Agent 配置</div></div>
+    <div class="type-sample"><div class="type-sample-label">text-base · 16px / weight 400</div><div style="font-size:var(--text-base)">基于 Pi Agent SDK 构建的自定义 Web 端。</div></div>
+    <div class="type-sample"><div class="type-sample-label">text-sm · 14px / weight 400 (body default)</div><div style="font-size:var(--text-sm)">Fastify + React + Zustand 技术栈，LLM 使用智谱 GLM-4.7。</div></div>
+    <div class="type-sample"><div class="type-sample-label">text-xs · 12px / weight 600 (eyebrow)</div><div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted)">最近会话</div></div>
+    <div class="type-sample"><div class="type-sample-label">font-mono · JetBrains Mono</div><div style="font-family:var(--font-mono);font-size:var(--text-sm)">const server = fastify({ port: 3000 })</div></div>
+  </div>
+</div>
+
+<!-- ═══ 按钮 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">按钮 & 图标按钮</div>
+  <div class="demo-card">
+    <div class="demo-row">
+      <span class="demo-label">Primary</span>
+      <button class="ws-open-btn"><svg class="icon icon-sm"><use href="#i-plus"/></svg>新建会话</button>
+    </div>
+    <div class="demo-row">
+      <span class="demo-label">Icon (36px)</span>
+      <button class="icon-btn"><svg class="icon"><use href="#i-settings"/></svg></button>
+      <button class="icon-btn"><svg class="icon"><use href="#i-edit"/></svg></button>
+      <button class="icon-btn"><svg class="icon"><use href="#i-download"/></svg></button>
+      <button class="icon-btn"><svg class="icon"><use href="#i-copy"/></svg></button>
+    </div>
+    <div class="demo-row">
+      <span class="demo-label">Header btn</span>
+      <button class="sb-header-btn accent"><svg class="icon"><use href="#i-plus"/></svg></button>
+      <button class="sb-header-btn"><svg class="icon"><use href="#i-search"/></svg></button>
+    </div>
+    <div class="demo-row">
+      <span class="demo-label">Send btn</span>
+      <button class="btn-send"><svg class="icon"><use href="#i-send"/></svg></button>
+      <button class="btn-send" disabled><svg class="icon"><use href="#i-send"/></svg></button>
+    </div>
+    <div class="demo-row">
+      <span class="demo-label">Toggle</span>
+      <div class="toggle"></div>
+      <div class="toggle active"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Badge & 标签 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">Badge & 标签</div>
+  <div class="demo-card">
+    <div class="demo-row">
+      <span class="demo-label">Session badge</span>
+      <span class="session-badge">3 条新消息</span>
+      <span class="ws-switcher-sub">main</span>
+      <span class="ws-open-tag">已打开</span>
+      <span class="user-plan-tag">Pro</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 会话列表 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">会话列表项</div>
+  <div class="demo-card" style="max-width:280px">
+    <div class="session-item">
+      <div class="session-title">SSE 流式输出迁移方案</div>
+      <div class="session-meta"><span class="session-time">2 小时前</span><span class="session-badge">活跃</span></div>
+    </div>
+    <div class="session-item active">
+      <div class="session-title">Zustand store 全局状态设计</div>
+      <div class="session-meta"><span class="session-time">昨天</span></div>
+    </div>
+    <div class="session-item">
+      <div class="session-title">Pi Agent SDK 协议类型定义</div>
+      <div class="session-meta"><span class="session-time">3 天前</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 消息 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">消息气泡</div>
+  <div class="demo-card" style="padding:var(--space-6)">
+    <div class="msg msg-assistant">
+      <div class="msg-avatar"><svg class="icon"><use href="#i-bot"/></svg></div>
+      <div class="msg-body">
+        <div class="msg-author">Agent</div>
+        <div class="msg-content">
+          <p>SSE 迁移已完成。核心改动包括：</p>
+          <ul>
+            <li>全局 <code>event-bus</code> 替代 WebSocket 事件分发</li>
+            <li>流式 <code>delta</code> 缓冲打字机效果，平滑 GLM burst</li>
+            <li>多会话并发：<code>loadMessages</code> 合并不替换</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="msg msg-user">
+      <div class="msg-body">
+        <div class="msg-content">帮我看看 agent-registry 的注册逻辑有没有内存泄漏</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 代码块 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">代码块</div>
+  <div class="demo-card" style="padding:var(--space-5)">
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">typescript</span>
+        <button class="code-copy"><svg class="icon-sm"><use href="#i-copy"/></svg> 复制</button>
+      </div>
+      <pre><code>import { FastifyInstance } from 'fastify'
+
+export function registerSSERoutes(app: FastifyInstance) {
+  app.get('/api/stream/:sessionId', async (req, reply) => {
+    const stream = createEventStream(req.params.sessionId)
+    return reply.sse(stream)
+  })
+}</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 工具调用 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">工具调用卡片</div>
+  <div class="demo-card" style="padding:var(--space-5)">
+    <div class="tool-call">
+      <div class="tool-call-header">
+        <svg class="icon tool-icon"><use href="#i-tool"/></svg>
+        <span class="tool-name">read_file</span>
+        <span class="tool-status done">已完成</span>
+        <svg class="icon-sm tool-chevron"><use href="#i-chevron"/></svg>
+      </div>
+    </div>
+    <div class="tool-call expanded">
+      <div class="tool-call-header">
+        <svg class="icon tool-icon"><use href="#i-tool"/></svg>
+        <span class="tool-name">execute_code</span>
+        <span class="tool-status running">运行中</span>
+        <svg class="icon-sm tool-chevron"><use href="#i-chevron"/></svg>
+      </div>
+      <div class="tool-call-body">
+        <div class="tool-section">
+          <div class="tool-section-label">输入</div>
+          <div class="tool-code"><code>await web_extract(['https://example.com'])</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 输入栏 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">输入栏</div>
+  <div class="demo-card" style="padding:var(--space-5)">
+    <div class="input-bar" style="border:none;padding:0">
+      <div class="input-wrapper">
+        <div class="attachments">
+          <div class="attach-chip"><svg class="icon"><use href="#i-paperclip"/></svg> server.ts<div class="attach-remove"><svg class="icon"><use href="#i-x"/></svg></div></div>
+        </div>
+        <div class="input-row">
+          <button class="input-attach"><svg class="icon"><use href="#i-paperclip"/></svg></button>
+          <textarea class="input" rows="1" placeholder="输入消息…  (Enter 发送 / Shift+Enter 换行)"></textarea>
+          <button class="btn-send"><svg class="icon"><use href="#i-send"/></svg></button>
+        </div>
+      </div>
+      <div class="input-hint">
+        <span><svg class="icon-sm"><use href="#i-zap"/></svg> GLM-4.7 · 温度 0.7 · Top P 0.9</span>
+        <span>200K 上下文</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 文件树 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">文件树节点</div>
+  <div class="demo-card" style="max-width:320px;padding:var(--space-3)">
+    <div class="file-node folder">
+      <svg class="file-chevron open"><use href="#i-chevron"/></svg>
+      <svg class="file-node-icon"><use href="#i-folder"/></svg>
+      <span class="file-node-name">server</span>
+    </div>
+    <div class="file-children open" style="padding-left:16px">
+      <div class="file-node folder">
+        <svg class="file-chevron"><use href="#i-chevron"/></svg>
+        <svg class="file-node-icon"><use href="#i-folder"/></svg>
+        <span class="file-node-name">src</span>
+      </div>
+      <div class="file-node active" style="padding-left:16px">
+        <span class="file-chevron-spacer"></span>
+        <svg class="file-node-icon"><use href="#i-file"/></svg>
+        <span class="file-node-name">index.ts</span>
+        <span class="file-node-ext">ts</span>
+      </div>
+      <div class="file-node" style="padding-left:16px">
+        <span class="file-chevron-spacer"></span>
+        <svg class="file-node-icon"><use href="#i-file"/></svg>
+        <span class="file-node-name">event-bus.ts</span>
+        <span class="file-node-ext">ts</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Token 进度条 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">Token 用量进度条</div>
+  <div class="demo-card" style="max-width:280px">
+    <div class="token-row">
+      <div class="token-bar-mini"><div class="token-bar-mini-fill ok" style="width:23%"></div></div>
+      <span class="token-pct ok">23%</span>
+    </div>
+    <div class="token-row">
+      <div class="token-bar-mini"><div class="token-bar-mini-fill warn" style="width:72%"></div></div>
+      <span class="token-pct warn">72%</span>
+    </div>
+    <div class="token-row">
+      <div class="token-bar-mini"><div class="token-bar-mini-fill danger" style="width:95%"></div></div>
+      <span class="token-pct danger">95%</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 技能 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">技能项</div>
+  <div class="demo-card" style="max-width:420px;padding:var(--space-3)">
+    <div class="skill-item">
+      <div class="skill-icon"><svg class="icon"><use href="#i-code"/></svg></div>
+      <div class="skill-info">
+        <div class="skill-name">web_search</div>
+        <div class="skill-desc">搜索互联网获取最新信息</div>
+      </div>
+      <div class="toggle active"></div>
+    </div>
+    <div class="skill-item">
+      <div class="skill-icon"><svg class="icon"><use href="#i-file"/></svg></div>
+      <div class="skill-info">
+        <div class="skill-name">read_file</div>
+        <div class="skill-desc">读取项目中的文件内容</div>
+      </div>
+      <div class="toggle"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 配置控件 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">配置控件</div>
+  <div class="demo-card" style="max-width:420px;padding:var(--space-5)">
+    <div class="config-section">
+      <label class="config-label">模型</label>
+      <select class="config-select">
+        <option>zai/glm-4.7</option>
+        <option>zai/glm-4-plus</option>
+        <option>openai/gpt-4o</option>
+      </select>
+    </div>
+    <div class="config-section">
+      <div class="config-row"><label class="config-label" style="margin:0">Temperature</label><span class="config-value">0.7</span></div>
+      <input type="range" class="slider" min="0" max="2" step="0.1" value="0.7">
+    </div>
+    <div class="config-section">
+      <div class="config-row"><label class="config-label" style="margin:0">Top P</label><span class="config-value">0.9</span></div>
+      <input type="range" class="slider" min="0" max="1" step="0.05" value="0.9">
+    </div>
+    <div class="config-section">
+      <label class="config-label">System Prompt</label>
+      <textarea class="config-textarea" placeholder="你是一个专业的 AI 编程助手…">你是一个基于 Pi Agent 的自定义助手，专注于代码审查和系统架构。</textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 图标集 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">图标集 (28)</div>
+  <div class="demo-card">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:var(--space-3);text-align:center">
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-plus"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">plus</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-search"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">search</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-send"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">send</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-paperclip"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">paperclip</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-settings"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">settings</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-x"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">x</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-chevron"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">chevron</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-bot"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">bot</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-tool"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">tool</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-check"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">check</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-copy"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">copy</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-code"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">code</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-file"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">file</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-folder"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">folder</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-message"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">message</div></div>
+      <div><svg class="icon-lg" style="color:var(--fg);margin:0 auto var(--space-1);display:block"><use href="#i-zap"/></svg><div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">zap</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 空状态 ═══ -->
+<div class="preview-section">
+  <div class="preview-section-title">空状态</div>
+  <div class="demo-card">
+    <div class="empty-state" style="padding:var(--space-8) var(--space-4)">
+      <div class="empty-icon"><svg class="icon"><use href="#i-message"/></svg></div>
+      <h2>开始新对话</h2>
+      <p>选择一个工作空间，然后开始与 Agent 交互</p>
+      <div class="suggestions">
+        <div class="suggestion-card">
+          <div class="suggestion-icon"><svg class="icon"><use href="#i-code"/></svg></div>
+          <div class="suggestion-text">帮我分析这个项目的架构</div>
+        </div>
+        <div class="suggestion-card">
+          <div class="suggestion-icon"><svg class="icon"><use href="#i-zap"/></svg></div>
+          <div class="suggestion-text">写一个 SSE 流式输出的示例</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /preview-content -->
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "output/pi-agent-design-system/index.html",
+  "entry": "output/pi-agent-design-system/index.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-07-23T15:50:13.949Z",
+  "updatedAt": "2026-07-23T15:50:13.949Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

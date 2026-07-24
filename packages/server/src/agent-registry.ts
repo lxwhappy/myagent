@@ -13,6 +13,7 @@ import { config } from "./config.js";
 import { eventBridge } from "./event-bridge.js";
 import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
+import { createTodoTool, customTools, todoStore } from "./tools/index.js";
 
 export interface AgentEntry {
   agent: AgentSession;
@@ -44,11 +45,16 @@ export async function createAgent(
 
   const mcpTools = mcpManager.toToolDefinitions();
 
+  // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）
+  const todoTool = createTodoTool(chatSessionId);
+  const allCustomTools = [...customTools, todoTool, ...mcpTools];
+
   const { session } = await createAgentSession({
     model,
+    cwd,
     resourceLoader: loader,
     thinkingLevel: "off",
-    ...(mcpTools.length > 0 ? { customTools: mcpTools } : {}),
+    customTools: allCustomTools,
   });
 
   const skillsResult = loader.getSkills();
@@ -65,6 +71,7 @@ export async function createAgent(
   });
 
   // 发送 agent_created 事件
+  const existingTodos = await todoStore.list(chatSessionId);
   emit({
     type: "agent_created",
     chatSessionId,
@@ -72,6 +79,7 @@ export async function createAgent(
       skills,
       model: { provider, model: modelId, name: model.name, contextWindow: (model as any).contextWindow ?? 0 },
       mcpTools: mcpTools.length,
+      todos: existingTodos,
     },
     ts: Date.now(),
   });

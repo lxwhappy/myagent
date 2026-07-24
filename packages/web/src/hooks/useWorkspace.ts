@@ -1,24 +1,9 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useWorkspaceStore, type Workspace } from "../stores/workspace";
-
-export interface FileItem {
-  name: string;
-  path: string;
-  type: "dir" | "file";
-  ext: string;
-}
-
-export interface FileContent {
-  path: string;
-  content: string;
-  size: number;
-  language: string;
-}
+import type { FileItem, FileContent } from "./workspace-types";
 
 export function useWorkspace() {
   const store = useWorkspaceStore();
-  const [currentFile, setCurrentFile] = useState<FileContent | null>(null);
-  const [loading, setLoading] = useState(false);
 
   // ── 加载工作空间列表 ──
   const loadWorkspaces = useCallback(async () => {
@@ -56,16 +41,16 @@ export function useWorkspace() {
 
   // ── 打开文件 ──
   const openFile = useCallback(async (wsId: string, path: string) => {
-    setLoading(true);
+    store.setFileLoading(true);
     try {
       const res = await fetch(`/api/workspace/${wsId}/file?path=${encodeURIComponent(path)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setCurrentFile(data);
+      store.setCurrentFile(data);
     } catch (e: any) {
       console.error(e);
     } finally {
-      setLoading(false);
+      store.setFileLoading(false);
     }
   }, []);
 
@@ -79,14 +64,12 @@ export function useWorkspace() {
 
   return {
     ...store,
-    currentFile,
-    loading,
     loadWorkspaces,
     addWorkspace,
     removeWorkspace,
     listDir,
     openFile,
     searchFiles,
-    closeFile: () => setCurrentFile(null),
+    closeFile: () => store.setCurrentFile(null),
   };
 }

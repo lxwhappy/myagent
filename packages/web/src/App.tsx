@@ -1,26 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel";
 import { InputBar } from "./components/InputBar";
-import { Splitter } from "./components/Splitter";
-import { WorkspaceDrawer } from "./components/WorkspaceDrawer";
+import { SidebarFileTree, FilePreviewPane } from "./components/WorkspaceDrawer";
 import { DirBrowser } from "./components/DirBrowser";
+import { Icon } from "./components/Icon";
 import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
 import { useSessions } from "./hooks/useSessions";
 import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
-import "./styles.css";
 
 export default function App() {
-  const { createChatSession, sendMessage, abort, loadSession } = useChat();
+  const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo } = useChat();
   const wsStore = useWorkspaceStore();
   const sessions = useSessions();
   const [showDirBrowser, setShowDirBrowser] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
+  const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
+  const wsDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 暴露 store 的 getState 方法到 window，让 useChat 能实时访问
     (window as any).__wsStore = useWorkspaceStore;
     (window as any).__chatStore = useChatStore;
   }, []);
@@ -29,23 +30,20 @@ export default function App() {
     fetch("/api/workspaces").then(r => r.json()).then(async (d) => {
       const wss = d.workspaces || [];
       wsStore.setWorkspaces(wss);
-      // 首次打开：自动选中第一个工作空间 + 加载/创建会话
       if (wss.length > 0 && !useWorkspaceStore.getState().activeId) {
-        const first = wss[0];
-        wsStore.setActive(first.id);
-        wsStore.toggleWsExpanded(first.id);
-        // 加载该工作空间的会话列表
-        await sessions.loadSessions(first.id);
-        const wsSessions = useWorkspaceStore.getState().sessionsByWs[first.id] || [];
+        // 恢复上次选中的工作空间，没有则用第一个
+        const savedWsId = localStorage.getItem("myagent:activeWsId");
+        const target = wss.find((w: { id: string }) => w.id === savedWsId) ?? wss[0];
+        wsStore.setActive(target.id);
+        await sessions.loadSessions(target.id);
+        const wsSessions = useWorkspaceStore.getState().sessionsByWs[target.id] || [];
         if (wsSessions.length > 0) {
-          // 选中最近的会话
           const recent = wsSessions[0];
           wsStore.setActiveSession(recent.id);
           loadSession(recent.id, recent.id);
         } else {
-          // 没有会话则自动创建一个
-          const chatSession = await sessions.createSession(first.id);
-          createChatSession(chatSession.id, first.path);
+          const chatSession = await sessions.createSession(target.id);
+          createChatSession(chatSession.id, target.path);
         }
       }
     }).catch(e => console.error("Failed to load workspaces:", e));
@@ -53,24 +51,32 @@ export default function App() {
   }, []);
 
   const selectWorkspace = async (wsId: string) => {
-    wsStore.setActive(wsId);
     const ws = wsStore.workspaces.find(w => w.id === wsId);
+    wsStore.setActive(wsId);
+    localStorage.setItem("myagent:activeWsId", wsId);
     await sessions.loadSessions(wsId);
-    wsStore.toggleWsExpanded(wsId);
+    const wsSessions = useWorkspaceStore.getState().sessionsByWs[wsId] || [];
+    if (wsSessions.length > 0) {
+      const recent = wsSessions[0];
+      wsStore.setActiveSession(recent.id);
+      // 销毁旧 agent，用新 cwd 重建
+      await sseClient.destroyAgent(recent.id);
+      useChatStore.getState().setAgentCreated(recent.id, []);
+      loadSession(recent.id, recent.id, ws?.path);
+    } else {
+      const chatSession = await sessions.createSession(wsId);
+      createChatSession(chatSession.id, ws?.path);
+    }
   };
 
-  // 新会话：在工作空间下创建
   const handleNewSession = async () => {
     if (!wsStore.activeId) {
-      alert("请先选择一个工作空间");
+      setShowDirBrowser(true);
       return;
     }
     const chatSession = await sessions.createSession(wsStore.activeId);
-    // chatSession.id 作为 chatSessionId，同时作为后端 agent 的标识
     const ws = wsStore.workspaces.find(w => w.id === wsStore.activeId);
     createChatSession(chatSession.id, ws?.path);
-
-    // 映射关系
     if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
     (window as any).__chatToAppSession[chatSession.id] = chatSession.id;
   };
@@ -100,152 +106,203 @@ export default function App() {
     } catch (e: any) { alert(e.message); }
   };
 
-  // 用 ref 持有最新的函数/状态，避免 stale closure
-  const handlersRef = useRef({ handleNewSession, wsStore, showDirBrowser, setShowDirBrowser });
-  handlersRef.current = { handleNewSession, wsStore, showDirBrowser, setShowDirBrowser };
+  const handlersRef = useRef({ handleNewSession, wsStore, showDirBrowser, setShowDirBrowser, setShowSettings });
+  handlersRef.current = { handleNewSession, wsStore, showDirBrowser, setShowDirBrowser, setShowSettings };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const h = handlersRef.current;
       const isMod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
-
-      // 有弹窗打开时，只有 Escape 生效（关闭弹窗），其他快捷键不触发
       if (h.showDirBrowser) {
-        if (key === "escape") {
-          e.preventDefault();
-          h.setShowDirBrowser(false);
-        }
+        if (key === "escape") { e.preventDefault(); h.setShowDirBrowser(false); }
         return;
       }
-
-      // Escape 无弹窗时不处理
       if (key === "escape") return;
-
-      // Cmd/Ctrl 组合键为全局快捷键，即便焦点在 input/textarea 也生效
       if (isMod) {
-        if (e.shiftKey && key === "w") {
-          e.preventDefault();
-          h.wsStore.toggleDrawer();
-        } else if (!e.shiftKey && key === "n") {
-          e.preventDefault();
-          h.handleNewSession();
-        } else if (!e.shiftKey && key === "b") {
-          e.preventDefault();
-          h.wsStore.toggleSidebar();
-        }
+        if (e.shiftKey && key === "w") { e.preventDefault(); h.wsStore.toggleDrawer(); }
+        else if (!e.shiftKey && key === "n") { e.preventDefault(); h.handleNewSession(); }
+        else if (!e.shiftKey && key === "b") { e.preventDefault(); h.wsStore.toggleSidebar(); }
+        else if (!e.shiftKey && key === ",") { e.preventDefault(); h.setShowSettings(true); }
       }
     };
-
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // 点击外部关闭下拉
+  useEffect(() => {
+    if (!wsDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) {
+        setWsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [wsDropdownOpen]);
+
+  const handleSwitchWs = async (wsId: string) => {
+    await selectWorkspace(wsId);
+    setWsDropdownOpen(false);
+  };
+
+  const activeWs = wsStore.workspaces.find(w => w.id === wsStore.activeId);
+
   return (
-    <div className="app">
-      {wsStore.sidebarCollapsed ? (
-        <div className="sidebar-collapsed">
-          <button className="sidebar-icon-btn" onClick={() => wsStore.toggleSidebar()} title="展开侧栏">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      ) : (
-        <div className="sidebar">
-          <div className="sidebar-header">
-            <span className="sidebar-brand">MyAgent</span>
-            <button className="sidebar-icon-btn" onClick={() => wsStore.toggleSidebar()} title="收起侧栏">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          </div>
-
-          <button className="btn-new-session" onClick={handleNewSession}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-            </svg>
-            新会话
-          </button>
-
-          <div className="sidebar-nav">
-            <button className="nav-btn" onClick={() => setShowDirBrowser(true)}>
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4C2 3.45 2.45 3 3 3H6L7.5 4.5H13C13.55 4.5 14 4.95 14 5.5V12C14 12.55 13.55 13 13 13H3C2.45 13 2 12.55 2 12V4Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-              </svg>
-              添加项目
-            </button>
-            <button className="nav-btn" onClick={() => setShowSettings(true)}>
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M8 5.5C6.62 5.5 5.5 6.62 5.5 8C5.5 9.38 6.62 10.5 8 10.5C9.38 10.5 10.5 9.38 10.5 8C10.5 6.62 9.38 5.5 8 5.5Z" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M12.5 8C12.5 7.76 12.48 7.53 12.44 7.3L13.45 6.51L12.45 4.78L11.23 5.24C10.9 4.94 10.52 4.7 10.1 4.54L9.9 3.25H7.9L7.7 4.54C7.28 4.7 6.9 4.94 6.57 5.24L5.35 4.78L4.35 6.51L5.36 7.3C5.32 7.53 5.3 7.76 5.3 8C5.3 8.24 5.32 8.47 5.36 8.7L4.35 9.49L5.35 11.22L6.57 10.76C6.9 11.06 7.28 11.3 7.7 11.46L7.9 12.75H9.9L10.1 11.46C10.52 11.3 10.9 11.06 11.23 10.76L12.45 11.22L13.45 9.49L12.44 8.7C12.48 8.47 12.5 8.24 12.5 8Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
-              </svg>
-              设置
-            </button>
-          </div>
-
-          <div className="ws-list">
-            <div className="ws-list-header">
-              <span className="ws-list-title">工作空间</span>
-              <button className="ws-list-add-btn" onClick={() => setShowDirBrowser(true)} title="添加项目">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M7 3V11M3 7H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </button>
+    <div className={`app ${wsStore.sidebarCollapsed ? "sidebar-hidden" : ""}`}>
+      {/* ===== Sidebar (4-zone) ===== */}
+      <aside className="sidebar">
+        {/* Zone 1: Header — WS Switcher Dropdown + New + Collapse */}
+        <div className="sb-header" ref={wsDropdownRef}>
+          <div className="ws-switcher" onClick={() => setWsDropdownOpen(v => !v)}>
+            <div className="ws-switcher-brand">M</div>
+            <div className="ws-switcher-info">
+              <span className="ws-switcher-name">{activeWs?.name ?? "选择工作空间"}</span>
             </div>
-
-            {wsStore.workspaces.length === 0 && (
-              <div className="ws-empty-hint" onClick={() => setShowDirBrowser(true)}>
-                点击 + 添加你的第一个项目
-              </div>
-            )}
-
-            {wsStore.workspaces.map(w => {
-              const isExpanded = wsStore.expandedWs.has(w.id);
-              const isActive = wsStore.activeId === w.id;
-              const wsSessions = wsStore.sessionsByWs[w.id] || [];
-              return (
-                <div key={w.id} className="ws-group">
-                  <div
-                    className={`ws-group-header ${isActive ? "ws-group-active" : ""}`}
-                    onClick={() => isActive ? wsStore.toggleWsExpanded(w.id) : selectWorkspace(w.id)}
-                  >
-                    <span className="ws-chevron">{isExpanded ? "▾" : "▸"}</span>
-                    <span className="ws-group-icon">📁</span>
-                    <span className="ws-group-name">{w.name}</span>
-                  </div>
-                  {isExpanded && wsSessions.length > 0 && (
-                    <SessionList
-                      sessions={wsSessions}
-                      activeSessionId={wsStore.activeSessionId}
-                      onSelect={handleSelectSession}
-                      onDelete={(e, sid) => handleDeleteSession(e, w.id, sid)}
-                    />
-                  )}
-                  {isExpanded && wsSessions.length === 0 && (
-                    <div className="ws-no-sessions">暂无会话</div>
-                  )}
-                </div>
-              );
-            })}
+            <span className={`ws-switcher-chevron ${wsDropdownOpen ? "open" : ""}`}>
+              <Icon name="i-chevron" size={14} />
+            </span>
           </div>
 
-          <div className="sidebar-info">
-            <p>MyAgent v0.8</p>
+          {/* 工作空间下拉菜单 */}
+          {wsDropdownOpen && (
+            <div className="ws-dropdown show">
+              {wsStore.workspaces.map(w => (
+                <div
+                  key={w.id}
+                  className={`ws-dropdown-item ${w.id === wsStore.activeId ? "active" : ""}`}
+                  onClick={() => handleSwitchWs(w.id)}
+                >
+                  <Icon name="i-folder" size={16} className="ws-dropdown-icon" />
+                  <span className="ws-dropdown-name">{w.name}</span>
+                  {w.id === wsStore.activeId && <Icon name="i-check" size={14} className="ws-dropdown-check" />}
+                </div>
+              ))}
+              <div className="ws-dropdown-divider" />
+              <div
+                className="ws-dropdown-action"
+                onClick={() => { setWsDropdownOpen(false); setShowDirBrowser(true); }}
+              >
+                <Icon name="i-plus" size={16} />
+                <span>打开工作空间…</span>
+              </div>
+            </div>
+          )}
+
+          <button className="sb-header-btn accent" onClick={handleNewSession} title="新建会话 (⌘N)">
+            <Icon name="i-plus" size={18} />
+          </button>
+          <button className="sb-header-btn" onClick={() => wsStore.toggleSidebar()} title="收起侧栏 (⌘B)">
+            <Icon name="i-sidebar-collapse" size={16} />
+          </button>
+        </div>
+
+        {/* Zone 2: Nav — Tab(会话/文件) + 搜索 */}
+        <nav className="sb-nav">
+          <div className={`sb-tab ${sidebarTab === "sessions" ? "active" : ""}`} onClick={() => setSidebarTab("sessions")}>
+            <Icon name="i-message" size={15} />
+            <span>会话</span>
+            {(() => {
+              const count = wsStore.activeId ? (wsStore.sessionsByWs[wsStore.activeId] || []).length : 0;
+              return count > 0 ? <span className="sb-tab-count">{count}</span> : null;
+            })()}
+          </div>
+          <div className={`sb-tab ${sidebarTab === "files" ? "active" : ""}`} onClick={() => setSidebarTab("files")}>
+            <Icon name="i-folder" size={15} />
+            <span>文件</span>
+          </div>
+          <button className="sb-search-btn" title="搜索 (⌘K)" onClick={() => setSidebarTab("sessions")}>
+            <Icon name="i-search" size={15} />
+          </button>
+        </nav>
+
+        {/* Zone 3: Content */}
+        {sidebarTab === "sessions" ? (
+          <div className="session-list">
+            {wsStore.workspaces.length === 0 ? (
+              <div className="ws-empty-hint" onClick={() => setShowDirBrowser(true)}>
+                点击添加你的第一个项目
+              </div>
+            ) : !activeWs ? (
+              <div className="ws-empty-hint" onClick={() => setWsDropdownOpen(true)}>
+                点击顶部选择工作空间
+              </div>
+            ) : (() => {
+              const wsSessions = wsStore.sessionsByWs[activeWs.id] || [];
+              return wsSessions.length > 0 ? (
+                <SessionList
+                  sessions={wsSessions}
+                  activeSessionId={wsStore.activeSessionId}
+                  onSelect={handleSelectSession}
+                  onDelete={(e, sid) => handleDeleteSession(e, activeWs.id, sid)}
+                />
+              ) : (
+                <div className="ws-no-sessions">暂无会话<br /><button className="sb-tab" style={{ marginTop: 8 }} onClick={handleNewSession}>+ 新建会话</button></div>
+              );
+            })()}
+          </div>
+        ) : (
+          <SidebarFileTree onOpenFile={() => wsStore.setDrawerOpen(true)} />
+        )}
+
+        {/* Zone 4: Footer — Token + User */}
+        <div className="sb-footer">
+          <SidebarTokenRow usage={usage} modelInfo={modelInfo} onClick={() => setShowSettings(true)} />
+          <div className="user-row" onClick={() => setShowSettings(true)}>
+            <div className="user-avatar">鑫</div>
+            <span className="user-name-sb">小鑫</span>
+            <span className="user-plan-tag">{modelInfo?.provider ?? "zai"}</span>
+            <span className="user-settings-icon"><Icon name="i-settings" size={15} /></span>
           </div>
         </div>
-      )}
+      </aside>
 
-      <div className="main">
-        <ChatPanel />
-        <InputBar />
-      </div>
+      {/* ===== Main ===== */}
+      <main className={`main ${wsStore.drawerOpen ? "preview-open" : ""}`}>
+        {/* Chat Header — 在 main 里，不在 ChatPanel 里 */}
+        <header className="chat-head">
+          <button className="icon-btn sidebar-toggle" onClick={() => wsStore.toggleSidebar()} title="切换侧栏">
+            <Icon name="i-menu" size={18} />
+          </button>
+          <div className="chat-title-group">
+            <h1 className="chat-title">{activeWs?.name ?? "MyAgent"}</h1>
+          </div>
+          <div className="chat-actions">
+            {activeWs && (
+              <button
+                className={`icon-btn ${wsStore.drawerOpen ? "active" : ""}`}
+                onClick={() => wsStore.toggleDrawer()}
+                title={wsStore.drawerOpen ? "收起面板 (⌘⇧W)" : "展开文件面板 (⌘⇧W)"}
+              >
+                <Icon name="i-folder-open" size={16} />
+              </button>
+            )}
+            <button className="icon-btn" onClick={() => setShowDirBrowser(true)} title="添加工作空间">
+              <Icon name="i-plus" size={16} />
+            </button>
+            <button className="icon-btn" onClick={() => setShowSettings(true)} title="设置 (⌘,)">
+              <Icon name="i-settings" size={16} />
+            </button>
+          </div>
+        </header>
 
-      {wsStore.drawerOpen && (
-        <Splitter onResize={delta => wsStore.setPreviewWidth(wsStore.previewWidth - delta)} />
-      )}
-      {wsStore.drawerOpen && <WorkspaceDrawer />}
+        {/* Main Body: chat only (preview is overlay) */}
+        <div className="main-body">
+          <div className="chat-pane">
+            <ChatPanel />
+            <InputBar />
+          </div>
+        </div>
+
+        {/* 右侧预览抽屉（overlay，不挤压聊天区） */}
+        {wsStore.drawerOpen && (
+          <div className="preview-drawer">
+            <FilePreviewPane />
+          </div>
+        )}
+      </main>
+
       {showDirBrowser && (
         <DirBrowser onSelect={handleSelectDir} onCancel={() => setShowDirBrowser(false)} />
       )}
@@ -256,6 +313,7 @@ export default function App() {
   );
 }
 
+// ── Session List (grouped by date) ──
 function SessionList({ sessions, activeSessionId, onSelect, onDelete }: {
   sessions: ChatSession[];
   activeSessionId: string | null;
@@ -264,9 +322,9 @@ function SessionList({ sessions, activeSessionId, onSelect, onDelete }: {
 }) {
   const groups = groupSessionsByDate(sessions);
   return (
-    <div className="session-list">
+    <>
       {groups.map(group => (
-        <div key={group.label}>
+        <div key={group.label} className="session-group">
           <div className="session-group-label">{group.label}</div>
           {group.items.map(s => (
             <SessionRow
@@ -279,7 +337,7 @@ function SessionList({ sessions, activeSessionId, onSelect, onDelete }: {
           ))}
         </div>
       ))}
-    </div>
+    </>
   );
 }
 
@@ -289,17 +347,64 @@ function SessionRow({ session, isActive, onSelect, onDelete }: {
   onSelect: (s: ChatSession) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
 }) {
-  // 订阅该会话的 isGenerating 状态（响应式：状态变化时本行重新渲染）
   const isGenerating = useChatStore(s => s.sessions[session.id]?.isGenerating ?? false);
   return (
     <div
-      className={`session-item ${isActive ? "session-item-active" : ""}`}
+      className={`session-item ${isActive ? "active" : ""}`}
       onClick={() => onSelect(session)}
     >
-      <span className="session-icon">💬</span>
-      <span className="session-title">{session.title}</span>
-      {isGenerating && <span className="session-spinner" />}
-      <button className="session-delete-btn" onClick={(e) => onDelete(e, session.id)} title="删除">✕</button>
+      <div className="session-title">{session.title}</div>
+      <div className="session-meta">
+        {isGenerating ? (
+          <span className="session-badge">生成中</span>
+        ) : (
+          <span className="session-time">
+            {new Date(session.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
+          </span>
+        )}
+        <button
+          className="session-delete-btn"
+          onClick={(e) => { e.stopPropagation(); onDelete(e, session.id); }}
+          title="删除"
+        >
+          <Icon name="i-x" size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Sidebar Token Row ──
+function SidebarTokenRow({ usage, modelInfo, onClick }: {
+  usage: {
+    stats: { tokens: { input: number; output: number; total: number }; cost: number; toolCalls: number } | null;
+    context: { tokens: number | null; contextWindow: number; percent: number | null } | null;
+  } | null;
+  modelInfo: { provider: string; model: string; name: string; contextWindow: number } | null;
+  onClick?: () => void;
+}) {
+  if (!usage || !usage.context) {
+    return (
+      <div className="token-row" onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
+        <div className="token-bar-mini">
+          <div className="token-bar-mini-fill ok" style={{ width: "0%" }} />
+        </div>
+        <span className="token-pct ok">—</span>
+      </div>
+    );
+  }
+
+  const ctx = usage.context;
+  const pct = ctx.percent ?? 0;
+  const tier = pct >= 80 ? "danger" : pct >= 50 ? "warn" : "ok";
+  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+
+  return (
+    <div className="token-row" title={`${ctx.tokens != null ? fmt(ctx.tokens) : "?"} / ${fmt(ctx.contextWindow)} tokens`} onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
+      <div className="token-bar-mini">
+        <div className={`token-bar-mini-fill ${tier}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className={`token-pct ${tier}`}>{pct.toFixed(0)}%</span>
     </div>
   );
 }

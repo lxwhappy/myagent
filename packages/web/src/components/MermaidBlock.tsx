@@ -65,14 +65,28 @@ export function MermaidBlock({ chart }: { chart: string }) {
         }
         const renderId = `mmd-${idBase}-${++renderCounter}`;
         const result = await mermaid.render(renderId, code);
+        cleanupMermaidDom(renderId);
         if (cancelled) return;
         if (result?.svg) {
-          lastGoodSvg.current = result.svg;
-          setSvg(result.svg);
-          setError(null);
-          setLoading(false);
+          // Mermaid v11 语法错误时不抛异常，而是返回一个含 "Syntax error" 的错误 SVG
+          const isErrorSvg = /Syntax error|Parse error|error in text/i.test(result.svg);
+          if (isErrorSvg) {
+            if (lastGoodSvg.current) {
+              // 流式过程中代码不完整出错，保留上一次成功的图
+              setSvg(lastGoodSvg.current);
+            } else {
+              setError("Syntax error");
+              setLoading(false);
+            }
+          } else {
+            lastGoodSvg.current = result.svg;
+            setSvg(result.svg);
+            setError(null);
+            setLoading(false);
+          }
         }
       } catch (e: any) {
+        cleanupMermaidDom(`mmd-${idBase}-${renderCounter}`);
         if (cancelled) return;
         if (lastGoodSvg.current) {
           setSvg(lastGoodSvg.current);
@@ -240,4 +254,25 @@ function MermaidModal({ svg, onClose }: { svg: string; onClose: () => void }) {
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
+}
+
+/**
+ * 清理 Mermaid v11 在 document.body 上残留的临时渲染容器和错误 SVG。
+ * Mermaid render() 失败时不会自动清除它创建的 DOM 元素，导致页面布局错乱。
+ */
+function cleanupMermaidDom(renderId: string) {
+  // 1. 移除指定 renderId 的临时容器
+  const el = document.getElementById(renderId);
+  if (el) el.remove();
+
+  // 2. 移除所有 body 直属的 mermaid 残留元素（id 以 dmm- 或 mmd- 开头的 div）
+  document.querySelectorAll('body > div[id^="dmm-"], body > div[id^="mmd-"]').forEach(e => e.remove());
+
+  // 3. 移除 mermaid 错误 SVG 的残留容器（含 "Syntax error" 文本的孤立 SVG 父元素）
+  document.querySelectorAll('body > div > svg').forEach(svg => {
+    const text = svg.textContent || "";
+    if (/Syntax error|Parse error|error in text/i.test(text)) {
+      svg.parentElement?.remove();
+    }
+  });
 }

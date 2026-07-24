@@ -67,3 +67,6 @@ export const timeTool: ToolDefinition = {
 
 /** 导出所有自定义工具 */
 export const customTools: ToolDefinition[] = [weatherTool, timeTool];
+
+export { createTodoTool } from "./todo-tool.js";
+export { todoStore } from "./todo-store.js";

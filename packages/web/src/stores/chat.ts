@@ -53,6 +53,15 @@ export interface UsageInfo {
   } | null;
 }
 
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  priority: "low" | "medium" | "high";
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface SessionChatState {
   messages: Message[];
   isGenerating: boolean;
@@ -62,10 +71,11 @@ interface SessionChatState {
   modelInfo: ModelInfo | null;
   usage: UsageInfo | null;
   activeSkill: { name: string; path: string } | null;
+  todos: TodoItem[];
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [] });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
@@ -81,6 +91,7 @@ interface ChatStore {
   clearSession: (id: string) => void;
   setUsage: (id: string, usage: UsageInfo) => void;
   setActiveSkill: (id: string, skill: { name: string; path: string } | null) => void;
+  setTodos: (id: string, todos: TodoItem[]) => void;
 
   addUserMessage: (id: string, text: string) => void;
   startAssistantMessage: (id: string) => void;
@@ -130,6 +141,11 @@ export const useChatStore = create<ChatStore>((set) => ({
   setActiveSkill: (id, skill) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, activeSkill: skill } } };
+  }),
+
+  setTodos: (id, todos) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, todos } } };
   }),
 
   addUserMessage: (id, text) => set((s) => {

@@ -1,0 +1,113 @@
+/* ============================================================================
+ * PiAgent Design System — tokens.css
+ *
+ * 基于 Neutral Modern 的设计令牌，适用于 AI Agent Web Console 类产品。
+ * 直接 @import 或复制到项目 CSS 中即可使用。
+ *
+ * 用法：
+ *   @import url('./tokens.css');
+ *   .my-component { color: var(--accent); }
+ *
+ * 自定义：覆盖任意令牌值即可，所有组件通过 var() 引用，会自动跟随。
+ * ========================================================================== */
+
+:root {
+  /* ── Surface 表面层 (3 levels) ─────────────────────────────── */
+  --bg: #fafafa;                       /* 页面背景 */
+  --surface: #ffffff;                  /* 卡片/面板背景 */
+  --surface-warm: var(--surface);      /* 暖色表面（预留，默认同 surface） */
+
+  /* ── Foreground 前景文字 (4 levels) ────────────────────────── */
+  --fg: #111111;                       /* 主要文字 */
+  --fg-2: var(--fg);                   /* 次要文字（预留，默认同 fg） */
+  --muted: #6b6b6b;                    /* 辅助文字 */
+  --meta: var(--muted);                /* 元数据文字（预留，默认同 muted） */
+
+  /* ── Border 边框 (2 levels) ────────────────────────────────── */
+  --border: #e5e5e5;                   /* 标准边框 */
+  --border-soft: var(--border);        /* 轻量分隔线（预留，默认同 border） */
+
+  /* ── Accent 强调色 ─────────────────────────────────────────── */
+  --accent: #2f6feb;                   /* 钴蓝主色 */
+  --accent-on: #ffffff;                /* accent 背景上的文字色 */
+  --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+  --accent-active: color-mix(in oklab, var(--accent), black 14%);
+  --accent-tint: color-mix(in oklab, var(--accent), white 90%);
+
+  /* ── Semantic 语义状态色 ──────────────────────────────────── */
+  --success: #17a34a;
+  --warn: #eab308;
+  --danger: #dc2626;
+
+  /* ── Typography 字体 ──────────────────────────────────────── */
+  --font-display: "Inter", -apple-system, system-ui, sans-serif;
+  --font-body: "Inter", -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Type scale 字号 */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 48px;
+  --text-4xl: 64px;
+
+  /* Line height 行高 */
+  --leading-body: 1.5;
+  --leading-tight: 1.2;
+
+  /* Letter spacing 字距 */
+  --tracking-display: -0.01em;         /* ≥32px 标题使用 */
+
+  /* ── Spacing 间距 (4px base) ──────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-20: 80px;
+
+  /* Section rhythm 区域间距 */
+  --section-y-desktop: 80px;
+  --section-y-tablet: 48px;
+  --section-y-phone: 32px;
+
+  /* ── Radius 圆角 ──────────────────────────────────────────── */
+  --radius-sm: 8px;                    /* 按钮、输入框 */
+  --radius-md: 12px;                   /* 卡片、弹窗内体 */
+  --radius-lg: 16px;                   /* 用户消息气泡 */
+  --radius-pill: 9999px;               /* badge、进度条、头像 */
+
+  /* ── Elevation 阴影 (3 levels) ────────────────────────────── */
+  --elev-flat: none;
+  --elev-ring: 0 0 0 1px var(--border);
+  --elev-raised: 0 2px 8px color-mix(in oklab, var(--fg), transparent 92%);
+
+  /* ── Focus ring 焦点环 ────────────────────────────────────── */
+  --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%);
+
+  /* ── Motion 动效 ──────────────────────────────────────────── */
+  --motion-fast: 150ms;                /* hover、focus、微交互 */
+  --motion-base: 200ms;                /* 通用状态切换 */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Layout 布局 ──────────────────────────────────────────── */
+  --container-max: 1200px;
+  --container-gutter-desktop: 24px;
+  --container-gutter-tablet: 16px;
+  --container-gutter-phone: 12px;
+
+  /* ── App Shell 应用外壳 ───────────────────────────────────── */
+  --sidebar-w: 264px;                  /* 侧边栏宽度 */
+
+  /* ── Code Theme 代码主题 (Catppuccin Mocha) ───────────────── */
+  --code-bg: #1e1e2e;                  /* 代码块背景 */
+  --code-bg-2: #181825;                /* 代码块头部背景 */
+  --code-fg: #cdd6f4;                  /* 代码文字 */
+  --code-dim: #6c7086;                 /* 代码注释/语言标签 */
+}

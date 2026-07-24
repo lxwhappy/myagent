@@ -1,13 +1,16 @@
-// components/MessageItem.tsx — Codex IDE 风格：无边框行内工具摘要
+// components/MessageItem.tsx — PiAgent Design System 风格消息渲染
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Message, ToolExecution, SkillUsage } from "../stores/chat";
 import { MermaidBlock } from "./MermaidBlock";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
+import { Icon } from "./Icon";
 
 export function MessageItem({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
@@ -16,183 +19,215 @@ export function MessageItem({ msg }: { msg: Message }) {
   if (isUser) {
     return (
       <div className="msg msg-user">
-        <div className="msg-user-body">{msg.content}</div>
+        <div className="msg-body">
+          <div className="msg-content" style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="msg msg-assistant">
-      {/* 思考过程 — 无边框可展开行 */}
-      {msg.thinking && msg.thinking.trim() && (
-        <ThinkingRow thinking={msg.thinking} streaming={msg.isStreaming} />
-      )}
-
-      {/* Skill 加载 — 每个一行，闪电图标 */}
-      {msg.skillsUsed && msg.skillsUsed.length > 0 && (
-        <div className="msg-skills">
-          {msg.skillsUsed.map(sk => (
-            <SkillRow key={sk.name} skill={sk} streaming={msg.isStreaming} />
-          ))}
-        </div>
-      )}
-
-      {/* 工具调用 — 每个一行，无边框 */}
-      {msg.tools && msg.tools.length > 0 && (
-        <div className="msg-tools">
-          {msg.tools.map(t => (
-            <ToolRow key={t.toolCallId} tool={t} />
-          ))}
-        </div>
-      )}
-
-      {/* 等待指示器：流式开始但还没有任何内容（首字符延迟期间） */}
-      {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
-        <div className="msg-thinking-dots">
-          <span className="thinking-dot" />
-          <span className="thinking-dot" />
-          <span className="thinking-dot" />
-        </div>
-      )}
-
-      {/* 消息正文 */}
-      <div className="msg-body">
-        <ReactMarkdown
-          components={{
-            code({ node, className, children, ...props }: any) {
-              const match = /language-(\w+)/.exec(className || "");
-              const lang = match?.[1];
-              if (lang === "mermaid") {
-                return <MermaidBlock chart={String(children).replace(/\n$/, "")} />;
-              }
-              if (match) {
-                return (
-                  <SyntaxHighlighter style={oneDark} language={lang} PreTag="div">
-                    {String(children).replace(/\n$/, "")}
-                  </SyntaxHighlighter>
-                );
-              }
-              return <code className={className} {...props}>{children}</code>;
-            },
-          }}
-        >
-          {msg.content || ""}
-        </ReactMarkdown>
-        {msg.isStreaming && <span className="stream-cursor" />}
+      <div className="msg-avatar">
+        <Icon name="i-bot" size={18} />
       </div>
+      <div className="msg-body">
+        <div className="msg-author">MyAgent</div>
 
-      {/* 任务摘要卡 — 仅在有工具调用且流结束后显示 */}
-      {stats && !msg.isStreaming && (
-        <TaskSummaryCard stats={stats} />
-      )}
+        {/* 思考过程 — 可展开卡片 */}
+        {msg.thinking && msg.thinking.trim() && (
+          <ThinkingCard thinking={msg.thinking} streaming={msg.isStreaming} />
+        )}
+
+        {/* Skill 加载 */}
+        {msg.skillsUsed && msg.skillsUsed.length > 0 && (
+          <>
+            {msg.skillsUsed.map(sk => (
+              <SkillItem key={sk.name} skill={sk} streaming={msg.isStreaming} />
+            ))}
+          </>
+        )}
+
+        {/* 工具调用 */}
+        {msg.tools && msg.tools.length > 0 && (
+          <>
+            {msg.tools.map(t => (
+              <ToolCallCard key={t.toolCallId} tool={t} />
+            ))}
+          </>
+        )}
+
+        {/* 等待指示器：流式开始但还没有任何内容（首字符延迟期间） */}
+        {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
+          <div className="typing-indicator">
+            <span />
+            <span />
+            <span />
+          </div>
+        )}
+
+        {/* 消息正文 */}
+        {msg.content && (
+          <div className="msg-content">
+            <ErrorBoundary fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                pre: ({ children }) => <>{children}</>,
+                code({ node, className, children, ...props }: any) {
+                  const match = /language-(\w+)/.exec(className || "");
+                  const lang = match?.[1];
+                  const raw = String(children).replace(/\n$/, "");
+                  if (lang === "mermaid") {
+                    return (
+                      <ErrorBoundary
+                        fallback={
+                          <div className="mermaid-error">
+                            <div className="mermaid-error-title">⚠️ 流程图渲染失败</div>
+                            <pre className="mermaid-error-code">{raw}</pre>
+                          </div>
+                        }
+                      >
+                        <MermaidBlock chart={raw} />
+                      </ErrorBoundary>
+                    );
+                  }
+                  // 有语言标签 → 带高亮的代码块
+                  if (match) {
+                    return <CodeBlock language={lang!} value={raw} />;
+                  }
+                  // 无语言标签但含换行 → 纯文本代码块（不用深色背景）
+                  if (raw.includes("\n")) {
+                    return <CodeBlock language="text" value={raw} />;
+                  }
+                  // 单行 → 行内 code
+                  return <code className={className} {...props}>{children}</code>;
+                },
+              }}
+            >
+              {msg.content}
+            </ReactMarkdown>
+            </ErrorBoundary>
+            {msg.isStreaming && <span className="stream-cursor" />}
+          </div>
+        )}
+
+        {/* 任务摘要卡 — 仅在有工具调用且流结束后显示 */}
+        {stats && !msg.isStreaming && (
+          <TaskSummaryCard stats={stats} />
+        )}
+      </div>
     </div>
   );
 }
 
-// ── 工具行：图标 + 动词摘要，点击展开看详情（无边框）──
-function ToolRow({ tool }: { tool: ToolExecution }) {
+// ── 代码块：DS .code-block + .code-header + 复制按钮 ──
+function CodeBlock({ language, value }: { language: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    if (!navigator.clipboard) return;
+    navigator.clipboard
+      .writeText(value)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  };
+  return (
+    <div className="code-block">
+      <div className="code-header">
+        <span className="code-lang">{language}</span>
+        <button type="button" className="code-copy" onClick={copy}>
+          <Icon name={copied ? "i-check" : "i-copy"} size={14} />
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        language={language}
+        style={oneDark}
+        PreTag="div"
+        customStyle={{ margin: 0, background: "var(--code-bg)" }}
+      >
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
+// ── 工具调用卡片：DS .tool-call / .tool-call-header / .tool-call-body ──
+function ToolCallCard({ tool }: { tool: ToolExecution }) {
   const [open, setOpen] = useState(false);
   const summary = extractToolSummary(tool);
   const running = tool.status === "running";
   const errored = tool.status === "error";
+  const verb = verbForTool(tool.tool);
+
+  const statusClass = errored ? "error" : running ? "running" : "done";
+  const statusText = errored ? "error" : running ? "running" : "done";
+  const iconName = running ? "i-tool" : errored ? "i-x" : "i-check";
 
   return (
-    <div className={`tool-row${running ? " tool-running" : ""}${errored ? " tool-error" : ""}`}>
-      <button className="tool-row-head" onClick={() => setOpen(!open)}>
-        <span className="tool-ico">
-          {running ? (
-            <svg className="ico-spinner" width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" opacity="0.25" />
-              <path d="M6 1.5A4.5 4.5 0 1 1 1.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-          ) : errored ? (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </span>
-        <span className="tool-summary-text">
-          <span className="tool-verb-text">{verbForTool(tool.tool)}</span>
-          {summary && <span className="tool-arg"> {summary}</span>}
-        </span>
-        {open && <span className="tool-exp">▾</span>}
+    <div className={`tool-call${open ? " expanded" : ""}`}>
+      <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
+        <Icon name={iconName} size={16} className="tool-icon" />
+        <span className="tool-name">{verb}{summary ? ` ${summary}` : ""}</span>
+        <span className={`tool-status ${statusClass}`}>{statusText}</span>
+        <Icon name="i-chevron" size={14} className="tool-chevron" />
       </button>
-      {open && (
-        <div className="tool-row-body">
+      <div className="tool-call-body">
+        <div className="tool-section">
           {tool.input != null && (
-            <div className="tool-io-block">
-              <div className="tool-io-label">input</div>
-              <pre className="tool-io">{fmtIO(tool.input)}</pre>
-            </div>
+            <>
+              <div className="tool-section-label">input</div>
+              <pre className="tool-code"><code>{fmtIO(tool.input)}</code></pre>
+            </>
           )}
           {tool.output != null && (
-            <div className="tool-io-block">
-              <div className="tool-io-label">output</div>
-              <pre className="tool-io">{fmtIO(tool.output, 2000)}</pre>
-            </div>
+            <>
+              <div className="tool-section-label">output</div>
+              <pre className="tool-code"><code>{fmtIO(tool.output, 2000)}</code></pre>
+            </>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// ── 思考行：SVG spinner + "thinking"，点击展开 ──
-function ThinkingRow({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
+// ── 思考卡片：复用 .tool-call 结构 ──
+function ThinkingCard({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="tool-row tool-thinking">
-      <button className="tool-row-head" onClick={() => setOpen(!open)}>
-        <span className="tool-ico">
-          {streaming ? (
-            <svg className="ico-spinner" width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" opacity="0.25" />
-              <path d="M6 1.5A4.5 4.5 0 1 1 1.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
+    <div className={`tool-call${open ? " expanded" : ""}`}>
+      <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
+        <Icon name={streaming ? "i-tool" : "i-check"} size={16} className="tool-icon" />
+        <span className="tool-name">thinking</span>
+        <span className={`tool-status ${streaming ? "running" : "done"}`}>
+          {streaming ? "running" : "done"}
         </span>
-        <span className="tool-summary-text">
-          <span className="tool-verb-text">thinking</span>
-        </span>
-        {open && <span className="tool-exp">▾</span>}
+        <Icon name="i-chevron" size={14} className="tool-chevron" />
       </button>
-      {open && <pre className="tool-row-thinking-body">{thinking}</pre>}
+      <div className="tool-call-body">
+        <div className="tool-section">
+          <pre className="tool-code"><code>{thinking}</code></pre>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Skill 加载行：闪电图标 + skill 名称 ──
-function SkillRow({ skill, streaming }: { skill: SkillUsage; streaming?: boolean }) {
+// ── Skill 加载项：DS .skill-item ──
+function SkillItem({ skill, streaming }: { skill: SkillUsage; streaming?: boolean }) {
   return (
-    <div className="skill-row">
-      <span className="skill-row-ico">
-        {streaming ? (
-          <svg className="ico-spinner" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" opacity="0.25" />
-            <path d="M6 1.5A4.5 4.5 0 1 1 1.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M7 1L3 7H6L5 11L9 5H6L7 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15" />
-          </svg>
-        )}
-      </span>
-      <span className="skill-row-text">
-        加载 Skill <strong>{skill.name}</strong>
-      </span>
-      {!streaming && (
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ color: "var(--success)" }}>
-          <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
+    <div className="skill-item">
+      <div className="skill-icon">
+        <Icon name={streaming ? "i-zap" : "i-check"} size={18} />
+      </div>
+      <div className="skill-info">
+        <div className="skill-name">{skill.name}</div>
+        <div className="skill-desc">{streaming ? "加载中…" : "已加载"}</div>
+      </div>
     </div>
   );
 }
