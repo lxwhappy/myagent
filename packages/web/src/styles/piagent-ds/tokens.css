@@ -103,7 +103,7 @@
   --container-gutter-phone: 12px;
 
   /* ── App Shell 应用外壳 ───────────────────────────────────── */
-  --sidebar-w: 264px;                  /* 侧边栏宽度 */
+  --sidebar-w: 240px;                  /* 侧边栏宽度 */
 
   /* ── Code Theme 代码主题 (Catppuccin Mocha) ───────────────── */
   --code-bg: #1e1e2e;                  /* 代码块背景 */

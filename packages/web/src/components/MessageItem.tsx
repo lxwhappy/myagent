@@ -155,6 +155,25 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
   );
 }
 
+// ── 通用复制按钮 ──
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+  return (
+    <button type="button" className="tool-copy-btn" onClick={copy} title="复制">
+      <Icon name={copied ? "i-check" : "i-copy"} size={12} />
+      {label && <span>{copied ? "已复制" : label}</span>}
+    </button>
+  );
+}
+
 // ── 工具调用卡片：DS .tool-call / .tool-call-header / .tool-call-body ──
 function ToolCallCard({ tool }: { tool: ToolExecution }) {
   const [open, setOpen] = useState(false);
@@ -164,8 +183,11 @@ function ToolCallCard({ tool }: { tool: ToolExecution }) {
   const verb = verbForTool(tool.tool);
 
   const statusClass = errored ? "error" : running ? "running" : "done";
-  const statusText = errored ? "error" : running ? "running" : "done";
+  const statusText = errored ? "出错" : running ? "执行中" : "完成";
   const iconName = running ? "i-tool" : errored ? "i-x" : "i-check";
+
+  const inputText = tool.input != null ? fmtIO(tool.input) : "";
+  const outputText = tool.output != null ? fmtIO(tool.output, 2000) : "";
 
   return (
     <div className={`tool-call${open ? " expanded" : ""}`}>
@@ -179,14 +201,20 @@ function ToolCallCard({ tool }: { tool: ToolExecution }) {
         <div className="tool-section">
           {tool.input != null && (
             <>
-              <div className="tool-section-label">input</div>
-              <pre className="tool-code"><code>{fmtIO(tool.input)}</code></pre>
+              <div className="tool-section-label">
+                input
+                <CopyButton text={inputText} />
+              </div>
+              <pre className="tool-code"><code>{inputText}</code></pre>
             </>
           )}
           {tool.output != null && (
             <>
-              <div className="tool-section-label">output</div>
-              <pre className="tool-code"><code>{fmtIO(tool.output, 2000)}</code></pre>
+              <div className="tool-section-label">
+                output
+                <CopyButton text={outputText} />
+              </div>
+              <pre className="tool-code"><code>{outputText}</code></pre>
             </>
           )}
         </div>
@@ -202,14 +230,18 @@ function ThinkingCard({ thinking, streaming }: { thinking: string; streaming?: b
     <div className={`tool-call${open ? " expanded" : ""}`}>
       <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
         <Icon name={streaming ? "i-tool" : "i-check"} size={16} className="tool-icon" />
-        <span className="tool-name">thinking</span>
+        <span className="tool-name">思考过程</span>
         <span className={`tool-status ${streaming ? "running" : "done"}`}>
-          {streaming ? "running" : "done"}
+          {streaming ? "思考中" : "完成"}
         </span>
         <Icon name="i-chevron" size={14} className="tool-chevron" />
       </button>
       <div className="tool-call-body">
         <div className="tool-section">
+          <div className="tool-section-label">
+            内容
+            <CopyButton text={thinking} />
+          </div>
           <pre className="tool-code"><code>{thinking}</code></pre>
         </div>
       </div>
@@ -241,12 +273,12 @@ function fmtIO(v: unknown, max = 0): string {
 
 function verbForTool(name: string): string {
   const n = name.toLowerCase();
-  if (n.includes("bash") || n.includes("exec") || n.includes("terminal") || n.includes("shell") || n.includes("run")) return "ran";
-  if (n.includes("read") || n.includes("get") || n.includes("cat") || n.includes("view")) return "read";
-  if (n.includes("write") || n.includes("edit") || n.includes("patch") || n.includes("create")) return "edited";
-  if (n.includes("search") || n.includes("grep") || n.includes("find") || n.includes("glob")) return "searched";
-  if (n.startsWith("mcp__")) return "called";
-  return "used";
+  if (n.includes("bash") || n.includes("exec") || n.includes("terminal") || n.includes("shell") || n.includes("run")) return "已执行";
+  if (n.includes("read") || n.includes("get") || n.includes("cat") || n.includes("view")) return "已读取";
+  if (n.includes("write") || n.includes("edit") || n.includes("patch") || n.includes("create")) return "已编辑";
+  if (n.includes("search") || n.includes("grep") || n.includes("find") || n.includes("glob")) return "已搜索";
+  if (n.startsWith("mcp__")) return "已调用";
+  return "已使用";
 }
 
 function extractToolSummary(tool: ToolExecution): string {

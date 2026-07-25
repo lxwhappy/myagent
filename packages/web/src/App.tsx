@@ -358,26 +358,23 @@ function SessionRow({ session, isActive, onSelect, onDelete }: {
   const isGenerating = useChatStore(s => s.sessions[session.id]?.isGenerating ?? false);
   return (
     <div
-      className={`session-item ${isActive ? "active" : ""}`}
+      className={`session-item ${isActive ? "active" : ""} ${isGenerating ? "generating" : ""}`}
       onClick={() => onSelect(session)}
     >
-      <div className="session-title">{session.title}</div>
-      <div className="session-meta">
-        {isGenerating ? (
-          <span className="session-badge">生成中</span>
-        ) : (
-          <span className="session-time">
-            {new Date(session.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
-          </span>
-        )}
-        <button
-          className="session-delete-btn"
-          onClick={(e) => { e.stopPropagation(); onDelete(e, session.id); }}
-          title="删除"
-        >
-          <Icon name="i-x" size={12} />
-        </button>
-      </div>
+      <span className={`session-status ${isGenerating ? "generating" : isActive ? "active" : ""}`} />
+      <span className="session-title">{session.title}</span>
+      <span className="session-meta">
+        <span className="session-time">
+          {new Date(session.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
+        </span>
+      </span>
+      <button
+        className="session-delete-btn"
+        onClick={(e) => { e.stopPropagation(); onDelete(e, session.id); }}
+        title="删除会话"
+      >
+        <Icon name="i-trash" size={13} />
+      </button>
     </div>
   );
 }
