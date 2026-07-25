@@ -248,7 +248,7 @@ export default function App() {
 
         {/* Zone 4: Footer — Token + User */}
         <div className="sb-footer">
-          <SidebarTokenRow usage={usage} modelInfo={modelInfo} onClick={() => setShowSettings(true)} />
+          <SidebarTokenRow usage={usage} modelInfo={modelInfo} />
           <div className="user-row" onClick={() => setShowSettings(true)}>
             <div className="user-avatar">鑫</div>
             <span className="user-name-sb">小鑫</span>
@@ -268,25 +268,7 @@ export default function App() {
           <div className="chat-title-group">
             <h1 className="chat-title">{activeWs?.name ?? "MyAgent"}</h1>
           </div>
-          <div className="chat-actions">
-            {activeWs && (
-              <button
-                className={`icon-btn ${wsStore.drawerOpen ? "active" : ""}`}
-                onClick={() => wsStore.toggleDrawer()}
-                title={wsStore.drawerOpen ? "收起面板 (⌘⇧W)" : "展开文件面板 (⌘⇧W)"}
-              >
-                <Icon name="i-folder-open" size={16} />
-              </button>
-            )}
-            <button className="icon-btn" onClick={() => setShowDirBrowser(true)} title="添加工作空间">
-              <Icon name="i-plus" size={16} />
-            </button>
-            <button className="icon-btn" onClick={() => setShowSettings(true)} title="设置 (⌘,)">
-              <Icon name="i-settings" size={16} />
-            </button>
-          </div>
         </header>
-
         {/* Main Body: chat only (preview is overlay) */}
         <div className="main-body">
           <div className="chat-pane">
@@ -295,9 +277,31 @@ export default function App() {
           </div>
         </div>
 
-        {/* 右侧预览抽屉（overlay，不挤压聊天区） */}
+        {/* 右侧预览抽屉（overlay，可拖拽调宽） */}
         {wsStore.drawerOpen && (
-          <div className="preview-drawer">
+          <div className="preview-drawer" style={{ width: wsStore.previewWidth }}>
+            <div
+              className="preview-resize-handle"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startX = e.clientX;
+                const startW = wsStore.previewWidth;
+                const onMove = (ev: MouseEvent) => {
+                  const delta = startX - ev.clientX;
+                  wsStore.setPreviewWidth(startW + delta);
+                };
+                const onUp = () => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  document.body.style.cursor = "";
+                  document.body.style.userSelect = "";
+                };
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              }}
+            />
             <FilePreviewPane />
           </div>
         )}
@@ -307,7 +311,11 @@ export default function App() {
         <DirBrowser onSelect={handleSelectDir} onCancel={() => setShowDirBrowser(false)} />
       )}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          onSwitchWorkspace={handleSwitchWs}
+          onAddWorkspace={() => setShowDirBrowser(true)}
+        />
       )}
     </div>
   );
@@ -375,36 +383,38 @@ function SessionRow({ session, isActive, onSelect, onDelete }: {
 }
 
 // ── Sidebar Token Row ──
-function SidebarTokenRow({ usage, modelInfo, onClick }: {
+function SidebarTokenRow({ usage, modelInfo }: {
   usage: {
     stats: { tokens: { input: number; output: number; total: number }; cost: number; toolCalls: number } | null;
     context: { tokens: number | null; contextWindow: number; percent: number | null } | null;
   } | null;
   modelInfo: { provider: string; model: string; name: string; contextWindow: number } | null;
-  onClick?: () => void;
 }) {
-  if (!usage || !usage.context) {
-    return (
-      <div className="token-row" onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
-        <div className="token-bar-mini">
-          <div className="token-bar-mini-fill ok" style={{ width: "0%" }} />
-        </div>
-        <span className="token-pct ok">—</span>
-      </div>
-    );
-  }
-
-  const ctx = usage.context;
-  const pct = ctx.percent ?? 0;
+  const ctx = usage?.context;
+  const pct = ctx?.percent ?? 0;
   const tier = pct >= 80 ? "danger" : pct >= 50 ? "warn" : "ok";
-  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+  const tokens = usage?.stats?.tokens;
+  const toK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
   return (
-    <div className="token-row" title={`${ctx.tokens != null ? fmt(ctx.tokens) : "?"} / ${fmt(ctx.contextWindow)} tokens`} onClick={onClick} style={{ cursor: onClick ? "pointer" : "default" }}>
-      <div className="token-bar-mini">
-        <div className={`token-bar-mini-fill ${tier}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    <div className="token-detail-row" title={modelInfo ? `${modelInfo.provider}/${modelInfo.model}` : undefined}>
+      <div className="token-detail-ctx">
+        <div className="token-bar-mini">
+          <div className={`token-bar-mini-fill ${tier}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+        </div>
+        <span className="token-detail-ctx-text">
+          {ctx?.tokens != null ? toK(ctx.tokens) : "—"}<span className="tds-sep">/</span>{ctx?.contextWindow ? toK(ctx.contextWindow) : "?"}
+        </span>
       </div>
-      <span className={`token-pct ${tier}`}>{pct.toFixed(0)}%</span>
+      {tokens ? (
+        <div className="token-detail-stats">
+          <span className="tds-item">↑{toK(tokens.input)}</span>
+          <span className="tds-item">↓{toK(tokens.output)}</span>
+          <span className="tds-item tds-total">Σ{toK(tokens.total)}</span>
+        </div>
+      ) : (
+        <div className="token-detail-stats"><span className="tds-empty">无用量</span></div>
+      )}
     </div>
   );
 }

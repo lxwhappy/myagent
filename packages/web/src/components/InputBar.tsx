@@ -52,6 +52,8 @@ function imageToBase64(file: File): Promise<AttachedImage> {
 
 export function InputBar() {
   const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId } = useChat();
+  const thinkingEnabled = useChatStore(s => s.thinkingEnabled);
+  const toggleThinking = useChatStore(s => s.toggleThinking);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -364,6 +366,17 @@ export function InputBar() {
               <span>松开以添加图片</span>
             </div>
           )}
+
+          {/* 思考开关 */}
+          <button
+            className={`input-thinking${thinkingEnabled ? " active" : ""}`}
+            onClick={toggleThinking}
+            type="button"
+            aria-label="切换思考模式"
+            title={thinkingEnabled ? "思考已开启（点击关闭）" : "思考已关闭（点击开启，模型会先思考再回答）"}
+          >
+            🧠
+          </button>
 
           {/* 发送 / 停止 */}
           {isGenerating ? (

@@ -92,6 +92,19 @@ export function getAgent(chatSessionId: string): AgentSession | undefined {
   return registry.get(chatSessionId)?.agent;
 }
 
+// 动态切换思考级别（在 prompt 前调用，对下一轮 agent 回合生效）
+// setThinkingLevel 内部会 clamp 到当前模型支持的范围。
+export function setThinkingLevel(chatSessionId: string, level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"): boolean {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return false;
+  try {
+    entry.agent.setThinkingLevel(level);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function destroyAgent(chatSessionId: string): void {
   const entry = registry.get(chatSessionId);
   if (!entry) return;

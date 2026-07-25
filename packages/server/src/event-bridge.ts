@@ -4,6 +4,7 @@
 
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { emit } from "./event-bus.js";
+import { chatSessionStore } from "./chat-sessions.js";
 
 export class EventBridge {
   bind(chatSessionId: string, session: AgentSession): () => void {
@@ -15,7 +16,7 @@ export class EventBridge {
       try {
         const stats = session.getSessionStats();
         const ctx = session.getContextUsage();
-        send("usage_update", {
+        const usage = {
           stats: {
             tokens: stats.tokens,
             cost: stats.cost,
@@ -28,7 +29,10 @@ export class EventBridge {
             contextWindow: ctx.contextWindow,
             percent: ctx.percent,
           } : null,
-        });
+        };
+        send("usage_update", usage);
+        // 持久化到会话文件，刷新后可恢复
+        chatSessionStore.setUsage(chatSessionId, usage).catch(() => {});
       } catch {}
     };
 

@@ -1,11 +1,19 @@
 // ============================================================
-// chat-sessions.ts — 会话持久化管理
+// chat-sessions.ts — 会话持久化管理（每会话独立文件）
 //
-// 每个 ChatSession 绑定到一个 Workspace。
-// 存储在 ~/.pi/agent/myagent-chat-sessions.json
+// 存储布局（~/.pi/agent/sessions/）：
+//   sessions/<id>.json  — 单个会话完整内容（含 messages）
+//   sessions/index.json — 轻量元数据索引（id → {title, workspaceId, ...}）
+//
+// 相比旧的「全堆一个文件」方案：
+//   - addMessage 只重写单个会话文件，不再全量重写所有会话
+//   - listByWorkspace 只读轻量 index（无 messages），不扫所有文件
+//   - 内存缓存：get 命中缓存不读磁盘
+//
+// 首次加载若检测到旧文件 myagent-chat-sessions.json，自动迁移。
 // ============================================================
 
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -24,48 +32,130 @@ export interface ChatSession {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  // 最近一次 agent_end 的 usage 快照，刷新后可恢复
+  lastUsage?: unknown;
 }
 
-const SESSIONS_FILE = join(
-  process.env.HOME || process.env.USERPROFILE || "/",
-  ".pi",
-  "agent",
-  "myagent-chat-sessions.json",
-);
+// index 条目：不含 messages 的轻量元数据，用于列表查询
+interface SessionMeta {
+  id: string;
+  workspaceId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
-let sessions: ChatSession[] = [];
+const HOME = process.env.HOME || process.env.USERPROFILE || "/";
+// 独立目录，避免和 pi-coding-agent 的 ~/.pi/agent/sessions/ 冲突
+const SESSIONS_DIR = join(HOME, ".pi", "agent", "myagent-sessions");
+const INDEX_FILE = join(SESSIONS_DIR, "index.json");
+const OLD_FILE = join(HOME, ".pi", "agent", "myagent-chat-sessions.json");
+
 let loaded = false;
+// 元数据索引（全量常驻内存，极小：每会话 ~100B）
+let index: Record<string, SessionMeta> = {};
+// 完整会话缓存（按需加载，命中缓存不读磁盘）
+const cache = new Map<string, ChatSession>();
+
+function sessionFile(id: string): string {
+  return join(SESSIONS_DIR, `${id}.json`);
+}
 
 async function ensureLoaded() {
   if (loaded) return;
   loaded = true;
-  try {
-    if (existsSync(SESSIONS_FILE)) {
-      const raw = await readFile(SESSIONS_FILE, "utf-8");
-      sessions = JSON.parse(raw).sessions || [];
+  await mkdir(SESSIONS_DIR, { recursive: true });
+
+  // 读 index
+  if (existsSync(INDEX_FILE)) {
+    try {
+      index = JSON.parse(await readFile(INDEX_FILE, "utf-8"));
+    } catch {
+      index = {};
     }
-  } catch {
-    sessions = [];
+  }
+
+  // 首次迁移：旧的单文件数据 → 每会话独立文件
+  if (Object.keys(index).length === 0 && existsSync(OLD_FILE)) {
+    await migrateOldFormat();
   }
 }
 
-async function persist() {
-  const dir = join(SESSIONS_FILE, "..");
-  if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-  await writeFile(SESSIONS_FILE, JSON.stringify({ sessions }, null, 2));
+// 把旧的 myagent-chat-sessions.json 拆成每会话独立文件 + 建 index
+async function migrateOldFormat() {
+  try {
+    const raw = JSON.parse(await readFile(OLD_FILE, "utf-8"));
+    const sessions: ChatSession[] = raw.sessions || [];
+    for (const s of sessions) {
+      await writeFile(sessionFile(s.id), JSON.stringify(s, null, 2), "utf-8");
+      index[s.id] = {
+        id: s.id,
+        workspaceId: s.workspaceId,
+        title: s.title,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      };
+    }
+    await persistIndex();
+    console.log(`[chat-sessions] migrated ${sessions.length} session(s) to per-file storage`);
+  } catch (e: any) {
+    console.error("[chat-sessions] migration error:", e.message);
+  }
+}
+
+async function persistIndex() {
+  await writeFile(INDEX_FILE, JSON.stringify(index, null, 2), "utf-8");
+}
+
+// 读取单个会话（优先缓存）
+async function loadSession(id: string): Promise<ChatSession | undefined> {
+  const cached = cache.get(id);
+  if (cached) return cached;
+  try {
+    const s: ChatSession = JSON.parse(await readFile(sessionFile(id), "utf-8"));
+    cache.set(id, s);
+    return s;
+  } catch {
+    return undefined;
+  }
+}
+
+// 写单个会话文件 + 更新缓存 + 同步 index 元数据
+async function writeSession(s: ChatSession, updateIndex = true) {
+  cache.set(s.id, s);
+  await writeFile(sessionFile(s.id), JSON.stringify(s, null, 2), "utf-8");
+  if (updateIndex) {
+    index[s.id] = {
+      id: s.id,
+      workspaceId: s.workspaceId,
+      title: s.title,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    };
+    await persistIndex();
+  }
 }
 
 export const chatSessionStore = {
+  // 列表查询：只读轻量 index，不碰 messages，不读会话文件
   async listByWorkspace(workspaceId: string): Promise<ChatSession[]> {
     await ensureLoaded();
-    return sessions
-      .filter((s) => s.workspaceId === workspaceId)
-      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return Object.values(index)
+      .filter((m) => m.workspaceId === workspaceId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((m) => ({
+        id: m.id,
+        workspaceId: m.workspaceId,
+        title: m.title,
+        messages: [], // 列表不返回消息，按需 get(id) 加载
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt,
+      }));
   },
 
   async get(id: string): Promise<ChatSession | undefined> {
     await ensureLoaded();
-    return sessions.find((s) => s.id === id);
+    return loadSession(id);
   },
 
   async create(workspaceId: string, title?: string): Promise<ChatSession> {
@@ -79,23 +169,24 @@ export const chatSessionStore = {
       createdAt: now,
       updatedAt: now,
     };
-    sessions.push(session);
-    await persist();
+    await writeSession(session);
+    console.log(`[chat-sessions] created ${session.id.slice(0, 8)} (ws=${workspaceId})`);
     return session;
   },
 
   async updateTitle(id: string, title: string) {
     await ensureLoaded();
-    const s = sessions.find((s) => s.id === id);
-    if (s) {
-      s.title = title.slice(0, 40);
-      await persist();
-    }
+    const s = await loadSession(id);
+    if (!s) return;
+    s.title = title.slice(0, 40);
+    s.updatedAt = Date.now();
+    await writeSession(s);
   },
 
+  // 只重写单个会话文件，不再全量重写所有会话
   async addMessage(id: string, role: "user" | "assistant", content: string): Promise<ChatMessage> {
     await ensureLoaded();
-    const s = sessions.find((s) => s.id === id);
+    const s = await loadSession(id);
     const msg: ChatMessage = {
       id: randomUUID(),
       role,
@@ -105,23 +196,35 @@ export const chatSessionStore = {
     if (s) {
       s.messages.push(msg);
       s.updatedAt = Date.now();
-      await persist();
+      await writeSession(s);
     }
     return msg;
   },
 
   async touch(id: string) {
     await ensureLoaded();
-    const s = sessions.find((s) => s.id === id);
-    if (s) {
-      s.updatedAt = Date.now();
-      await persist();
-    }
+    const s = await loadSession(id);
+    if (!s) return;
+    s.updatedAt = Date.now();
+    await writeSession(s);
+  },
+
+  // 存最近一次 usage 快照（agent_end 时调用），刷新后可恢复
+  async setUsage(id: string, usage: unknown) {
+    await ensureLoaded();
+    const s = await loadSession(id);
+    if (!s) return;
+    s.lastUsage = usage;
+    await writeSession(s, false); // 不更新 index（元数据没变）
   },
 
   async remove(id: string) {
     await ensureLoaded();
-    sessions = sessions.filter((s) => s.id !== id);
-    await persist();
+    delete index[id];
+    cache.delete(id);
+    await persistIndex();
+    try {
+      await rm(sessionFile(id), { force: true });
+    } catch {}
   },
 };

@@ -78,12 +78,12 @@ class SSEClient {
     }
   }
 
-  async prompt(chatSessionId: string, message: string, images?: unknown) {
+  async prompt(chatSessionId: string, message: string, images?: unknown, thinking?: boolean) {
     try {
       await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, images }),
+        body: JSON.stringify({ message, images, thinking }),
       });
     } catch (err) {
       console.error("[sse] prompt failed:", err);

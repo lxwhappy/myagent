@@ -62,7 +62,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   expandedWs: new Set(),
   drawerOpen: false,
   sidebarCollapsed: false,
-  previewWidth: 280,
+  previewWidth: 520,
   treeWidth: 220,
   searchQuery: "",
   currentFile: null,

@@ -22,7 +22,34 @@ const EXT_LANG: Record<string,string> = {
   ".json":"json",".css":"css",".html":"html",".md":"markdown",".py":"python",
   ".go":"go",".rs":"rust",".java":"java",".sh":"bash",".yml":"yaml",".yaml":"yaml",
   ".toml":"toml",".sql":"sql",".xml":"xml",".vue":"vue",".svelte":"svelte",
+  ".svg":"svg",
 };
+
+// 预览文件服务的 Content-Type 映射（相对路径资源自动解析需要）
+const CONTENT_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".ico": "image/x-icon",
+  ".map": "application/json",
+  ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+};
+// 预览路由允许的最大单文件（比代码预览宽松，覆盖大 HTML 应用）
+const PREVIEW_MAX_SIZE = 5 * 1024 * 1024;
 
 function getWs(id: string): Workspace | undefined {
   return workspaces.get(id);
@@ -135,6 +162,34 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
       };
     } catch (err: any) {
       return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // ── 预览文件服务（原始文件 + 正确 Content-Type，支持相对路径资源解析）──
+  // iframe 用真实 URL 加载 HTML 时，其中的 <link href="assets/x.css"> 等相对路径
+  // 会被浏览器解析为 /api/workspace/:id/preview/<dir>/assets/x.css 自动加载。
+  app.get("/api/workspace/:id/preview/*", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).type("text/plain").send("Workspace not found");
+
+    const relPath = ((req.params as any)["*"] || "").replace(/^\//, "");
+    if (!relPath) return reply.code(400).type("text/plain").send("path required");
+
+    const absPath = resolve(ws.path, relPath);
+    const rel = relative(ws.path, absPath);
+    if (rel.startsWith("..")) return reply.code(403).type("text/plain").send("Path outside workspace");
+
+    try {
+      const s = await stat(absPath);
+      if (!s.isFile()) return reply.code(404).type("text/plain").send("Not a file");
+      if (s.size > PREVIEW_MAX_SIZE) return reply.code(413).type("text/plain").send("File too large");
+
+      const buf = await readFile(absPath);
+      const ct = CONTENT_TYPES[extname(absPath)] ?? "application/octet-stream";
+      reply.type(ct).send(buf);
+    } catch {
+      return reply.code(404).type("text/plain").send("File not found");
     }
   });
 

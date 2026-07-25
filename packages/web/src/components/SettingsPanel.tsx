@@ -2,8 +2,10 @@
 // Claude Warm Light 暖色调设计
 
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "./Icon";
+import { useWorkspaceStore } from "../stores/workspace";
 
-type Tab = "models" | "skills" | "mcp";
+type Tab = "models" | "skills" | "mcp" | "workspace";
 
 interface ModelInfo {
   id: string;
@@ -37,7 +39,11 @@ interface McpServerConfig {
   env?: Record<string, string>;
 }
 
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
+  onClose: () => void;
+  onSwitchWorkspace: (wsId: string) => void;
+  onAddWorkspace: () => void;
+}) {
   const [tab, setTab] = useState<Tab>("models");
 
   return (
@@ -51,11 +57,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <button className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>🤖 模型</button>
           <button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}>⚡ Skills</button>
           <button className={tab === "mcp" ? "active" : ""} onClick={() => setTab("mcp")}>🔌 MCP</button>
+          <button className={tab === "workspace" ? "active" : ""} onClick={() => setTab("workspace")}>📁 工作空间</button>
         </div>
         <div className="settings-body">
           {tab === "models" && <ModelsTab />}
           {tab === "skills" && <SkillsTab />}
           {tab === "mcp" && <McpTab />}
+          {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
         </div>
       </div>
     </div>
@@ -434,6 +442,73 @@ function McpTab() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── 工作空间管理 Tab ──
+function WorkspaceTab({ onSwitchWorkspace, onAddWorkspace, onClose }: {
+  onSwitchWorkspace: (wsId: string) => void;
+  onAddWorkspace: () => void;
+  onClose: () => void;
+}) {
+  const activeId = useWorkspaceStore(s => s.activeId);
+  const removeWorkspace = useWorkspaceStore(s => s.removeWorkspace);
+  const [data, setData] = useState<{ workspaces: Array<{ id: string; name: string; path: string }> } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    setLoading(true);
+    fetch("/api/workspaces").then(r => r.json()).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`移除工作空间「${name}」？\n（仅从列表移除，不删除磁盘文件）`)) return;
+    await fetch(`/api/workspaces/${encodeURIComponent(id)}`, { method: "DELETE" });
+    removeWorkspace(id);
+    load();
+  };
+
+  const handleSwitch = (id: string) => {
+    if (id === activeId) return;
+    onSwitchWorkspace(id);
+    onClose();
+  };
+
+  if (loading) return <div className="settings-loading">加载工作空间…</div>;
+  const workspaces = data?.workspaces || [];
+
+  return (
+    <div className="settings-workspaces">
+      <div className="settings-current">
+        共 <strong>{workspaces.length}</strong> 个工作空间
+        <button className="ws-add-btn" onClick={() => { onAddWorkspace(); onClose(); }}>📁 添加工作空间…</button>
+      </div>
+      <div className="ws-manage-list">
+        {workspaces.length === 0 && (
+          <div className="settings-empty">还没有工作空间，点击上方添加。</div>
+        )}
+        {workspaces.map(w => (
+          <div key={w.id} className={`ws-manage-item ${w.id === activeId ? "active" : ""}`}>
+            <div className="ws-manage-info" onClick={() => handleSwitch(w.id)}>
+              <Icon name="i-folder" size={16} className="ws-manage-icon" />
+              <div className="ws-manage-text">
+                <span className="ws-manage-name">
+                  {w.name}
+                  {w.id === activeId && <span className="tag tag-active">当前</span>}
+                </span>
+                <span className="ws-manage-path" title={w.path}>{w.path}</span>
+              </div>
+            </div>
+            <button className="ws-manage-del" onClick={() => handleDelete(w.id, w.name)} title="移除">✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="settings-hint" style={{ marginTop: 12 }}>
+        点击切换工作空间；✕ 仅从列表移除，不删除磁盘文件。
       </div>
     </div>
   );

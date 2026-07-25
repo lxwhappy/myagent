@@ -81,8 +81,10 @@ interface ChatStore {
   sessions: Record<string, SessionChatState>;
   activeChatSessionId: string | null;
   connected: boolean;
+  thinkingEnabled: boolean;
 
   setConnected: (v: boolean) => void;
+  toggleThinking: () => void;
   setActiveChatSession: (id: string | null) => void;
   ensureSession: (id: string) => void;
   setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo) => void;
@@ -107,8 +109,14 @@ export const useChatStore = create<ChatStore>((set) => ({
   sessions: {},
   activeChatSessionId: null,
   connected: false,
+  thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") === "1"; } catch { return false; } })(),
 
   setConnected: (v) => set({ connected: v }),
+  toggleThinking: () => set((s) => {
+    const v = !s.thinkingEnabled;
+    try { localStorage.setItem("myagent:thinking", v ? "1" : "0"); } catch {}
+    return { thinkingEnabled: v };
+  }),
   setActiveChatSession: (id) => set({ activeChatSessionId: id }),
 
   ensureSession: (id) => set((s) => s.sessions[id] ? {} : { sessions: { ...s.sessions, [id]: empty() } }),

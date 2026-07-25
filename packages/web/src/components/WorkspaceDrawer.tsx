@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import type { FileItem } from "../hooks/workspace-types";
 import { Icon } from "./Icon";
@@ -289,6 +289,14 @@ export function FilePreviewPane() {
           <div className="preview-empty">加载中...</div>
         ) : ws.currentFile.language === "markdown" ? (
           <MarkdownPreview content={ws.currentFile.content} />
+        ) : ws.currentFile.language === "html" || ws.currentFile.language === "svg" ? (
+          <HtmlPreview
+            content={ws.currentFile.content}
+            filename={ws.currentFile.path.split("/").pop() || "preview"}
+            language={ws.currentFile.language}
+            wsId={wsStore.activeId}
+            path={ws.currentFile.path}
+          />
         ) : (
           <SyntaxHighlighter
             language={ws.currentFile.language}
@@ -297,6 +305,97 @@ export function FilePreviewPane() {
             customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)" }}
           >
             {ws.currentFile.content}
+          </SyntaxHighlighter>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── HTML / SVG 渲染预览 ──
+// HTML：用后端代理 URL 加载（iframe src），相对路径的 CSS/JS/图片会被浏览器
+//       自动解析为 /api/workspace/:id/preview/<dir>/... 正确加载。
+//       sandbox 限制：允许脚本和同源（资源加载），禁止 top-navigation。
+// SVG：内联内容少、无外部依赖，用 srcDoc 包一层 HTML 容器即可。
+function HtmlPreview({ content, filename, language, wsId, path }: {
+  content: string;
+  filename: string;
+  language: string;
+  wsId: string | null;
+  path: string;
+}) {
+  const [mode, setMode] = useState<"render" | "source">("render");
+
+  // HTML 代理 URL（有 wsId 才能用后端目录服务）
+  const previewUrl = wsId && language === "html"
+    ? `/api/workspace/${wsId}/preview/${path}`
+    : null;
+
+  // SVG 用 srcDoc：包一层 HTML 容器，白底居中 + 自适应缩放
+  const srcDoc = useMemo(() => {
+    if (language === "svg") {
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;background:#fff;}
+        svg{max-width:100%;max-height:100%;}
+      </style></head><body>${content}</body></html>`;
+    }
+    return content;
+  }, [content, language]);
+
+  // 新窗口打开：HTML 用代理 URL（相对路径可用）；SVG 用 Blob
+  const openInNewTab = () => {
+    if (previewUrl) {
+      window.open(previewUrl, "_blank");
+    } else {
+      const blob = new Blob([srcDoc], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+  };
+
+  return (
+    <div className="html-preview-wrap">
+      <div className="html-preview-toolbar">
+        <div className="html-preview-modes">
+          <button
+            className={`hpv-mode-btn ${mode === "render" ? "active" : ""}`}
+            onClick={() => setMode("render")}
+          >渲染</button>
+          <button
+            className={`hpv-mode-btn ${mode === "source" ? "active" : ""}`}
+            onClick={() => setMode("source")}
+          >源码</button>
+        </div>
+        <button className="hpv-newwin-btn" onClick={openInNewTab} title="新窗口打开">
+          ↗ 新窗口
+        </button>
+      </div>
+      <div className="html-preview-body">
+        {mode === "render" ? (
+          previewUrl ? (
+            <iframe
+              title={filename}
+              src={previewUrl}
+              sandbox="allow-scripts allow-same-origin"
+              className="html-preview-iframe"
+            />
+          ) : (
+            <iframe
+              title={filename}
+              srcDoc={srcDoc}
+              sandbox="allow-same-origin"
+              className="html-preview-iframe"
+            />
+          )
+        ) : (
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            showLineNumbers
+            customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)", height: "100%" }}
+          >
+            {content}
           </SyntaxHighlighter>
         )}
       </div>

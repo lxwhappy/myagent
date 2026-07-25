@@ -266,7 +266,7 @@ export function useChat() {
         ws.updateSession(ws.activeSessionId, { title });
       }
     }
-    sseClient.prompt(sid!, text, images);
+    sseClient.prompt(sid!, text, images, useChatStore.getState().thinkingEnabled);
   }, []);
 
   const abort = useCallback(() => {
@@ -290,6 +290,8 @@ export function useChat() {
       const chat = useChatStore.getState();
       chat.ensureSession(chatSessionId);
       chat.loadMessages(chatSessionId, (data.messages || []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+      // 恢复上次保存的 usage（刷新后不丢失）
+      if (data.lastUsage) chat.setUsage(chatSessionId, data.lastUsage);
       if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
       (window as any).__chatToAppSession[chatSessionId] = appSessionId;
 

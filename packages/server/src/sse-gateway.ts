@@ -9,7 +9,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
-import { createAgent, getAgent, destroyAgent } from "./agent-registry.js";
+import { createAgent, getAgent, destroyAgent, setThinkingLevel } from "./agent-registry.js";
 
 export function setupSSEGateway(app: FastifyInstance) {
   // ── 全局 SSE 事件流 ──
@@ -60,7 +60,7 @@ export function setupSSEGateway(app: FastifyInstance) {
   // ── 发送消息 ──
   app.post("/api/agent/:id/prompt", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { message?: string; images?: unknown; cwd?: string } | null;
+    const body = req.body as { message?: string; images?: unknown; cwd?: string; thinking?: boolean } | null;
 
     let agent = getAgent(id);
     if (!agent) {
@@ -73,7 +73,14 @@ export function setupSSEGateway(app: FastifyInstance) {
       return;
     }
 
-    console.log(`[prompt] ${id.slice(0, 8)}: ${String(body?.message).slice(0, 60)}`);
+    // 对话中动态切换思考级别（影响本轮及后续）。
+    // thinking=true → medium（setThinkingLevel 内部会 clamp 到模型支持范围）
+    // thinking=false → off
+    if (body?.thinking !== undefined) {
+      setThinkingLevel(id, body.thinking ? "medium" : "off");
+    }
+
+    console.log(`[prompt] ${id.slice(0, 8)}: ${String(body?.message).slice(0, 60)}${body?.thinking ? " [thinking]" : ""}`);
     try {
       // 不 await — 事件通过 SSE 流式返回
       agent.prompt(body?.message ?? "", { images: body?.images as any }).catch((err: any) => {
