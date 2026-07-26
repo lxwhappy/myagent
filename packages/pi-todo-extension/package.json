@@ -1,0 +1,29 @@
+{
+  "name": "@myagent/pi-todo-extension",
+  "version": "0.1.0",
+  "description": "Todo list tool for Pi Agent — task tracking with real-time progress",
+  "type": "module",
+  "main": "./index.ts",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./src/store.ts": "./src/store.ts",
+    "./src/tool.ts": "./src/tool.ts",
+    "./src/extension.ts": "./src/extension.ts",
+    "./store": "./src/store.ts",
+    "./tool": "./src/tool.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.80.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "latest",
+    "typescript": "^5"
+  }
+}

@@ -17,3 +17,9 @@ data/
 
 # Output files
 output/
+
+# Hermes agent workspace
+.hermes/
+
+# 临时/测试文件
+tetris.html

@@ -1,5 +1,6 @@
 // components/TaskSummaryCard.tsx — Agent 回合结束后的结构化状态卡
 
+import { useState } from "react";
 import type { SessionStats } from "../utils/sessionStats";
 
 interface Props {
@@ -9,24 +10,44 @@ interface Props {
 }
 
 export function TaskSummaryCard({ stats, isStreaming, onOpenChanges }: Props) {
-  const { totalActions, edits, commands, reads, searches, errors, filesChanged } = stats;
+  const { totalActions, edits, commands, reads, searches, errors, errorDetails, filesChanged } = stats;
   const hasErrors = errors > 0;
   const fileCount = filesChanged.length;
+  const [showErrors, setShowErrors] = useState(false);
 
   return (
     <div className={`task-card ${hasErrors ? "task-card-error" : ""} ${isStreaming ? "task-card-streaming" : ""}`}>
       {/* 顶部状态行 */}
       <div className="task-card-header">
-        <div className="task-card-status">
+        <div
+          className="task-card-status"
+          onClick={() => hasErrors && setShowErrors(!showErrors)}
+          style={hasErrors ? { cursor: "pointer" } : undefined}
+        >
           <span className={`task-card-dot ${isStreaming ? "dot-running" : hasErrors ? "dot-error" : "dot-done"}`} />
           <span className="task-card-status-text">
             {isStreaming ? "执行中…" : hasErrors ? `${errors} 个错误` : "已完成"}
           </span>
+          {hasErrors && (
+            <span className="task-card-error-toggle">{showErrors ? "隐藏" : "查看详情"}</span>
+          )}
         </div>
         <div className="task-card-meta">
           {totalActions} actions
         </div>
       </div>
+
+      {/* 错误详情 — 可展开 */}
+      {hasErrors && showErrors && (
+        <div className="task-card-errors">
+          {errorDetails.map((e, i) => (
+            <div key={i} className="task-card-error-item">
+              <span className="task-card-error-tool">{e.tool}</span>
+              <span className="task-card-error-msg">{e.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 指标网格 */}
       <div className="task-card-metrics">

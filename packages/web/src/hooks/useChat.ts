@@ -6,6 +6,7 @@ import { useEffect, useCallback } from "react";
 import { sseClient } from "../services/sse-client";
 import { useChatStore } from "../stores/chat";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useAgentsStore } from "../stores/agents";
 import { playCompletionSound } from "../hooks/useAudio";
 
 let eventsBound = false;
@@ -27,8 +28,8 @@ const deltaBuffers = new Map<string, DeltaBuffer>();
 // 目标完成时间（ms）：burst 结束后剩余内容在此时长内释放完
 const FLUSH_TARGET_MS = 600;
 // 每帧最少/最多释放字符数
-const MIN_CHARS_PER_FRAME = 3;
-const MAX_CHARS_PER_FRAME = 50;
+const MIN_CHARS_PER_FRAME = 6;
+const MAX_CHARS_PER_FRAME = 80;
 
 function pushDelta(sid: string, delta: string) {
   let buf = deltaBuffers.get(sid);
@@ -54,21 +55,12 @@ function scheduleFlush(sid: string) {
       return;
     }
 
-    // 自适应释放速率：缓冲越大，每帧释放越多（保证在 ~FLUSH_TARGET_MS 内完成）
-    // 但如果最近有新 delta 涌入（burst 还在进行），保守一点别太快释放完
-    const elapsed = Date.now() - b.lastUpdateTime;
-    const isStillReceiving = elapsed < 100; // 100ms 内有新 delta = burst 进行中
-
-    let charsPerFrame: number;
-    if (isStillReceiving) {
-      // burst 中：匀速释放，让用户看到正在输入
-      charsPerFrame = MIN_CHARS_PER_FRAME;
-    } else {
-      // burst 结束：加速释放剩余内容
-      const framesLeft = Math.ceil(FLUSH_TARGET_MS / 16.7);
-      charsPerFrame = Math.max(MIN_CHARS_PER_FRAME, Math.ceil(b.text.length / framesLeft));
-      charsPerFrame = Math.min(charsPerFrame, MAX_CHARS_PER_FRAME);
-    }
+    // 自适应释放速率：根据当前缓冲区大小动态计算每帧释放字符数
+    // 目标是让大缓冲快速清完（不卡顿），小缓冲慢速释放（有打字感）
+    // 不再区分 burst/非 burst —— GLM-4.7 的 delta 间隔不稳定，固定慢速会导致 2000 字要 11 秒
+    const framesLeft = Math.ceil(FLUSH_TARGET_MS / 16.7);
+    let charsPerFrame = Math.max(MIN_CHARS_PER_FRAME, Math.ceil(b.text.length / framesLeft));
+    charsPerFrame = Math.min(charsPerFrame, MAX_CHARS_PER_FRAME);
 
     const chunk = b.text.slice(0, charsPerFrame);
     b.text = b.text.slice(charsPerFrame);
@@ -115,8 +107,10 @@ export function useChat() {
       switch (msg.type) {
         case "agent_created":
           if (sid) {
-            chat.setAgentCreated(sid, msg.payload?.skills, msg.payload?.model);
+            chat.setAgentCreated(sid, msg.payload?.skills, msg.payload?.model, msg.payload?.agent);
             if (msg.payload?.todos) chat.setTodos(sid, msg.payload.todos);
+            // 同步会话的 agentId + 显示信息（来自服务端创建结果）
+            if (msg.payload?.agent) chat.setSessionAgent(sid, msg.payload.agent.id, msg.payload.agent);
           }
           break;
 
@@ -180,6 +174,11 @@ export function useChat() {
           console.error("[agent error]", msg.payload);
           if (sid) {
             flushAllDeltas(sid);
+            // abort 时后端发的 agent_unavailable：静默解锁，不显示错误文字
+            if (msg.payload?.message === "agent_unavailable") {
+              chat.forceResetGenerating(sid);
+              break;
+            }
             // 确保有一条 assistant message 来显示错误
             const s = useChatStore.getState().sessions[sid];
             const last = s?.messages[s.messages.length - 1];
@@ -197,7 +196,13 @@ export function useChat() {
   const createChatSession = useCallback((chatSessionId: string, cwd?: string) => {
     useChatStore.getState().ensureSession(chatSessionId);
     useChatStore.getState().setActiveChatSession(chatSessionId);
-    sseClient.createAgent(chatSessionId, { cwd });
+    // 用当前选中的 Agent 预设创建（默认 agent 不附加 systemPrompt）
+    const agentId = useAgentsStore.getState().activeAgentId;
+    if (agentId && agentId !== "default") {
+      const cfg = useAgentsStore.getState().getActive();
+      useChatStore.getState().setSessionAgent(chatSessionId, agentId, { id: cfg.id, name: cfg.name, icon: cfg.icon });
+    }
+    sseClient.createAgent(chatSessionId, { cwd, agentId });
   }, []);
 
   const switchToSession = useCallback((chatSessionId: string) => {
@@ -238,7 +243,7 @@ export function useChat() {
         wsState.setActiveSession(sessionData.id);
         useChatStore.getState().ensureSession(sessionData.id);
         useChatStore.getState().setActiveChatSession(sessionData.id);
-        sseClient.createAgent(sessionData.id, { cwd: targetWs.path });
+        sseClient.createAgent(sessionData.id, { cwd: targetWs.path, agentId: useAgentsStore.getState().activeAgentId });
         sid = sessionData.id;
         if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
         (window as any).__chatToAppSession[sessionData.id] = sessionData.id;
@@ -271,7 +276,32 @@ export function useChat() {
 
   const abort = useCallback(() => {
     const sid = useChatStore.getState().activeChatSessionId;
-    if (sid) sseClient.abort(sid);
+    if (!sid) return;
+    sseClient.abort(sid);
+    // 兜底：abort 后无论后端结果，强制解除生成状态
+    // （agent 可能已被 destroy/重建，abort 对新 agent 是 no-op，不靠这个会卡死）
+    setTimeout(() => useChatStore.getState().forceResetGenerating(sid), 200);
+  }, []);
+
+  // 切换当前会话使用的 Agent：记录选中项 + 销毁旧 agent session + 用新配置重建
+  const switchAgent = useCallback(async (agentId: string) => {
+    const cfg = useAgentsStore.getState().getById(agentId);
+    if (!cfg) return;
+    useAgentsStore.getState().setActive(agentId);
+
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid) return;
+    const info = { id: cfg.id, name: cfg.name, icon: cfg.icon };
+    useChatStore.getState().setSessionAgent(sid, agentId, info);
+
+    // 销毁旧 agent（若正在生成，destroy 会 abort，但不会发 agent_end）
+    // 立即强制重置生成状态，防止前端卡在"思考中"
+    await sseClient.destroyAgent(sid);
+    useChatStore.getState().forceResetGenerating(sid);
+    useChatStore.getState().setAgentCreated(sid, []);
+    const ws = useWorkspaceStore.getState();
+    const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
+    sseClient.createAgent(sid, { cwd: activeWs?.path, agentId });
   }, []);
 
   const loadSession = useCallback(async (chatSessionId: string, appSessionId: string, forceCwd?: string) => {
@@ -304,7 +334,8 @@ export function useChat() {
           const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
           return activeWs?.path;
         })();
-        sseClient.createAgent(chatSessionId, { cwd });
+        // 优先用该会话已绑定的 Agent，否则用当前选中的
+        sseClient.createAgent(chatSessionId, { cwd, agentId: sess.agentId ?? useAgentsStore.getState().activeAgentId });
       }
       fresh.setActiveChatSession(chatSessionId);
     } catch (e) { console.error("Failed to load session:", e); }
@@ -322,6 +353,8 @@ export function useChat() {
     usage: activeSession?.usage ?? null,
     activeSkill: activeSession?.activeSkill ?? null,
     todos: activeSession?.todos ?? [],
+    agent: activeSession?.agent ?? null,
+    agentId: activeSession?.agentId ?? null,
     connected: store.connected,
     activeChatSessionId: activeId,
     createChatSession,
@@ -329,6 +362,7 @@ export function useChat() {
     sendMessage,
     abort,
     loadSession,
+    switchAgent,
   };
 }
 

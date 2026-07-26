@@ -26,11 +26,12 @@ export function ChatPanel() {
   const showSkills = skills.length > 0 && !dismissedSkills && !storeNotified;
 
   return (
-    <div className="messages">
-      {/* TODO 任务清单 */}
+    <div className="chat-panel-inner">
+      {/* TODO 任务清单 — 固定在消息区上方，始终可见 */}
       <TodoPanel />
 
-      {/* Skills 加载通知 */}
+      <div className="messages">
+        {/* Skills 加载通知 */}
       {showSkills && (
         <div className="msg-notice-wrap">
           <div className="skill-item" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -83,6 +84,7 @@ export function ChatPanel() {
         <MessageItem key={msg.id} msg={msg} />
       ))}
       <div ref={bottomRef} />
+      </div>
     </div>
   );
 }

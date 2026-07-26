@@ -78,6 +78,8 @@ textarea { resize: none; }
 
 .main-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 .chat-pane { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow: hidden; }
+.chat-panel-inner { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.chat-panel-inner .messages { flex: 1; overflow-y: auto; }
 
 /* ════════════════════════════════════════════════════════════════════════════
  * 3. Sidebar Shell + Header (Zone 1)
@@ -585,25 +587,71 @@ textarea { resize: none; }
   border-radius: var(--radius-md);
   background: var(--surface);
   overflow: hidden;
-  margin: var(--space-3) 0;
+  margin: var(--space-2) 0;
 }
 .tool-call-header {
   display: flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-3);
+  width: 100%;
+  padding: 8px var(--space-3);
   cursor: pointer; user-select: none;
 }
 .tool-call-header:hover { background: var(--bg); }
-.tool-icon { color: var(--accent); }
-.tool-name { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 500; }
-.tool-status {
-  font-size: var(--text-xs); font-weight: 600;
-  margin-left: auto;
-  display: flex; align-items: center; gap: 4px;
+
+/* 固定蓝色色块图标 */
+.tool-icon-box {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: white;
+  background: var(--accent);
 }
-.tool-status.done { color: var(--success); }
-.tool-status.running { color: var(--warn); }
-.tool-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.tool-chevron { color: var(--muted); transition: transform var(--motion-fast); }
+.tool-icon-box .icon { width: 14px; height: 14px; }
+
+/* 工具名 */
+.tool-label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 思考卡片用的通用名称样式 */
+.tool-name {
+  font-size: var(--text-sm); font-weight: 600; color: var(--fg);
+  white-space: nowrap;
+}
+
+.tool-summary {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* 占位 — 把后面的 pill 推到最右 */
+.tool-spacer { flex: 1; }
+
+/* 实心 pill 状态徽章 — 始终靠最右 */
+.tool-status-pill {
+  margin-left: auto;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  flex-shrink: 0; white-space: nowrap;
+  display: flex; align-items: center; gap: 4px;
+  color: white;
+}
+.tool-status-pill.done { background: var(--success); }
+.tool-status-pill.running { background: var(--warn); }
+.tool-status-pill.error { background: var(--danger); }
+.tool-status-pill.running::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%; background: white;
+  animation: pulse 1s infinite;
+}
+
+.tool-chevron { color: var(--muted); transition: transform var(--motion-fast); flex-shrink: 0; }
 .tool-call.expanded .tool-chevron { transform: rotate(180deg); }
 .tool-call-body { max-height: 0; overflow: hidden; transition: max-height var(--motion-base) var(--ease-standard); }
 .tool-call.expanded .tool-call-body { max-height: 500px; }

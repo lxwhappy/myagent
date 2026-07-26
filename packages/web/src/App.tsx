@@ -7,6 +7,7 @@ import { Icon } from "./components/Icon";
 import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
+import { useAgentsStore } from "./stores/agents";
 import { useSessions } from "./hooks/useSessions";
 import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -47,6 +48,9 @@ export default function App() {
         }
       }
     }).catch(e => console.error("Failed to load workspaces:", e));
+
+    // 加载 Agent 预设列表
+    useAgentsStore.getState().load().catch(e => console.error("Failed to load agents:", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

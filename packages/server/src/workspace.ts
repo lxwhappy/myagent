@@ -1,11 +1,11 @@
-
 import type { FastifyInstance } from "fastify";
-import { readdir, readFile, stat } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir, stat } from "fs/promises";
+import { existsSync } from "fs";
 import { join, resolve, relative, extname, basename } from "path";
 import { randomUUID } from "crypto";
 import { chatSessionStore } from "./chat-sessions.js";
 
-// ── 工作空间存储（内存） ──
+// ── 工作空间存储（内存 + 磁盘持久化） ──
 interface Workspace {
   id: string;
   name: string;
@@ -13,6 +13,31 @@ interface Workspace {
 }
 
 const workspaces = new Map<string, Workspace>();
+
+const HOME = process.env.HOME || process.env.USERPROFILE || "/";
+const WS_FILE = join(HOME, ".pi", "agent", "myagent-workspaces.json");
+
+// 启动时从磁盘恢复（同步阻塞，确保路由注册前数据就绪）
+async function persistWorkspaces() {
+  try {
+    await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+    await writeFile(WS_FILE, JSON.stringify([...workspaces.values()], null, 2), "utf-8");
+  } catch (e: any) {
+    console.error("[workspace] persist failed:", e.message);
+  }
+}
+
+async function loadWorkspaces() {
+  if (!existsSync(WS_FILE)) return;
+  try {
+    const list: Workspace[] = JSON.parse(await readFile(WS_FILE, "utf-8"));
+    for (const ws of list) workspaces.set(ws.id, ws);
+    console.log(`[workspace] restored ${workspaces.size} workspace(s) from disk`);
+  } catch (e: any) {
+    console.error("[workspace] load failed:", e.message);
+  }
+}
+await loadWorkspaces();
 
 const IGNORE = ["node_modules",".git","dist",".DS_Store",".next",".cache","__pycache__",".pnpm",".turbo","coverage"];
 const MAX_SIZE = 512 * 1024;
@@ -84,6 +109,7 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     const name = body.name || basename(absPath);
     const ws: Workspace = { id, name, path: absPath };
     workspaces.set(id, ws);
+    await persistWorkspaces();
     console.log(`[workspace] added: ${name} (${absPath})`);
     return ws;
   });
@@ -93,6 +119,7 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     if (!workspaces.has(id)) return reply.code(404).send({ error: "Not found" });
     workspaces.delete(id);
+    await persistWorkspaces();
     console.log(`[workspace] removed: ${id}`);
     return { ok: true };
   });

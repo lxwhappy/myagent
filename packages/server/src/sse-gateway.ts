@@ -10,6 +10,7 @@
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
 import { createAgent, getAgent, destroyAgent, setThinkingLevel } from "./agent-registry.js";
+import { todoStore } from "./tools/index.js";
 
 export function setupSSEGateway(app: FastifyInstance) {
   // ── 全局 SSE 事件流 ──
@@ -48,9 +49,9 @@ export function setupSSEGateway(app: FastifyInstance) {
   // ── 创建 Agent ──
   app.post("/api/agent/:id/create", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { cwd?: string; provider?: string; model?: string } | null;
+    const body = req.body as { cwd?: string; provider?: string; model?: string; agentId?: string } | null;
     try {
-      await createAgent(id, { cwd: body?.cwd, provider: body?.provider, model: body?.model });
+      await createAgent(id, { cwd: body?.cwd, provider: body?.provider, model: body?.model, agentId: body?.agentId });
       reply.send({ success: true });
     } catch (err: any) {
       reply.status(500).send({ error: err?.message ?? "Unknown" });
@@ -82,8 +83,15 @@ export function setupSSEGateway(app: FastifyInstance) {
 
     console.log(`[prompt] ${id.slice(0, 8)}: ${String(body?.message).slice(0, 60)}${body?.thinking ? " [thinking]" : ""}`);
     try {
+      let message = body?.message ?? "";
+
+      // 新一轮对话：清空上一轮的 todo（每轮交互独立，不累加）
+      try {
+        await todoStore.clear(id);
+      } catch {}
+
       // 不 await — 事件通过 SSE 流式返回
-      agent.prompt(body?.message ?? "", { images: body?.images as any }).catch((err: any) => {
+      agent.prompt(message, { images: body?.images as any }).catch((err: any) => {
         emit({ type: "error", chatSessionId: id, payload: { message: `Agent error: ${err?.message ?? "Unknown"}` }, ts: Date.now() });
       });
       reply.send({ success: true });
@@ -96,7 +104,12 @@ export function setupSSEGateway(app: FastifyInstance) {
   app.post("/api/agent/:id/abort", async (req, reply) => {
     const { id } = req.params as { id: string };
     const agent = getAgent(id);
-    if (agent) await agent.abort();
+    if (agent) {
+      await agent.abort();
+    } else {
+      // agent 不存在（已被 destroy/重建/重启）：发 error 事件让前端解锁
+      emit({ type: "error", chatSessionId: id, payload: { message: "agent_unavailable" }, ts: Date.now() });
+    }
     reply.send({ success: true });
   });
 

@@ -4,8 +4,10 @@
 import { useRef, useState, useEffect, useMemo, useCallback, type KeyboardEvent } from "react";
 import { useChat } from "../hooks/useChat";
 import { useChatStore, type SkillInfo } from "../stores/chat";
+import { useAgentsStore } from "../stores/agents";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
 import { Icon } from "./Icon";
+import { AgentManager } from "./AgentManager";
 
 const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
@@ -51,12 +53,22 @@ function imageToBase64(file: File): Promise<AttachedImage> {
 }
 
 export function InputBar() {
-  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId } = useChat();
+  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId, agent, switchAgent } = useChat();
   const thinkingEnabled = useChatStore(s => s.thinkingEnabled);
   const toggleThinking = useChatStore(s => s.toggleThinking);
+  const agentsList = useAgentsStore(s => s.agents);
+  const activeAgentId = useAgentsStore(s => s.activeAgentId);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 当前 Agent：优先用会话绑定的，否则用全局选中的
+  const currentAgent = agent || agentsList.find(a => a.id === activeAgentId) || agentsList[0];
+
+  // ── Agent 选择器 ──
+  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
+  const [showAgentManager, setShowAgentManager] = useState(false);
+  const agentDropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Draft 持久化：会话切换时恢复草稿 ──
   const draftKey = activeChatSessionId ?? "__default";
@@ -294,6 +306,23 @@ export function InputBar() {
     return () => document.removeEventListener("mousedown", handler);
   }, [skillPicker.visible]);
 
+  // Agent 选择器：点击外部关闭
+  useEffect(() => {
+    if (!agentDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (agentDropdownRef.current && !agentDropdownRef.current.contains(e.target as Node)) {
+        setAgentDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [agentDropdownOpen]);
+
+  const handleSelectAgent = (id: string) => {
+    setAgentDropdownOpen(false);
+    if (id !== currentAgent?.id) switchAgent(id);
+  };
+
   useEffect(() => {
     if (skillPicker.visible) setSkillPicker(prev => ({ ...prev, activeIndex: 0 }));
   }, [skillPicker.query]);
@@ -337,6 +366,48 @@ export function InputBar() {
         )}
 
         <div className="input-row">
+          {/* Agent 选择器 */}
+          <div className="agent-selector" ref={agentDropdownRef}>
+            <button
+              className="agent-selector-btn"
+              onClick={() => setAgentDropdownOpen(v => !v)}
+              type="button"
+              title={`当前 Agent：${currentAgent?.name ?? "默认"}`}
+            >
+              <span className="agent-selector-icon">{currentAgent?.icon ?? "🤖"}</span>
+              <span className="agent-selector-name">{currentAgent?.name ?? "MyAgent"}</span>
+              <Icon name="i-chevron" size={12} className={`agent-selector-chevron ${agentDropdownOpen ? "open" : ""}`} />
+            </button>
+            {agentDropdownOpen && (
+              <div className="agent-selector-dropdown show">
+                {agentsList.map(a => (
+                  <button
+                    key={a.id}
+                    className={`agent-selector-item ${currentAgent?.id === a.id ? "active" : ""}`}
+                    onClick={() => handleSelectAgent(a.id)}
+                    type="button"
+                  >
+                    <span className="agent-selector-item-icon">{a.icon}</span>
+                    <span className="agent-selector-item-text">
+                      <span className="agent-selector-item-name">{a.name}</span>
+                      {a.description && <span className="agent-selector-item-desc">{a.description}</span>}
+                    </span>
+                    {currentAgent?.id === a.id && <Icon name="i-check" size={14} className="agent-selector-item-check" />}
+                  </button>
+                ))}
+                <div className="agent-selector-divider" />
+                <button
+                  className="agent-selector-manage"
+                  onClick={() => { setAgentDropdownOpen(false); setShowAgentManager(true); }}
+                  type="button"
+                >
+                  <Icon name="i-settings" size={14} />
+                  <span>管理 Agent…</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* 附件按钮 */}
           <button
             className="input-attach"
@@ -459,6 +530,10 @@ export function InputBar() {
           <kbd>/</kbd> 选择 Skill
         </span>
       </div>
+
+      {showAgentManager && (
+        <AgentManager onClose={() => setShowAgentManager(false)} onSwitchActive={(id) => switchAgent(id)} />
+      )}
     </div>
   );
 }

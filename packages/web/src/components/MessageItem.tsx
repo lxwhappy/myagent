@@ -192,9 +192,12 @@ function ToolCallCard({ tool }: { tool: ToolExecution }) {
   return (
     <div className={`tool-call${open ? " expanded" : ""}`}>
       <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
-        <Icon name={iconName} size={16} className="tool-icon" />
-        <span className="tool-name">{verb}{summary ? ` ${summary}` : ""}</span>
-        <span className={`tool-status ${statusClass}`}>{statusText}</span>
+        <span className="tool-icon-box">
+          <Icon name="i-tool" size={14} />
+        </span>
+        <span className="tool-label">{tool.tool}</span>
+        <span className="tool-spacer" />
+        <span className={`tool-status-pill ${statusClass}`}>{statusText}</span>
         <Icon name="i-chevron" size={14} className="tool-chevron" />
       </button>
       <div className="tool-call-body">
@@ -229,9 +232,12 @@ function ThinkingCard({ thinking, streaming }: { thinking: string; streaming?: b
   return (
     <div className={`tool-call${open ? " expanded" : ""}`}>
       <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
-        <Icon name={streaming ? "i-tool" : "i-check"} size={16} className="tool-icon" />
+        <span className="tool-icon-box">
+          <Icon name="i-tool" size={14} />
+        </span>
         <span className="tool-name">思考过程</span>
-        <span className={`tool-status ${streaming ? "running" : "done"}`}>
+        <span className="tool-spacer" />
+        <span className={`tool-status-pill ${streaming ? "running" : "done"}`}>
           {streaming ? "思考中" : "完成"}
         </span>
         <Icon name="i-chevron" size={14} className="tool-chevron" />

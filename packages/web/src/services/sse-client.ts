@@ -13,7 +13,7 @@ class SSEClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private firstConnect = true;
   // SSE 断线后需要重建的 agent 列表
-  private knownAgents = new Map<string, { cwd?: string }>();
+  private knownAgents = new Map<string, { cwd?: string; agentId?: string }>();
 
   connect() {
     if (this.eventSource?.readyState === EventSource.OPEN) return;
@@ -33,7 +33,7 @@ class SSEClient {
           if (sessions[sid].agentCreated) {
             useChatStore.getState().setAgentCreated(sid, []);
             const info = this.knownAgents.get(sid);
-            this.createAgent(sid, { cwd: info?.cwd });
+            this.createAgent(sid, { cwd: info?.cwd, agentId: info?.agentId ?? sessions[sid].agentId });
             rebuilt++;
           }
         }
@@ -65,13 +65,13 @@ class SSEClient {
 
   // ── REST API 命令 ──
 
-  async createAgent(chatSessionId: string, opts?: { cwd?: string }) {
-    this.knownAgents.set(chatSessionId, { cwd: opts?.cwd });
+  async createAgent(chatSessionId: string, opts?: { cwd?: string; agentId?: string }) {
+    this.knownAgents.set(chatSessionId, { cwd: opts?.cwd, agentId: opts?.agentId });
     try {
       await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: opts?.cwd }),
+        body: JSON.stringify({ cwd: opts?.cwd, agentId: opts?.agentId }),
       });
     } catch (err) {
       console.error("[sse] createAgent failed:", err);

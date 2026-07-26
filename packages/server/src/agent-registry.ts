@@ -14,6 +14,7 @@ import { eventBridge } from "./event-bridge.js";
 import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
 import { createTodoTool, customTools, todoStore } from "./tools/index.js";
+import { agentConfigStore } from "./agent-configs.js";
 
 export interface AgentEntry {
   agent: AgentSession;
@@ -27,7 +28,7 @@ const registry = new Map<string, AgentEntry>();
 
 export async function createAgent(
   chatSessionId: string,
-  opts?: { cwd?: string; provider?: string; model?: string },
+  opts?: { cwd?: string; provider?: string; model?: string; agentId?: string },
 ): Promise<string> {
   // 如果该 chatSessionId 已有 agent，先销毁
   destroyAgent(chatSessionId);
@@ -35,18 +36,25 @@ export async function createAgent(
   const cwd = opts?.cwd ?? config.workDir;
   const agentDir = process.env.HOME + "/.pi/agent";
 
-  const loader = new DefaultResourceLoader({ cwd, agentDir });
+  // 读取 Agent 配置（角色预设），把 systemPrompt 追加到 AGENTS.md 之后
+  const agentCfg = opts?.agentId ? await agentConfigStore.get(opts.agentId) : undefined;
+  const extraPrompt = agentCfg?.systemPrompt?.trim();
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir,
+    appendSystemPromptOverride: extraPrompt ? (base: string[]) => [...base, extraPrompt] : undefined,
+  });
   await loader.reload();
 
   const provider = opts?.provider ?? config.defaultProvider;
-  const modelId = opts?.model ?? config.defaultModel;
+  const modelId = opts?.model ?? agentCfg?.model ?? config.defaultModel;
   const model = getModel(provider, modelId);
   if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
 
   const mcpTools = mcpManager.toToolDefinitions();
 
   // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）
-  const todoTool = createTodoTool(chatSessionId);
+  const todoTool = createTodoTool(todoStore, chatSessionId);
   const allCustomTools = [...customTools, todoTool, ...mcpTools];
 
   const { session } = await createAgentSession({
@@ -80,11 +88,14 @@ export async function createAgent(
       model: { provider, model: modelId, name: model.name, contextWindow: (model as any).contextWindow ?? 0 },
       mcpTools: mcpTools.length,
       todos: existingTodos,
+      agent: agentCfg
+        ? { id: agentCfg.id, name: agentCfg.name, icon: agentCfg.icon }
+        : { id: "default", name: "MyAgent", icon: "🤖" },
     },
     ts: Date.now(),
   });
 
-  console.log(`[agent] created for ${chatSessionId.slice(0, 8)} (cwd=${cwd}, model=${provider}/${modelId}, skills=${skills.length}, mcpTools=${mcpTools.length})`);
+  console.log(`[agent] created for ${chatSessionId.slice(0, 8)} (cwd=${cwd}, model=${provider}/${modelId}, agent=${agentCfg?.id ?? "default"}, skills=${skills.length}, mcpTools=${mcpTools.length})`);
   return chatSessionId;
 }
 

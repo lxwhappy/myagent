@@ -11,6 +11,11 @@ export interface FileChange {
   lastStatus: "done" | "error" | "running";
 }
 
+export interface ErrorDetail {
+  tool: string;
+  message: string;
+}
+
 export interface SessionStats {
   totalActions: number;
   edits: number;
@@ -19,6 +24,7 @@ export interface SessionStats {
   searches: number;
   others: number;
   errors: number;
+  errorDetails: ErrorDetail[];
   filesChanged: FileChange[];
 }
 
@@ -36,7 +42,7 @@ export function categorizeTool(toolName: string): ToolCategory {
   return "other";
 }
 
-/** 从 tool input 中提取文件路径 */
+/** 从工具 input 中提取文件路径 */
 export function extractFilePath(input: unknown): string | null {
   if (!input || typeof input !== "object") return null;
   const o = input as Record<string, unknown>;
@@ -67,6 +73,37 @@ function guessPathFromCommand(cmd: string): string | null {
   return match ? match[1] : null;
 }
 
+/** 从工具输出中提取错误消息（截取第一行有意义的内容） */
+function extractErrorMessage(output: unknown): string {
+  if (!output) return "";
+  let text: string;
+  // SDK 校验错误是 { content: [{ type: "text", text: "..." }] } 结构
+  if (typeof output === "object") {
+    const o = output as Record<string, unknown>;
+    const content = o.content;
+    if (Array.isArray(content)) {
+      const first = content[0];
+      if (first && typeof first === "object" && typeof (first as any).text === "string") {
+        text = (first as any).text;
+      } else {
+        text = JSON.stringify(output);
+      }
+    } else if (typeof o.text === "string") {
+      text = o.text;
+    } else if (typeof o.error === "string") {
+      text = o.error;
+    } else if (typeof o.message === "string") {
+      text = o.message;
+    } else {
+      text = JSON.stringify(output);
+    }
+  } else {
+    text = String(output);
+  }
+  const firstLine = text.trim().split("\n")[0];
+  return firstLine.length > 150 ? firstLine.slice(0, 150) + "…" : firstLine;
+}
+
 /** 聚合单条消息的工具统计 */
 export function aggregateTools(tools: ToolExecution[]): {
   edits: number;
@@ -75,10 +112,12 @@ export function aggregateTools(tools: ToolExecution[]): {
   searches: number;
   others: number;
   errors: number;
+  errorDetails: ErrorDetail[];
   filesChanged: Map<string, FileChange>;
 } {
   const filesMap = new Map<string, FileChange>();
   let edits = 0, commands = 0, reads = 0, searches = 0, others = 0, errors = 0;
+  const errorDetails: ErrorDetail[] = [];
 
   for (const t of tools) {
     const cat = categorizeTool(t.tool);
@@ -89,7 +128,11 @@ export function aggregateTools(tools: ToolExecution[]): {
       case "search": searches++; break;
       default: others++; break;
     }
-    if (t.status === "error") errors++;
+    if (t.status === "error") {
+      errors++;
+      const msg = extractErrorMessage(t.output) || t.tool;
+      errorDetails.push({ tool: t.tool, message: msg });
+    }
 
     // 收集文件变更
     if (cat === "edit") {
@@ -108,7 +151,7 @@ export function aggregateTools(tools: ToolExecution[]): {
     }
   }
 
-  return { edits, commands, reads, searches, others, errors, filesChanged: filesMap };
+  return { edits, commands, reads, searches, others, errors, errorDetails, filesChanged: filesMap };
 }
 
 function addFileChange(map: Map<string, FileChange>, path: string, status: ToolExecution["status"]) {
@@ -126,6 +169,7 @@ function addFileChange(map: Map<string, FileChange>, path: string, status: ToolE
 export function getSessionStats(messages: Message[]): SessionStats {
   const filesMap = new Map<string, FileChange>();
   let edits = 0, commands = 0, reads = 0, searches = 0, others = 0, errors = 0;
+  const errorDetails: ErrorDetail[] = [];
 
   for (const msg of messages) {
     if (!msg.tools) continue;
@@ -136,6 +180,7 @@ export function getSessionStats(messages: Message[]): SessionStats {
     searches += agg.searches;
     others += agg.others;
     errors += agg.errors;
+    errorDetails.push(...agg.errorDetails);
     for (const [path, fc] of agg.filesChanged) {
       const existing = filesMap.get(path);
       if (existing) {
@@ -155,6 +200,7 @@ export function getSessionStats(messages: Message[]): SessionStats {
     searches,
     others,
     errors,
+    errorDetails,
     filesChanged: Array.from(filesMap.values()),
   };
 }
@@ -171,6 +217,7 @@ export function getMessageStats(msg: Message): SessionStats | null {
     searches: agg.searches,
     others: agg.others,
     errors: agg.errors,
+    errorDetails: agg.errorDetails,
     filesChanged: Array.from(agg.filesChanged.values()),
   };
 }

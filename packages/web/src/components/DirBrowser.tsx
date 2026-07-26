@@ -112,8 +112,7 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
                 <div
                   key={d.path}
                   className={`dir-item ${selectedPath === d.path ? "dir-item-selected" : ""}`}
-                  onClick={() => setSelectedPath(d.path)}
-                  onDoubleClick={() => browseTo(d.path)}
+                  onClick={() => browseTo(d.path)}
                 >
                   <span className="dir-icon">📁</span>
                   <span className="dir-name">{d.name}</span>

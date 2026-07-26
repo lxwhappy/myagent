@@ -1,0 +1,125 @@
+// ============================================================
+// agent-configs.ts — Agent 配置持久化（角色预设管理）
+//
+// 存储：~/.pi/agent/myagent-agents.json（数组）
+// 内置一个不可删除的「默认」Agent，其余用户自定义。
+// 每个 Agent 的 systemPrompt 会在创建 agent session 时
+// 通过 DefaultResourceLoader.appendSystemPromptOverride 追加到
+// AGENTS.md 基础 prompt 之后。
+// ============================================================
+
+import { readFile, writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
+import { randomUUID } from "crypto";
+
+export interface AgentConfig {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string; // 追加到 AGENTS.md 之后
+  icon: string;         // emoji
+  model?: string;       // 可选：覆盖默认模型
+  isBuiltIn?: boolean;  // 内置不可删
+  createdAt: number;
+  updatedAt: number;
+}
+
+const HOME = process.env.HOME || process.env.USERPROFILE || "/";
+const FILE = join(HOME, ".pi", "agent", "myagent-agents.json");
+
+// 内置默认 Agent
+const DEFAULT_AGENT: AgentConfig = {
+  id: "default",
+  name: "MyAgent",
+  description: "默认通用助手",
+  systemPrompt: "",
+  icon: "🤖",
+  isBuiltIn: true,
+  createdAt: 0,
+  updatedAt: 0,
+};
+
+let loaded = false;
+let agents: AgentConfig[] = [];
+
+async function ensureLoaded() {
+  if (loaded) return;
+  loaded = true;
+  await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+  if (existsSync(FILE)) {
+    try {
+      agents = JSON.parse(await readFile(FILE, "utf-8"));
+    } catch {
+      agents = [];
+    }
+  }
+  // 确保默认 Agent 始终存在且在第一位
+  agents = agents.filter(a => a.id !== "default");
+  agents.unshift(DEFAULT_AGENT);
+}
+
+async function persist() {
+  await writeFile(FILE, JSON.stringify(agents, null, 2), "utf-8");
+}
+
+export const agentConfigStore = {
+  async list(): Promise<AgentConfig[]> {
+    await ensureLoaded();
+    return agents.map(({ ...a }) => a);
+  },
+
+  async get(id: string): Promise<AgentConfig | undefined> {
+    await ensureLoaded();
+    return agents.find(a => a.id === id);
+  },
+
+  async create(input: {
+    name: string;
+    description?: string;
+    systemPrompt?: string;
+    icon?: string;
+    model?: string;
+  }): Promise<AgentConfig> {
+    await ensureLoaded();
+    const now = Date.now();
+    const agent: AgentConfig = {
+      id: randomUUID(),
+      name: (input.name || "新 Agent").slice(0, 30),
+      description: (input.description || "").slice(0, 100),
+      systemPrompt: input.systemPrompt || "",
+      icon: input.icon || "🤖",
+      model: input.model || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    agents.push(agent);
+    await persist();
+    console.log(`[agent-configs] created ${agent.id.slice(0, 8)} (${agent.name})`);
+    return agent;
+  },
+
+  async update(id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model">>): Promise<AgentConfig | undefined> {
+    await ensureLoaded();
+    const agent = agents.find(a => a.id === id);
+    if (!agent) return undefined;
+    if (patch.name !== undefined) agent.name = patch.name.slice(0, 30);
+    if (patch.description !== undefined) agent.description = patch.description.slice(0, 100);
+    if (patch.systemPrompt !== undefined) agent.systemPrompt = patch.systemPrompt;
+    if (patch.icon !== undefined) agent.icon = patch.icon;
+    if (patch.model !== undefined) agent.model = patch.model || undefined;
+    agent.updatedAt = Date.now();
+    await persist();
+    return agent;
+  },
+
+  async remove(id: string): Promise<boolean> {
+    await ensureLoaded();
+    const idx = agents.findIndex(a => a.id === id);
+    if (idx < 0) return false;
+    if (agents[idx].isBuiltIn) return false; // 内置不可删
+    agents.splice(idx, 1);
+    await persist();
+    return true;
+  },
+};

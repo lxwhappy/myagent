@@ -8,6 +8,7 @@ import { config } from "./config.js";
 import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";
 import { setupSettingsRoutes } from "./settings-routes.js";
+import { setupAgentRoutes } from "./agent-routes.js";
 import { mcpManager } from "./mcp-manager.js";
 
 async function main() {
@@ -24,6 +25,9 @@ async function main() {
 
   // 设置管理 API（MCP / Models / Skills）
   setupSettingsRoutes(app);
+
+  // Agent 配置管理 API（角色预设 CRUD）
+  setupAgentRoutes(app);
 
   // 健康检查
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));

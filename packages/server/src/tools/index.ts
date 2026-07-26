@@ -68,5 +68,25 @@ export const timeTool: ToolDefinition = {
 /** 导出所有自定义工具 */
 export const customTools: ToolDefinition[] = [weatherTool, timeTool];
 
-export { createTodoTool } from "./todo-tool.js";
-export { todoStore } from "./todo-store.js";
+// todo 工具已迁移到独立包 @myagent/pi-todo-extension
+export { TodoStore } from "@myagent/pi-todo-extension/src/store.ts";
+export { createTodoTool } from "@myagent/pi-todo-extension/src/tool.ts";
+export type { TodoItem, TodoStatus, TodoPriority } from "@myagent/pi-todo-extension/src/store.ts";
+
+// 共享 store 单例（带 SSE 广播回调）
+import { TodoStore as _TodoStore } from "@myagent/pi-todo-extension/src/store.ts";
+import { emit } from "../event-bus.js";
+import { join } from "path";
+
+// 保持和旧版相同的持久化路径
+const TODO_FILE = join(
+  process.env.HOME || process.env.USERPROFILE || "/",
+  ".pi", "agent", "myagent-todos.json",
+);
+
+export const todoStore = new _TodoStore({
+  filePath: TODO_FILE,
+  onChange: (chatSessionId, todos) => {
+    emit({ type: "todo_update", chatSessionId, payload: { todos }, ts: Date.now() });
+  },
+});

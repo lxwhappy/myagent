@@ -1117,6 +1117,16 @@
   justify-content: center;
   animation: mermaid-fade-in 0.2s ease-out;
 }
+/* 弹窗主体容器（SettingsPanel / AgentManager 共用） */
+.settings-modal {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  box-sizing: border-box;
+}
 .settings-header {
   display: flex;
   align-items: center;
@@ -1604,6 +1614,39 @@
 }
 .task-card-error .task-card-status-text {
   color: #ef4444;
+}
+.task-card-error-toggle {
+  font-size: 11px;
+  color: var(--accent);
+  margin-left: 4px;
+  font-weight: 500;
+}
+.task-card-errors {
+  display: flex; flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, #ef4444 6%, transparent);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, #ef4444 15%, transparent);
+}
+.task-card-error-item {
+  display: flex; flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.task-card-error-tool {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 600;
+}
+.task-card-error-msg {
+  font-size: 12px;
+  color: var(--fg);
+  opacity: 0.8;
+  line-height: 1.4;
+  word-break: break-word;
 }
 .task-card-meta {
   font-size: 11px;
@@ -2210,84 +2253,155 @@
 /* main 需要 relative 让预览抽屉 absolute 定位 */
 .main { position: relative; }
 
-/* ════════════════════════════════════════════════════════
-   TODO 面板
-   ════════════════════════════════════════════════════════ */
+/* ═════════════════════════════════════════════════════════════════
+   TODO 任务进度面板 — 参考图风格
+   ════════════════════════════════════════════════════════════════ */
 .todo-panel {
-  margin: 0 0 8px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 var(--space-6);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border-bottom: 1px solid var(--border);
   overflow: hidden;
 }
 .todo-panel-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  max-width: 820px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 10px 0;
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s;
+  transition: background var(--motion-fast);
 }
-.todo-panel-header:hover { background: var(--bg); }
-.todo-panel-chevron { font-size: 10px; color: var(--text-dim); width: 12px; }
-.todo-panel-icon { font-size: 13px; }
-.todo-panel-title { font-size: 12px; color: var(--text); white-space: nowrap; }
-.todo-panel-title strong { color: var(--accent); }
-.todo-progress-bar {
-  flex: 1;
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-  max-width: 120px;
-  margin-left: 8px;
+.todo-panel-chevron { font-size: 10px; color: var(--muted); width: 12px; flex-shrink: 0; }
+.todo-panel-title { font-size: 14px; font-weight: 600; color: var(--fg); }
+.todo-panel-badge {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--code-bg);
+  color: var(--muted);
+  font-family: var(--font-mono);
 }
-.todo-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #4ade80, #22c55e);
-  border-radius: 2px;
-  transition: width 0.4s ease;
+.todo-panel-badge.all-done {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
 }
-.todo-progress-text {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
+.todo-panel-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--warn);
+  margin-left: auto;
+  animation: pulse 1.2s infinite;
 }
 
-.todo-panel-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px 6px; }
-.todo-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  transition: background 0.12s;
+/* 任务列表 */
+.todo-panel-list {
+  display: flex; flex-direction: column;
+  max-width: 820px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 0 10px;
+  gap: 2px;
 }
-.todo-item:hover { background: var(--bg); }
-.todo-status-btn {
-  width: 20px; height: 20px;
+
+/* 单个任务行 */
+.todo-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast);
+  position: relative;
+}
+.todo-row:hover { background: var(--bg); }
+.todo-row:hover .todo-delete-btn { opacity: 0.5; }
+
+/* 状态指示器（圆形） */
+.todo-indicator {
+  width: 18px; height: 18px;
+  border-radius: 50%;
   border: none; background: transparent;
-  cursor: pointer; font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 4px;
-  flex-shrink: 0;
+  cursor: pointer; flex-shrink: 0;
+  margin-top: 1px;
+  transition: all var(--motion-fast);
+  padding: 0;
+  position: relative;
 }
-.todo-status-btn:hover { background: var(--border); }
-.todo-priority-dot { font-size: 8px; flex-shrink: 0; }
-.todo-content { font-size: 12px; color: var(--text); flex: 1; line-height: 1.4; }
-.todo-content.done { text-decoration: line-through; color: var(--text-dim); }
+.todo-indicator:hover { transform: scale(1.15); }
+
+/* 待处理：空心圆 */
+.todo-ind-pending {
+  border: 2px solid var(--border-strong, #c5beb5);
+  background: transparent;
+}
+/* 进行中：实心橙圆 + 脉冲 */
+.todo-ind-in_progress {
+  background: var(--warn);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 40%, transparent);
+  animation: todo-pulse 1.5s infinite;
+}
+/* 已完成：实心绿圆 + 白勾 */
+.todo-ind-completed {
+  background: var(--success);
+}
+.todo-ind-completed::after {
+  content: "";
+  position: absolute;
+  width: 4px; height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  top: 3px; left: 6px;
+}
+@keyframes todo-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 40%, transparent); }
+  70% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--warn) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 0%, transparent); }
+}
+
+/* 任务文本 */
+.todo-text { flex: 1; min-width: 0; }
+.todo-row-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  line-height: 1.4;
+  transition: color var(--motion-fast);
+}
+.todo-row-title.done {
+  color: var(--muted);
+}
+.todo-row-desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.3;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 进行中标签 */
+.todo-row-badge {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
+  color: var(--warn);
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
 .todo-delete-btn {
-  width: 20px; height: 20px;
-  border: none; background: transparent;
-  border-radius: 4px; cursor: pointer;
-  color: var(--text-dim); font-size: 10px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
+  width: 20px; height: 20px; border: none; background: transparent;
+  border-radius: var(--radius-xs); cursor: pointer;
+  color: var(--muted); font-size: 10px;
+  opacity: 0; transition: opacity var(--motion-fast); flex-shrink: 0;
+  margin-top: 1px;
 }
-.todo-item:hover .todo-delete-btn { opacity: 1; }
-.todo-delete-btn:hover { background: #fee; color: #ef4444; }
+.todo-delete-btn:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); opacity: 1 !important; }
 
 
 /* 让 sidebar header 区域可以溢出（ws-dropdown 需要超出 sidebar 边界） */
@@ -2342,3 +2456,148 @@
 .msg-content input[type="checkbox"] { margin-right: var(--space-1); }
 
 /* 行内 code 样式由 DS .msg-content code 提供（浅灰背景），不覆盖 */
+
+/* 用户消息气泡：DS accent-tint（90% 白）太淡几乎看不见，用 accent 半透明叠加 */
+.msg-user .msg-content {
+  background: color-mix(in oklab, var(--accent), white 75%);
+}
+
+/* ============================================================
+   Agent 选择器（InputBar 内）
+   ============================================================ */
+.agent-selector { position: relative; flex-shrink: 0; }
+.agent-selector-btn {
+  display: flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 8px 0 6px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg);
+  cursor: pointer; font-size: 13px; transition: all 0.15s;
+  max-width: 180px;
+}
+.agent-selector-btn:hover { border-color: var(--accent); }
+.agent-selector-icon { font-size: 15px; line-height: 1; }
+.agent-selector-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;
+}
+.agent-selector-chevron { color: var(--muted); transition: transform 0.15s; flex-shrink: 0; }
+.agent-selector-chevron.open { transform: rotate(180deg); }
+.agent-selector-dropdown {
+  position: absolute; bottom: calc(100% + 6px); left: 0;
+  min-width: 240px; max-width: 320px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+  padding: 6px; z-index: 50; max-height: 360px; overflow-y: auto;
+}
+.agent-selector-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--fg); cursor: pointer; text-align: left;
+  transition: background 0.1s;
+}
+.agent-selector-item:hover { background: var(--bg); }
+.agent-selector-item.active { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.agent-selector-item-icon { font-size: 18px; flex-shrink: 0; }
+.agent-selector-item-text { display: flex; flex-direction: column; gap: 1px; overflow: hidden; flex: 1; }
+.agent-selector-item-name { font-size: 13px; font-weight: 600; }
+.agent-selector-item-desc {
+  font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.agent-selector-item-check { color: var(--accent); flex-shrink: 0; }
+.agent-selector-divider { height: 1px; background: var(--border); margin: 4px 2px; }
+.agent-selector-manage {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
+  transition: all 0.1s;
+}
+.agent-selector-manage:hover { background: var(--bg); color: var(--fg); }
+
+/* ============================================================
+   Agent 管理弹窗
+   ============================================================ */
+.agent-manager-modal { width: min(600px, 92vw); max-height: 88vh; box-sizing: border-box; overflow-y: auto; }
+.agent-mgr-body { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; flex-shrink: 0; }
+.agent-mgr-list { display: flex; flex-direction: column; gap: 4px; }
+.agent-mgr-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 0.1s;
+  border: 1px solid transparent;
+}
+.agent-mgr-row:hover { background: var(--bg); }
+.agent-mgr-row.active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.agent-mgr-icon { font-size: 22px; flex-shrink: 0; }
+.agent-mgr-info { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow: hidden; }
+.agent-mgr-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.agent-mgr-builtin {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  background: var(--bg); padding: 1px 6px; border-radius: 8px;
+}
+.agent-mgr-desc { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-mgr-model { font-size: 11px; color: var(--muted); font-family: var(--mono, monospace); }
+.agent-mgr-current { color: var(--accent); font-size: 10px; flex-shrink: 0; }
+.agent-mgr-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.agent-mgr-edit, .agent-mgr-del {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: var(--radius-sm); background: transparent;
+  color: var(--muted); cursor: pointer; transition: all 0.1s;
+}
+.agent-mgr-edit:hover { background: var(--bg); color: var(--accent); }
+.agent-mgr-del:hover { background: var(--bg); color: var(--danger); }
+.agent-mgr-add {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  padding: 10px; border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
+  transition: all 0.1s;
+}
+.agent-mgr-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 编辑表单 */
+.agent-mgr-form { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; flex-shrink: 0; }
+.agent-edit-field { display: flex; flex-direction: column; gap: 6px; }
+.agent-edit-field > label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.agent-emoji-row { display: flex; align-items: center; gap: 8px; }
+.agent-emoji-input {
+  width: 48px; height: 38px; text-align: center; font-size: 20px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg);
+}
+.agent-emoji-choices { display: flex; gap: 4px; flex-wrap: wrap; }
+.agent-emoji-choice {
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; cursor: pointer; font-size: 16px; transition: all 0.1s;
+}
+.agent-emoji-choice:hover { background: var(--bg); }
+.agent-emoji-choice.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.agent-edit-prompt {
+  width: 100%; min-height: 100px; resize: vertical;
+  padding: 10px 12px; font-size: 13px; line-height: 1.6;
+  font-family: var(--mono, monospace); box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg);
+}
+.agent-edit-prompt:focus { outline: none; border-color: var(--accent); }
+.agent-edit-hint { font-size: 11px; color: var(--muted); }
+.agent-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.settings-close-btn {
+  padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--fg); cursor: pointer; font-size: 13px;
+}
+.settings-close-btn:hover { background: var(--bg); }
+.settings-save-btn {
+  padding: 8px 16px; border: none; border-radius: var(--radius-sm);
+  background: var(--accent); color: white; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.settings-save-btn:hover { filter: brightness(1.08); }
+.settings-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.settings-input {
+  width: 100%; padding: 8px 12px; font-size: 13px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg);
+}
+.settings-input:focus { outline: none; border-color: var(--accent); }

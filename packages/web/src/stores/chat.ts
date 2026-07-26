@@ -31,6 +31,12 @@ export interface SkillInfo {
   description: string;
 }
 
+export interface AgentInfo {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 export interface ModelInfo {
   provider: string;
   model: string;
@@ -72,6 +78,8 @@ interface SessionChatState {
   usage: UsageInfo | null;
   activeSkill: { name: string; path: string } | null;
   todos: TodoItem[];
+  agentId?: string;            // 该会话使用的 Agent 预设 id
+  agent?: AgentInfo;           // 该会话使用的 Agent 显示信息
 }
 
 let msgCounter = 0;
@@ -87,7 +95,8 @@ interface ChatStore {
   toggleThinking: () => void;
   setActiveChatSession: (id: string | null) => void;
   ensureSession: (id: string) => void;
-  setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo) => void;
+  setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo, agent?: AgentInfo) => void;
+  setSessionAgent: (id: string, agentId: string, agent: AgentInfo) => void;
   removeSession: (id: string) => void;
   loadMessages: (id: string, messages: Message[]) => void;
   clearSession: (id: string) => void;
@@ -100,6 +109,7 @@ interface ChatStore {
   appendDelta: (id: string, delta: string) => void;
   appendThinking: (id: string, delta: string) => void;
   finishAssistantMessage: (id: string) => void;
+  forceResetGenerating: (id: string) => void;
   addToolStart: (id: string, exec: Partial<ToolExecution> & { toolCallId: string }) => void;
   updateToolEnd: (id: string, toolCallId: string, result: unknown, isError: boolean) => void;
   addSkillUsed: (id: string, skill: SkillUsage) => void;
@@ -121,9 +131,14 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   ensureSession: (id) => set((s) => s.sessions[id] ? {} : { sessions: { ...s.sessions, [id]: empty() } }),
 
-  setAgentCreated: (id, skills, modelInfo) => set((s) => {
+  setAgentCreated: (id, skills, modelInfo, agent) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
-    return { sessions: { ...s.sessions, [id]: { ...sess, agentCreated: true, skills: skills || [], modelInfo: modelInfo ?? sess.modelInfo } } };
+    return { sessions: { ...s.sessions, [id]: { ...sess, agentCreated: true, skills: skills || [], modelInfo: modelInfo ?? sess.modelInfo, agent: agent ?? sess.agent } } };
+  }),
+
+  setSessionAgent: (id, agentId, agent) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, agentId, agent } } };
   }),
 
   removeSession: (id) => set((s) => { const n = { ...s.sessions }; delete n[id]; return { sessions: n }; }),
@@ -205,6 +220,23 @@ export const useChatStore = create<ChatStore>((set) => ({
       const fin = msgs[msgs.length - 1];
       if (fin && !fin.content && !(fin.thinking && fin.thinking.trim()) && !(fin.tools && fin.tools.length)) {
         msgs.pop();
+      }
+    }
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs, isGenerating: false, activeSkill: null } } };
+  }),
+
+  // 强制重置生成状态：用于 agent 被 destroy / abort 后兜底解锁前端卡死
+  // （destroy 不发 agent_end，abort 若 agent 已不在跑也无效，isGenerating 会卡住）
+  forceResetGenerating: (id) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    const msgs = [...sess.messages];
+    const last = msgs[msgs.length - 1];
+    // 关闭最后一条 streaming 消息；若完全空则移除
+    if (last?.role === "assistant" && last.isStreaming) {
+      if (!last.content && !(last.thinking && last.thinking.trim()) && !(last.tools && last.tools.length)) {
+        msgs.pop();
+      } else {
+        msgs[msgs.length - 1] = { ...last, isStreaming: false };
       }
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs, isGenerating: false, activeSkill: null } } };
