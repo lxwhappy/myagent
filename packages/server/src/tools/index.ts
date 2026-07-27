@@ -66,12 +66,18 @@ export const timeTool: ToolDefinition = {
 };
 
 /** 导出所有自定义工具 */
-export const customTools: ToolDefinition[] = [weatherTool, timeTool];
+// 性能优化：只保留核心工具（weather/time 是示例，移除以减少 GLM-4.7 prefill 延迟）
+export const customTools: ToolDefinition[] = [];
 
 // todo 工具已迁移到独立包 @myagent/pi-todo-extension
 export { TodoStore } from "@myagent/pi-todo-extension/src/store.ts";
 export { createTodoTool } from "@myagent/pi-todo-extension/src/tool.ts";
 export type { TodoItem, TodoStatus, TodoPriority } from "@myagent/pi-todo-extension/src/store.ts";
+
+// subagent 委派工具（来自 @myagent/pi-subagent-extension）
+// spawn 函数由 server 端 subagent-runner.ts 实现，在 agent-registry 里组装注入
+export { createDelegateTool } from "@myagent/pi-subagent-extension/src/tool.ts";
+export type { SubagentSpawnFn, SubagentResult, SubagentSpawnOptions } from "@myagent/pi-subagent-extension/src/types.ts";
 
 // 共享 store 单例（带 SSE 广播回调）
 import { TodoStore as _TodoStore } from "@myagent/pi-todo-extension/src/store.ts";

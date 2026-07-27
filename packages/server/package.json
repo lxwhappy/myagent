@@ -15,8 +15,10 @@
     "@fastify/websocket": "^11.0.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@myagent/pi-todo-extension": "workspace:*",
+    "@myagent/pi-subagent-extension": "workspace:*",
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "fastify": "^5.2.1",
     "ws": "^8.21.0"
   },

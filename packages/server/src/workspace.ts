@@ -363,12 +363,27 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     return session;
   });
 
-  // 向会话添加消息
+  // 向会话添加消息（支持富消息：thinking/tools/skillsUsed/subagents）
   app.post("/api/sessions/:id/messages", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { role: "user" | "assistant"; content: string };
-    if (!body.role || !body.content) return reply.code(400).send({ error: "role and content required" });
+    const body = req.body as any;
+    if (!body.role) return reply.code(400).send({ error: "role required" });
+    // 有富字段时用 addRichMessage，否则退回 addMessage（向后兼容）
+    if (body.thinking !== undefined || body.tools || body.skillsUsed || body.subagents) {
+      const msg = await chatSessionStore.addRichMessage(id, body);
+      return msg;
+    }
+    if (!body.content) return reply.code(400).send({ error: "content required" });
     const msg = await chatSessionStore.addMessage(id, body.role, body.content);
+    return msg;
+  });
+
+  // Upsert 消息（流式过程中 debounce 存盘用，刷新后恢复生成中状态）
+  app.put("/api/sessions/:id/messages/upsert", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as any;
+    if (!body.id || !body.role) return reply.code(400).send({ error: "id and role required" });
+    const msg = await chatSessionStore.upsertMessage(id, body);
     return msg;
   });
 

@@ -1,6 +1,6 @@
 // components/MessageItem.tsx — PiAgent Design System 风格消息渲染
 
-import { useState } from "react";
+import { useState, useEffect, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -12,7 +12,11 @@ import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
 import { Icon } from "./Icon";
 
-export function MessageItem({ msg }: { msg: Message }) {
+// memo 包裹：只有 msg 引用变化时才重渲染。
+// 关键：store 的 appendDelta 只对正在流式的消息创建新对象，
+// 历史消息引用不变 → memo 跳过重渲染 → 每个 delta 只重渲染当前流式消息一条。
+// 自定义比较函数：msg 引用相同就跳过（React.memo 默认浅比较即可，这里显式更清晰）
+function MessageItemInner({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
   const stats = !isUser && msg.tools && msg.tools.length > 0 ? getMessageStats(msg) : null;
 
@@ -34,28 +38,8 @@ export function MessageItem({ msg }: { msg: Message }) {
       <div className="msg-body">
         <div className="msg-author">MyAgent</div>
 
-        {/* 思考过程 — 可展开卡片 */}
-        {msg.thinking && msg.thinking.trim() && (
-          <ThinkingCard thinking={msg.thinking} streaming={msg.isStreaming} />
-        )}
-
-        {/* Skill 加载 */}
-        {msg.skillsUsed && msg.skillsUsed.length > 0 && (
-          <>
-            {msg.skillsUsed.map(sk => (
-              <SkillItem key={sk.name} skill={sk} streaming={msg.isStreaming} />
-            ))}
-          </>
-        )}
-
-        {/* 工具调用 */}
-        {msg.tools && msg.tools.length > 0 && (
-          <>
-            {msg.tools.map(t => (
-              <ToolCallCard key={t.toolCallId} tool={t} />
-            ))}
-          </>
-        )}
+        {/* 过程面板：思考 + 技能 + 工具，统一折叠，默认收缩，放在正文上方 */}
+        <ProcessPanel msg={msg} />
 
         {/* 等待指示器：流式开始但还没有任何内容（首字符延迟期间） */}
         {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
@@ -66,49 +50,57 @@ export function MessageItem({ msg }: { msg: Message }) {
           </div>
         )}
 
-        {/* 消息正文 */}
+        {/* 消息正文（独立区域，不和过程混在一起） */}
         {msg.content && (
           <div className="msg-content">
-            <ErrorBoundary fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                pre: ({ children }) => <>{children}</>,
-                code({ node, className, children, ...props }: any) {
-                  const match = /language-(\w+)/.exec(className || "");
-                  const lang = match?.[1];
-                  const raw = String(children).replace(/\n$/, "");
-                  if (lang === "mermaid") {
-                    return (
-                      <ErrorBoundary
-                        fallback={
-                          <div className="mermaid-error">
-                            <div className="mermaid-error-title">⚠️ 流程图渲染失败</div>
-                            <pre className="mermaid-error-code">{raw}</pre>
-                          </div>
-                        }
-                      >
-                        <MermaidBlock chart={raw} />
-                      </ErrorBoundary>
-                    );
-                  }
-                  // 有语言标签 → 带高亮的代码块
-                  if (match) {
-                    return <CodeBlock language={lang!} value={raw} />;
-                  }
-                  // 无语言标签但含换行 → 纯文本代码块（不用深色背景）
-                  if (raw.includes("\n")) {
-                    return <CodeBlock language="text" value={raw} />;
-                  }
-                  // 单行 → 行内 code
-                  return <code className={className} {...props}>{children}</code>;
-                },
-              }}
-            >
-              {msg.content}
-            </ReactMarkdown>
-            </ErrorBoundary>
-            {msg.isStreaming && <span className="stream-cursor" />}
+            {msg.isStreaming ? (
+              // 流式进行中：纯文本预览（避免每帧重新 parse markdown，大幅减少 CPU）
+              // 流结束后（isStreaming=false）才走完整 ReactMarkdown 渲染
+              <>
+                <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+                <span className="stream-cursor" />
+              </>
+            ) : (
+              <ErrorBoundary fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  pre: ({ children }) => <>{children}</>,
+                  code({ node, className, children, ...props }: any) {
+                    const match = /language-(\w+)/.exec(className || "");
+                    const lang = match?.[1];
+                    const raw = String(children).replace(/\n$/, "");
+                    if (lang === "mermaid") {
+                      return (
+                        <ErrorBoundary
+                          fallback={
+                            <div className="mermaid-error">
+                              <div className="mermaid-error-title">⚠️ 流程图渲染失败</div>
+                              <pre className="mermaid-error-code">{raw}</pre>
+                            </div>
+                          }
+                        >
+                          <MermaidBlock chart={raw} />
+                        </ErrorBoundary>
+                      );
+                    }
+                    // 有语言标签 → 带高亮的代码块
+                    if (match) {
+                      return <CodeBlock language={lang!} value={raw} />;
+                    }
+                    // 无语言标签但含换行 → 纯文本代码块（不用深色背景）
+                    if (raw.includes("\n")) {
+                      return <CodeBlock language="text" value={raw} />;
+                    }
+                    // 单行 → 行内 code
+                    return <code className={className} {...props}>{children}</code>;
+                  },
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+              </ErrorBoundary>
+            )}
           </div>
         )}
 
@@ -117,6 +109,65 @@ export function MessageItem({ msg }: { msg: Message }) {
           <TaskSummaryCard stats={stats} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── 过程面板：统一折叠思考+技能+工具过程，默认收缩，放在正文上方 ──
+function ProcessPanel({ msg }: { msg: Message }) {
+  const hasThinking = !!(msg.thinking && msg.thinking.trim());
+  const hasSkills = !!(msg.skillsUsed && msg.skillsUsed.length > 0);
+  const hasTools = !!(msg.tools && msg.tools.length > 0);
+  const hasProcess = hasThinking || hasSkills || hasTools;
+  const runningTool = msg.tools?.find(t => t.status === "running");
+
+  const [open, setOpen] = useState(false);
+
+  // 流式执行中且有工具在跑 → 自动展开（让用户看到实时进度）
+  useEffect(() => {
+    if (msg.isStreaming && runningTool) setOpen(true);
+  }, [msg.isStreaming, !!runningTool]);
+
+  if (!hasProcess) return null;
+
+  // 摘要文本
+  const parts: string[] = [];
+  if (hasThinking) parts.push("思考");
+  if (hasSkills) parts.push(`${msg.skillsUsed!.length} skill`);
+  if (hasTools) parts.push(`${msg.tools!.length} 工具`);
+
+  return (
+    <div className={`process-panel${open ? " expanded" : ""}`}>
+      <button type="button" className="process-header" onClick={() => setOpen(!open)}>
+        <span className={`process-icon${runningTool ? " spinning" : ""}`}>
+          {runningTool ? "⚙" : "✓"}
+        </span>
+        <span className="process-title">思考与工具过程</span>
+        <span className="process-summary">{parts.join(" · ")}</span>
+        {runningTool && <span className="process-running">{runningTool.tool}…</span>}
+        <span className="process-chevron">{open ? "收起" : "展开"}</span>
+      </button>
+      {open && (
+        <div className="process-body">
+          {hasThinking && (
+            <ThinkingCard thinking={msg.thinking!} streaming={msg.isStreaming} />
+          )}
+          {hasSkills && (
+            <>
+              {msg.skillsUsed!.map(sk => (
+                <SkillItem key={sk.name} skill={sk} streaming={msg.isStreaming} />
+              ))}
+            </>
+          )}
+          {hasTools && (
+            <>
+              {msg.tools!.map(t => (
+                <ToolCallCard key={t.toolCallId} tool={t} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -317,3 +368,6 @@ function truncate(s: string, n: number): string {
   const one = s.replace(/\n/g, " ").trim();
   return one.length > n ? one.slice(0, n) + "…" : one;
 }
+
+// React.memo：msg 引用不变时跳过重渲染（历史消息在 delta 更新时引用不变）
+export const MessageItem = memo(MessageItemInner);

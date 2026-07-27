@@ -13,7 +13,8 @@ import { config } from "./config.js";
 import { eventBridge } from "./event-bridge.js";
 import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
-import { createTodoTool, customTools, todoStore } from "./tools/index.js";
+import { createTodoTool, createDelegateTool, customTools, todoStore } from "./tools/index.js";
+import { runSubagent } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
 
 export interface AgentEntry {
@@ -53,15 +54,19 @@ export async function createAgent(
 
   const mcpTools = mcpManager.toToolDefinitions();
 
-  // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）
+  // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）+ delegate_task（按会话隔离）
   const todoTool = createTodoTool(todoStore, chatSessionId);
-  const allCustomTools = [...customTools, todoTool, ...mcpTools];
+  const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId });
+  const allCustomTools = [...customTools, todoTool, delegateTool, ...mcpTools];
 
   const { session } = await createAgentSession({
     model,
     cwd,
     resourceLoader: loader,
     thinkingLevel: "off",
+    // 性能优化：排除可被 bash 替代的内置工具（find/ls/grep），
+    // 减少 GLM-4.7 处理工具定义的 prefill 延迟（每减 3 个工具约省 1-2s 首 token）
+    excludeTools: ["find", "ls"],
     customTools: allCustomTools,
   });
 

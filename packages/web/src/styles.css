@@ -2601,3 +2601,189 @@
   background: var(--surface); color: var(--fg);
 }
 .settings-input:focus { outline: none; border-color: var(--accent); }
+
+/* ── 子 agent 状态面板（delegate_task）── */
+.subagent-panel {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 8px 0 4px;
+}
+.subagent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  animation: subagent-fade-in 0.2s ease;
+}
+.subagent-card.subagent-running { border-left-color: var(--accent); }
+.subagent-card.subagent-error { border-left-color: #e54d42; }
+.subagent-card.subagent-done { border-left-color: #4caf50; opacity: 0.92; }
+@keyframes subagent-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.subagent-head {
+  display: flex; align-items: center; gap: 8px;
+}
+.subagent-icon { flex-shrink: 0; font-size: 14px; line-height: 1; }
+.subagent-card.subagent-running .subagent-icon { animation: subagent-spin 1s linear infinite; display: inline-block; }
+@keyframes subagent-spin { to { transform: rotate(360deg); } }
+.subagent-goal {
+  color: var(--fg); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1; min-width: 0;
+}
+.subagent-progress {
+  margin-top: 6px; padding-left: 22px;
+  font-size: 12px; color: var(--muted);
+}
+.subagent-summary {
+  margin-top: 6px; padding-left: 22px;
+  font-size: 12px; color: var(--muted);
+  line-height: 1.5; white-space: pre-wrap;
+  max-height: 60px; overflow-y: auto;
+}
+.subagent-error {
+  margin-top: 6px; padding-left: 22px;
+  font-size: 12px; color: #e54d42;
+}
+.subagent-meta {
+  margin-top: 4px; padding-left: 22px;
+  font-size: 11px; color: var(--muted); opacity: 0.8;
+}
+
+/* 子 agent 卡片可点击钻入 */
+.subagent-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.subagent-clickable:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+.subagent-enter {
+  margin-left: auto; flex-shrink: 0;
+  font-size: 11px; color: var(--muted); opacity: 0.7;
+  white-space: nowrap;
+}
+.subagent-clickable:hover .subagent-enter { color: var(--accent); opacity: 1; }
+
+/* ── 子 agent 钻入视图 ── */
+.subagent-view { display: flex; flex-direction: column; height: 100%; }
+.subagent-view-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.subagent-back-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 12px;
+  font-size: 13px; font-weight: 500;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.subagent-back-btn:hover { background: var(--bg); border-color: var(--accent); }
+.subagent-back-arrow { font-size: 15px; }
+.subagent-view-title {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 0;
+}
+.subagent-view-icon { flex-shrink: 0; font-size: 16px; }
+.subagent-view-goal {
+  font-size: 14px; font-weight: 600; color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.subagent-view-status {
+  flex-shrink: 0;
+  font-size: 12px; color: var(--muted);
+  padding: 4px 10px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+/* ── 过程面板：思考+工具统一折叠，放在正文上方 ── */
+.process-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+.process-panel.expanded { border-color: var(--accent); }
+
+.process-header {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg);
+  text-align: left;
+  transition: background 0.15s;
+}
+.process-header:hover { background: var(--bg); }
+
+.process-icon {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.process-icon.spinning { animation: process-spin 1.2s linear infinite; color: var(--accent); }
+@keyframes process-spin { to { transform: rotate(360deg); } }
+.process-panel.expanded .process-icon:not(.spinning) { color: var(--accent); }
+
+.process-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.process-summary {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.process-running {
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.process-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  white-space: nowrap;
+}
+.process-header:hover .process-chevron { color: var(--accent); }
+
+.process-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+  animation: process-slide-in 0.2s ease;
+}
+@keyframes process-slide-in {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 9999px; }
+}

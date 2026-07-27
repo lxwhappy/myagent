@@ -15,6 +15,59 @@ let eventsBound = false;
 let lastSentText = "";
 let lastSentTime = 0;
 
+// ── 流式存盘系统 ──
+// 流式过程中 debounce(2s) 把 thinking+tools+subagents+content upsert 到服务端，
+// 这样刷新后能恢复"生成中"状态（思考过程、工具调用、子 agent 进度不丢）。
+// agent_end 时 saveReply 会做最终存盘（isStreaming=false）。
+const streamingPersistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const STREAMING_PERSIST_INTERVAL = 2000;
+
+function scheduleStreamingPersist(chatSessionId: string) {
+  // 已有定时器 → 等它到期（debounce）
+  if (streamingPersistTimers.has(chatSessionId)) return;
+  const timer = setTimeout(() => {
+    streamingPersistTimers.delete(chatSessionId);
+    persistStreamingState(chatSessionId);
+  }, STREAMING_PERSIST_INTERVAL);
+  streamingPersistTimers.set(chatSessionId, timer);
+}
+
+function persistStreamingState(chatSessionId: string) {
+  const store = useChatStore.getState();
+  const sess = store.sessions[chatSessionId];
+  if (!sess) return;
+  const last = sess.messages[sess.messages.length - 1];
+  if (!last || last.role !== "assistant" || !last.isStreaming) return;
+
+  // 映射到 appSessionId
+  const map = (window as any).__chatToAppSession;
+  const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
+  const appSessionId = map?.[chatSessionId] ?? ws?.activeSessionId;
+  if (!appSessionId) return;
+
+  const body: any = {
+    id: last.id,
+    role: "assistant",
+    content: last.content,
+    isStreaming: true,
+  };
+  if (last.thinking) body.thinking = last.thinking;
+  if (last.tools && last.tools.length) body.tools = last.tools;
+  if (last.skillsUsed && last.skillsUsed.length) body.skillsUsed = last.skillsUsed;
+  if (sess.subagents && sess.subagents.length) {
+    body.subagents = sess.subagents.map(sa => ({
+      subId: sa.subId, goal: sa.goal, status: sa.status,
+      toolCount: sa.toolCount, tokens: (sa.tokens as any)?.total ?? sa.tokens,
+      durationMs: sa.durationMs, summary: sa.summary, error: sa.error, messages: sa.messages,
+    }));
+  }
+
+  fetch(`/api/sessions/${appSessionId}/messages/upsert`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
 // ── Delta 缓冲系统 ──
 // GLM-4.7 的 SSE 经常在 8s 静默后 7ms 内 dump 200+ 字符。
 // 浏览器一帧(16ms)内收到全部 delta → 文字一次性闪现，看不到流式。
@@ -116,12 +169,14 @@ export function useChat() {
 
         // agent 回合开始：创建唯一一条 assistant 消息
         case "agent_start":
-          if (sid) chat.startAssistantMessage(sid);
+          if (sid) { chat.startAssistantMessage(sid); scheduleStreamingPersist(sid); }
           break;
 
         // agent 回合结束：收尾 + 持久化 + 提示音
         case "agent_end":
           if (sid) {
+            // 清除流式存盘定时器（saveReply 会做最终存盘）
+            const t = streamingPersistTimers.get(sid); if (t) { clearTimeout(t); streamingPersistTimers.delete(sid); }
             flushAllDeltas(sid);
             chat.finishAssistantMessage(sid);
             saveReply(sid);
@@ -137,22 +192,22 @@ export function useChat() {
           if (sid) {
             const d = typeof msg.payload?.delta === "string" ? msg.payload.delta
               : typeof msg.payload?.text === "string" ? msg.payload.text : "";
-            if (d) pushDelta(sid, d); // 缓冲 + RAF 渐进释放
+            if (d) { pushDelta(sid, d); scheduleStreamingPersist(sid); } // 缓冲 + RAF 渐进释放 + debounce 存盘
           }
           break;
 
         case "thinking_delta":
-          if (sid && typeof msg.payload?.delta === "string") chat.appendThinking(sid, msg.payload.delta);
+          if (sid && typeof msg.payload?.delta === "string") { chat.appendThinking(sid, msg.payload.delta); scheduleStreamingPersist(sid); }
           break;
 
         case "message_end":
           break; // 不做 finish，等 agent_end
 
         case "tool_execution_start":
-          if (sid) chat.addToolStart(sid, { toolCallId: msg.payload.toolCallId, tool: msg.payload.tool, input: msg.payload.input });
+          if (sid) { chat.addToolStart(sid, { toolCallId: msg.payload.toolCallId, tool: msg.payload.tool, input: msg.payload.input }); scheduleStreamingPersist(sid); }
           break;
         case "tool_execution_end":
-          if (sid) chat.updateToolEnd(sid, msg.payload.toolCallId, msg.payload.result, msg.payload.isError);
+          if (sid) { chat.updateToolEnd(sid, msg.payload.toolCallId, msg.payload.result, msg.payload.isError); scheduleStreamingPersist(sid); }
           break;
 
         case "usage_update":
@@ -168,6 +223,25 @@ export function useChat() {
 
         case "todo_update":
           if (sid && msg.payload?.todos) chat.setTodos(sid, msg.payload.todos);
+          break;
+
+        // ── 子 agent（delegate_task 工具触发的隔离子任务）──
+        case "subagent_start":
+          if (sid && msg.payload) chat.addSubagent(sid, { subId: msg.payload.subId, goal: msg.payload.goal, status: "running", toolCount: 0 });
+          break;
+        case "subagent_progress":
+          if (sid && msg.payload) chat.updateSubagentProgress(sid, msg.payload.subId, msg.payload.tool);
+          break;
+        case "subagent_end":
+          if (sid && msg.payload) {
+            const p = msg.payload;
+            chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, durationMs: p.durationMs, error: p.error });
+          }
+          break;
+
+        // ── 子 agent 完整事件流（供钻入查看执行过程）──
+        case "subagent_event":
+          if (sid && msg.payload) chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event);
           break;
 
         case "error":
@@ -319,7 +393,42 @@ export function useChat() {
 
       const chat = useChatStore.getState();
       chat.ensureSession(chatSessionId);
-      chat.loadMessages(chatSessionId, (data.messages || []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+      // 恢复完整消息：content + thinking + tools + skillsUsed + isStreaming（支持刷新回放）
+      const restoredMsgs = (data.messages || []).map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        thinking: m.thinking,
+        tools: m.tools,
+        skillsUsed: m.skillsUsed,
+        isStreaming: m.isStreaming === true,  // 恢复"生成中"标记
+      }));
+      chat.loadMessages(chatSessionId, restoredMsgs);
+      // 如果最后一条消息是流式中（刷新前 agent 还在跑），标记会话为 generating，
+      // 这样 SSE 重连后后续 delta 会 appendDelta 到这条消息，agent_end 时正常收尾
+      const lastMsg = restoredMsgs[restoredMsgs.length - 1];
+      if (lastMsg?.isStreaming && lastMsg?.role === "assistant") {
+        useChatStore.setState((s) => {
+          const sess = s.sessions[chatSessionId];
+          if (!sess) return {};
+          return { sessions: { ...s.sessions, [chatSessionId]: { ...sess, isGenerating: true } } };
+        });
+      }
+      // 从最后一条含 subagents 的 assistant 消息恢复子 agent 快照（支持刷新后钻入回放）
+      const lastWithSubs = [...(data.messages || [])].reverse().find((m: any) => m.subagents && m.subagents.length);
+      if (lastWithSubs) {
+        chat.setSubagents(chatSessionId, lastWithSubs.subagents.map((sa: any) => ({
+          subId: sa.subId,
+          goal: sa.goal,
+          status: sa.status,
+          toolCount: sa.toolCount || 0,
+          tokens: sa.tokens,
+          durationMs: sa.durationMs,
+          summary: sa.summary,
+          error: sa.error,
+          messages: sa.messages,
+        })));
+      }
       // 恢复上次保存的 usage（刷新后不丢失）
       if (data.lastUsage) chat.setUsage(chatSessionId, data.lastUsage);
       if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
@@ -375,9 +484,28 @@ function saveReply(chatSessionId: string) {
   if (!sess) return;
   const last = sess.messages[sess.messages.length - 1];
   if (last?.role === "assistant" && last.content) {
+    // 存完整 assistant 消息（thinking + tools + skillsUsed + subagents），支持刷新回放
+    const body: any = { role: "assistant", content: last.content, id: last.id };
+    if (last.thinking) body.thinking = last.thinking;
+    if (last.tools && last.tools.length) body.tools = last.tools;
+    if (last.skillsUsed && last.skillsUsed.length) body.skillsUsed = last.skillsUsed;
+    // 把会话级的 subagents 快照存在这条 assistant 消息上（刷新后恢复钻入视图）
+    if (sess.subagents && sess.subagents.length) {
+      body.subagents = sess.subagents.map(sa => ({
+        subId: sa.subId,
+        goal: sa.goal,
+        status: sa.status,
+        toolCount: sa.toolCount,
+        tokens: (sa.tokens as any)?.total ?? sa.tokens,
+        durationMs: sa.durationMs,
+        summary: sa.summary,
+        error: sa.error,
+        messages: sa.messages,
+      }));
+    }
     fetch(`/api/sessions/${appSessionId}/messages`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "assistant", content: last.content }),
+      body: JSON.stringify(body),
     });
   }
 }

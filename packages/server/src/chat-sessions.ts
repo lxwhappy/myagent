@@ -23,6 +23,25 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  // ── 回放扩展字段（向后兼容：旧数据没有这些字段，读取时为 undefined）──
+  thinking?: string;           // 思考过程
+  tools?: any[];               // 工具调用记录（结构同前端 ToolExecution）
+  skillsUsed?: any[];          // 该消息加载的 skills
+  subagents?: SubagentSnapshot[];  // 该消息期间产生的子 agent 快照
+  isStreaming?: boolean;       // 流式进行中标记（刷新后可恢复"生成中"状态）
+}
+
+/** 子 agent 持久化快照（存在对应 assistant 消息上，刷新后可钻入回放） */
+export interface SubagentSnapshot {
+  subId: string;
+  goal: string;
+  status: "running" | "done" | "error";
+  toolCount: number;
+  tokens?: number;
+  durationMs?: number;
+  summary?: string;
+  error?: string;
+  messages?: any[];   // 子 agent 完整执行过程
 }
 
 export interface ChatSession {
@@ -184,6 +203,7 @@ export const chatSessionStore = {
   },
 
   // 只重写单个会话文件，不再全量重写所有会话
+  // 简单消息：只存 content（向后兼容，user 消息用）
   async addMessage(id: string, role: "user" | "assistant", content: string): Promise<ChatMessage> {
     await ensureLoaded();
     const s = await loadSession(id);
@@ -199,6 +219,57 @@ export const chatSessionStore = {
       await writeSession(s);
     }
     return msg;
+  },
+
+  // 富消息：存 thinking + tools + skillsUsed + subagents（assistant 回合用，支持刷新回放）
+  async addRichMessage(id: string, msg: Partial<ChatMessage> & { role: "user" | "assistant"; content: string }): Promise<ChatMessage> {
+    await ensureLoaded();
+    const s = await loadSession(id);
+    const full: ChatMessage = {
+      id: msg.id || randomUUID(),
+      role: msg.role,
+      content: msg.content,
+      timestamp: Date.now(),
+      thinking: msg.thinking || undefined,
+      tools: msg.tools,
+      skillsUsed: msg.skillsUsed,
+      subagents: msg.subagents,
+    };
+    if (s) {
+      s.messages.push(full);
+      s.updatedAt = Date.now();
+      await writeSession(s);
+    }
+    return full;
+  },
+
+  // Upsert：按 msg.id 更新或追加。流式过程中 debounce 存盘用（刷新后恢复生成中状态）。
+  // 如果消息已存在 → 更新所有字段；不存在 → 追加。
+  async upsertMessage(id: string, msg: Partial<ChatMessage> & { id: string; role: "user" | "assistant" }): Promise<ChatMessage> {
+    await ensureLoaded();
+    const s = await loadSession(id);
+    const full: ChatMessage = {
+      id: msg.id,
+      role: msg.role,
+      content: msg.content ?? "",
+      timestamp: msg.timestamp ?? Date.now(),
+      thinking: msg.thinking || undefined,
+      tools: msg.tools,
+      skillsUsed: msg.skillsUsed,
+      subagents: msg.subagents,
+      isStreaming: msg.isStreaming,
+    };
+    if (s) {
+      const idx = s.messages.findIndex(m => m.id === msg.id);
+      if (idx >= 0) {
+        s.messages[idx] = { ...s.messages[idx], ...full, timestamp: Date.now() };
+      } else {
+        s.messages.push(full);
+      }
+      s.updatedAt = Date.now();
+      await writeSession(s);
+    }
+    return full;
   },
 
   async touch(id: string) {

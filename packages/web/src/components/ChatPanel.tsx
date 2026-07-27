@@ -3,9 +3,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "../hooks/useChat";
+import { useChatStore } from "../stores/chat";
 import { MessageItem } from "./MessageItem";
 import { Icon } from "./Icon";
 import { TodoPanel } from "./TodoPanel";
+import { SubagentPanel } from "./SubagentPanel";
 
 const SUGGESTIONS: Array<{ text: string; icon: string }> = [
   { text: "帮我看看当前目录有什么文件", icon: "i-folder" },
@@ -16,15 +18,70 @@ const SUGGESTIONS: Array<{ text: string; icon: string }> = [
 
 export function ChatPanel() {
   const { messages, connected, skills, skillsNotified: storeNotified, activeSkill, sendMessage } = useChat();
+  // 子 agent 钻入视图
+  const activeSubId = useChatStore(s => s.activeSubId);
+  const setActiveSub = useChatStore(s => s.setActiveSub);
+  const sid = useChatStore(s => s.activeChatSessionId);
+  const activeSub = useChatStore(s => {
+    if (!activeSubId || !sid) return undefined;
+    return s.sessions[sid]?.subagents.find(sa => sa.subId === activeSubId);
+  });
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const [dismissedSkills, setDismissedSkills] = useState(false);
 
+  // 主会话消息变化时滚动
   useEffect(() => {
+    if (activeSubId) return; // 子 agent 视图有自己的滚动
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, activeSubId]);
+
+  // 子 agent 消息变化时滚动
+  const subMessages = activeSub?.messages;
+  useEffect(() => {
+    if (!activeSubId) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [subMessages, activeSubId]);
 
   const showSkills = skills.length > 0 && !dismissedSkills && !storeNotified;
 
+  // ── 子 agent 钻入视图 ──
+  if (activeSubId && activeSub) {
+    const subMsgs = activeSub.messages || [];
+    return (
+      <div className="chat-panel-inner subagent-view">
+        <div className="subagent-view-bar">
+          <button className="subagent-back-btn" onClick={() => setActiveSub(null)}>
+            <span className="subagent-back-arrow">←</span> 返回主会话
+          </button>
+          <div className="subagent-view-title">
+            <span className="subagent-view-icon">
+              {activeSub.status === "running" ? "🔄" : activeSub.status === "done" ? "✅" : "❌"}
+            </span>
+            <span className="subagent-view-goal">{activeSub.goal}</span>
+          </div>
+          <div className="subagent-view-status">
+            {activeSub.status === "running" ? "执行中…" : activeSub.status === "done" ? "已完成" : "出错"}
+          </div>
+        </div>
+        <div className="messages">
+          {subMsgs.length === 0 && (
+            <div className="empty-state" style={{ minHeight: 120 }}>
+              <p style={{ color: "var(--muted)" }}>
+                {activeSub.status === "running" ? "子 agent 正在启动…" : "暂无执行记录"}
+              </p>
+            </div>
+          )}
+          {subMsgs.map(msg => (
+            <MessageItem key={msg.id} msg={msg} />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── 主会话视图（原有逻辑）──
   return (
     <div className="chat-panel-inner">
       {/* TODO 任务清单 — 固定在消息区上方，始终可见 */}
@@ -83,6 +140,10 @@ export function ChatPanel() {
       {messages.map(msg => (
         <MessageItem key={msg.id} msg={msg} />
       ))}
+
+      {/* 子 agent 实时状态（delegate_task 委派的子任务）*/}
+      <SubagentPanel />
+
       <div ref={bottomRef} />
       </div>
     </div>

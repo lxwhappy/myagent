@@ -87,6 +87,26 @@ export class EventBridge {
         case "message_start": break;
         case "message_end": break;
 
+        case "compaction_start": {
+          const reason = (event as any).reason;
+          console.log(`\n========== [COMPACTION] START  session=${chatSessionId.slice(0, 8)}  reason=${reason} ==========`);
+          send("compaction_start", { reason });
+          break;
+        }
+        case "compaction_end": {
+          const r = (event as any).result || {};
+          const reason = (event as any).reason;
+          const aborted = (event as any).aborted;
+          const before = r.tokensBefore ?? "?";
+          const after = r.estimatedTokensAfter ?? "?";
+          const saved = (typeof before === "number" && typeof after === "number") ? `${Math.round((1 - after / before) * 100)}%` : "?";
+          console.log(`========== [COMPACTION] END  session=${chatSessionId.slice(0, 8)}  reason=${reason}  aborted=${aborted} ==========`);
+          console.log(`[COMPACTION] tokensBefore=${before}  estAfter=${after}  压缩率=${saved}`);
+          if (r.summary) console.log(`[COMPACTION] 摘要预览(前300字):\n${(r.summary as string).slice(0, 300)}\n`);
+          send("compaction_end", { reason, aborted, tokensBefore: before, estimatedTokensAfter: after, summary: r.summary });
+          break;
+        }
+
         case "message_update": {
           const ae = (event as any).assistantMessageEvent;
           if (!ae) break;

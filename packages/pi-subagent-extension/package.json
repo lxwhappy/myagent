@@ -1,0 +1,29 @@
+{
+  "name": "@myagent/pi-subagent-extension",
+  "version": "0.1.0",
+  "description": "Subagent delegation tool for Pi Agent — spawn isolated child agents for subtasks",
+  "type": "module",
+  "main": "./index.ts",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./src/tool.ts": "./src/tool.ts",
+    "./src/types.ts": "./src/types.ts",
+    "./src/extension.ts": "./src/extension.ts",
+    "./tool": "./src/tool.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.80.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "latest",
+    "typescript": "^5"
+  }
+}

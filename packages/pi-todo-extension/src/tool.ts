@@ -31,10 +31,8 @@ export function createTodoTool(store: TodoStore, sessionId: string): ToolDefinit
     name: "todo",
     label: "TODO",
     description:
-      "管理当前会话的任务清单。遇到多步骤任务（3步以上）时，先用 action=add 添加每个步骤，" +
-      "然后开始执行。每完成一步，用 action=update 将该任务状态改为 completed，" +
-      "并将下一个任务改为 in_progress。这样用户能实时看到进度。" +
-      "状态：pending（待处理）/ in_progress（进行中）/ completed（已完成）。",
+      "管理当前会话的任务清单。多步骤任务先用 action=add 添加步骤，" +
+      "每完成一步用 action=update 更新状态。状态：pending/in_progress/completed。",
     promptSnippet:
       "- todo: 任务清单。先 add 拆步骤，每做完一步 update 状态(completed)，同时把下一步设为 in_progress",
     promptGuidelines: [

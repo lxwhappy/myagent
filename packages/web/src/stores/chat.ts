@@ -26,6 +26,20 @@ export interface ToolExecution {
   status: "running" | "done" | "error";
 }
 
+/** 子 agent 运行状态（delegate_task 工具触发的隔离子任务） */
+export interface SubagentState {
+  subId: string;
+  goal: string;
+  status: "running" | "done" | "error";
+  currentTool?: string;
+  toolCount: number;
+  tokens?: number;
+  durationMs?: number;
+  summary?: string;
+  error?: string;
+  messages?: Message[];   // 子 agent 的完整执行过程（供钻入查看）
+}
+
 export interface SkillInfo {
   name: string;
   description: string;
@@ -78,21 +92,24 @@ interface SessionChatState {
   usage: UsageInfo | null;
   activeSkill: { name: string; path: string } | null;
   todos: TodoItem[];
+  subagents: SubagentState[];   // 活跃/刚完成的子 agent（delegate_task）
   agentId?: string;            // 该会话使用的 Agent 预设 id
   agent?: AgentInfo;           // 该会话使用的 Agent 显示信息
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [] });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [] });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
   activeChatSessionId: string | null;
   connected: boolean;
   thinkingEnabled: boolean;
+  activeSubId: string | null;   // 当前钻入查看的子 agent id（null=主会话视图）
 
   setConnected: (v: boolean) => void;
   toggleThinking: () => void;
+  setActiveSub: (subId: string | null) => void;
   setActiveChatSession: (id: string | null) => void;
   ensureSession: (id: string) => void;
   setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo, agent?: AgentInfo) => void;
@@ -103,6 +120,11 @@ interface ChatStore {
   setUsage: (id: string, usage: UsageInfo) => void;
   setActiveSkill: (id: string, skill: { name: string; path: string } | null) => void;
   setTodos: (id: string, todos: TodoItem[]) => void;
+  addSubagent: (id: string, sub: SubagentState) => void;
+  updateSubagentProgress: (id: string, subId: string, tool: string) => void;
+  finishSubagent: (id: string, subId: string, result: { status: "done" | "error"; summary?: string; tokens?: number; durationMs?: number; error?: string }) => void;
+  applySubagentEvent: (id: string, subId: string, event: any) => void;
+  setSubagents: (id: string, subs: SubagentState[]) => void;
 
   addUserMessage: (id: string, text: string) => void;
   startAssistantMessage: (id: string) => void;
@@ -120,14 +142,16 @@ export const useChatStore = create<ChatStore>((set) => ({
   activeChatSessionId: null,
   connected: false,
   thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") === "1"; } catch { return false; } })(),
+  activeSubId: null,
 
   setConnected: (v) => set({ connected: v }),
+  setActiveSub: (subId) => set({ activeSubId: subId }),
+  setActiveChatSession: (id) => set({ activeChatSessionId: id, activeSubId: null }),
   toggleThinking: () => set((s) => {
     const v = !s.thinkingEnabled;
     try { localStorage.setItem("myagent:thinking", v ? "1" : "0"); } catch {}
     return { thinkingEnabled: v };
   }),
-  setActiveChatSession: (id) => set({ activeChatSessionId: id }),
 
   ensureSession: (id) => set((s) => s.sessions[id] ? {} : { sessions: { ...s.sessions, [id]: empty() } }),
 
@@ -271,5 +295,75 @@ export const useChatStore = create<ChatStore>((set) => ({
       }
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+  }),
+
+  // ── 子 agent（delegate_task）状态 ──
+  addSubagent: (id, sub) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: [...sess.subagents, sub] } } };
+  }),
+  updateSubagentProgress: (id, subId, tool) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: sess.subagents.map(sa => sa.subId === subId ? { ...sa, currentTool: tool, toolCount: sa.toolCount + 1 } : sa) } } };
+  }),
+  finishSubagent: (id, subId, result) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: sess.subagents.map(sa => sa.subId === subId ? { ...sa, status: result.status, summary: result.summary, tokens: result.tokens, durationMs: result.durationMs, error: result.error, currentTool: undefined } : sa) } } };
+  }),
+  // 把子 agent 的实时事件累积成 messages（结构同主会话，复用 MessageItem 渲染）
+  applySubagentEvent: (id, subId, event) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    let touched = false;
+    const subagents = sess.subagents.map(sa => {
+      if (sa.subId !== subId) return sa;
+      touched = true;
+      const msgs = [...(sa.messages || [])];
+      let subMsgCounter = msgs.length;
+      switch (event.type) {
+        case "agent_start":
+          // 子 agent 回合开始：创建一条 assistant 消息（复用主会话的流式结构）
+          msgs.push({ id: `subm-${subId}-${subMsgCounter}`, role: "assistant", content: "", isStreaming: true, thinking: "", tools: [] });
+          break;
+        case "message_update": {
+          if (!event.delta) break;
+          const last = msgs[msgs.length - 1];
+          if (last?.role === "assistant" && last.isStreaming) msgs[msgs.length - 1] = { ...last, content: last.content + event.delta };
+          break;
+        }
+        case "thinking_delta": {
+          if (!event.delta) break;
+          const last = msgs[msgs.length - 1];
+          if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, thinking: (last.thinking || "") + event.delta };
+          break;
+        }
+        case "tool_execution_start": {
+          const last = msgs[msgs.length - 1];
+          if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, tools: [...(last.tools || []), { toolCallId: event.toolCallId, tool: event.tool, input: event.input, status: "running" }] };
+          break;
+        }
+        case "tool_execution_end": {
+          const last = msgs[msgs.length - 1];
+          if (last?.role === "assistant" && last.tools) msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === event.toolCallId ? { ...t, output: event.result, isError: event.isError, status: event.isError ? "error" : "done" } : t) };
+          break;
+        }
+        case "agent_end": {
+          const last = msgs[msgs.length - 1];
+          if (last?.role === "assistant" && last.isStreaming) {
+            // 正文空但 thinking 有内容时，把 thinking 当正文（同主会话逻辑）
+            const patch: any = { isStreaming: false };
+            if (!last.content && last.thinking && last.thinking.trim()) { patch.content = last.thinking.trim(); patch.thinking = ""; }
+            msgs[msgs.length - 1] = { ...last, ...patch };
+          }
+          break;
+        }
+      }
+      return { ...sa, messages: msgs };
+    });
+    if (!touched) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents } } };
+  }),
+  setSubagents: (id, subs) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: subs } } };
   }),
 }));
