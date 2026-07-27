@@ -13,7 +13,7 @@ import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
 
 export default function App() {
-  const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo } = useChat();
+  const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo, subToken, subDurationMs, subStatus } = useChat();
   const wsStore = useWorkspaceStore();
   const sessions = useSessions();
   const [showDirBrowser, setShowDirBrowser] = useState(false);
@@ -252,7 +252,7 @@ export default function App() {
 
         {/* Zone 4: Footer — Token + User */}
         <div className="sb-footer">
-          <SidebarTokenRow usage={usage} modelInfo={modelInfo} />
+          <SidebarTokenRow usage={usage} modelInfo={modelInfo} subToken={subToken} subDurationMs={subDurationMs} subStatus={subStatus} />
           <div className="user-row" onClick={() => setShowSettings(true)}>
             <div className="user-avatar">鑫</div>
             <span className="user-name-sb">小鑫</span>
@@ -384,18 +384,41 @@ function SessionRow({ session, isActive, onSelect, onDelete }: {
 }
 
 // ── Sidebar Token Row ──
-function SidebarTokenRow({ usage, modelInfo }: {
+function SidebarTokenRow({ usage, modelInfo, subToken, subDurationMs, subStatus }: {
   usage: {
     stats: { tokens: { input: number; output: number; total: number }; cost: number; toolCalls: number } | null;
     context: { tokens: number | null; contextWindow: number; percent: number | null } | null;
   } | null;
   modelInfo: { provider: string; model: string; name: string; contextWindow: number } | null;
+  subToken?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number } | null;
+  subDurationMs?: number | null;
+  subStatus?: string | null;
 }) {
+  const toK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+
+  // ── 钻入子 agent 视图：显示子 agent 独立 token 统计 ──
+  if (subToken) {
+    const dur = subDurationMs ? `${(subDurationMs / 1000).toFixed(1)}s` : null;
+    return (
+      <div className="token-detail-row" title={`子 Agent ${subStatus ?? ""} ${dur ?? ""}`.trim()}>
+        <div className="token-detail-ctx">
+          <span className="tds-sub-label">🤖 子Agent</span>
+          {dur && <span className="tds-sub-dur">{dur}</span>}
+        </div>
+        <div className="token-detail-stats">
+          <span className="tds-item">↑{toK(subToken.input)}</span>
+          <span className="tds-item">↓{toK(subToken.output)}</span>
+          <span className="tds-item tds-total">Σ{toK(subToken.total)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 主会话视图 ──
   const ctx = usage?.context;
   const pct = ctx?.percent ?? 0;
   const tier = pct >= 80 ? "danger" : pct >= 50 ? "warn" : "ok";
   const tokens = usage?.stats?.tokens;
-  const toK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
   return (
     <div className="token-detail-row" title={modelInfo ? `${modelInfo.provider}/${modelInfo.model}` : undefined}>

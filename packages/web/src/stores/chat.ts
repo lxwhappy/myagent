@@ -34,6 +34,7 @@ export interface SubagentState {
   currentTool?: string;
   toolCount: number;
   tokens?: number;
+  tokenBreakdown?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
   durationMs?: number;
   summary?: string;
   error?: string;
@@ -122,7 +123,7 @@ interface ChatStore {
   setTodos: (id: string, todos: TodoItem[]) => void;
   addSubagent: (id: string, sub: SubagentState) => void;
   updateSubagentProgress: (id: string, subId: string, tool: string) => void;
-  finishSubagent: (id: string, subId: string, result: { status: "done" | "error"; summary?: string; tokens?: number; durationMs?: number; error?: string }) => void;
+  finishSubagent: (id: string, subId: string, result: { status: "done" | "error"; summary?: string; tokens?: number; tokenBreakdown?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number }; durationMs?: number; error?: string }) => void;
   applySubagentEvent: (id: string, subId: string, event: any) => void;
   setSubagents: (id: string, subs: SubagentState[]) => void;
 
@@ -308,7 +309,7 @@ export const useChatStore = create<ChatStore>((set) => ({
   }),
   finishSubagent: (id, subId, result) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
-    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: sess.subagents.map(sa => sa.subId === subId ? { ...sa, status: result.status, summary: result.summary, tokens: result.tokens, durationMs: result.durationMs, error: result.error, currentTool: undefined } : sa) } } };
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: sess.subagents.map(sa => sa.subId === subId ? { ...sa, status: result.status, summary: result.summary, tokens: result.tokens, tokenBreakdown: result.tokenBreakdown, durationMs: result.durationMs, error: result.error, currentTool: undefined } : sa) } } };
   }),
   // 把子 agent 的实时事件累积成 messages（结构同主会话，复用 MessageItem 渲染）
   applySubagentEvent: (id, subId, event) => set((s) => {

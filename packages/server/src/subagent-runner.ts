@@ -205,7 +205,8 @@ export const runSubagent: SubagentSpawnFn = async (
     const stats = session.getSessionStats();
     const result: SubagentResult = {
       summary: textBuf.trim() || "(子 agent 未产生文本输出)",
-      tokens: stats.tokens,
+      tokens: stats.tokens.total,
+      tokenBreakdown: stats.tokens,
       toolCalls: stats.toolCalls ?? toolCalls,
       durationMs: Date.now() - startedAt,
     };

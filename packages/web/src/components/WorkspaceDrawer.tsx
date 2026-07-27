@@ -132,8 +132,9 @@ export function SidebarFileTree({ onOpenFile }: { onOpenFile: () => void }) {
 function ChangesBadge() {
   const activeChatId = useChatStore(s => s.activeChatSessionId);
   const messages = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.messages : undefined);
+  const subagents = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.subagents : undefined);
   if (!messages) return null;
-  const stats = getSessionStats(messages);
+  const stats = getSessionStats(messages, subagents);
   if (stats.filesChanged.length === 0) return null;
   return <span className="sb-file-tab-badge">{stats.filesChanged.length}</span>;
 }
@@ -142,10 +143,11 @@ function ChangesBadge() {
 function ChangesPanel({ wsId, openFile }: { wsId?: string; openFile: (path: string) => void }) {
   const activeChatId = useChatStore(s => s.activeChatSessionId);
   const messages = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.messages : undefined);
+  const subagents = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.subagents : undefined);
 
   if (!messages || messages.length === 0) return <div className="sb-file-empty">本次会话暂无活动</div>;
 
-  const stats = getSessionStats(messages);
+  const stats = getSessionStats(messages, subagents);
   if (stats.filesChanged.length === 0) {
     return (
       <div className="sb-file-empty">

@@ -165,29 +165,39 @@ function addFileChange(map: Map<string, FileChange>, path: string, status: ToolE
   }
 }
 
-/** 聚合整个会话的统计 */
-export function getSessionStats(messages: Message[]): SessionStats {
+/** 聚合整个会话的统计（含子 agent 产出的文件） */
+export function getSessionStats(messages: Message[], subagents?: { messages?: Message[] }[]): SessionStats {
   const filesMap = new Map<string, FileChange>();
   let edits = 0, commands = 0, reads = 0, searches = 0, others = 0, errors = 0;
   const errorDetails: ErrorDetail[] = [];
 
-  for (const msg of messages) {
-    if (!msg.tools) continue;
-    const agg = aggregateTools(msg.tools);
-    edits += agg.edits;
-    commands += agg.commands;
-    reads += agg.reads;
-    searches += agg.searches;
-    others += agg.others;
-    errors += agg.errors;
-    errorDetails.push(...agg.errorDetails);
-    for (const [path, fc] of agg.filesChanged) {
-      const existing = filesMap.get(path);
-      if (existing) {
-        existing.edits += fc.edits;
-        existing.lastStatus = fc.lastStatus;
-      } else {
-        filesMap.set(path, { ...fc });
+  // 收集所有需要统计的消息：主会话 + 各子 agent
+  const allMessageSets: Message[][] = [messages];
+  if (subagents) {
+    for (const sub of subagents) {
+      if (sub.messages?.length) allMessageSets.push(sub.messages);
+    }
+  }
+
+  for (const msgs of allMessageSets) {
+    for (const msg of msgs) {
+      if (!msg.tools) continue;
+      const agg = aggregateTools(msg.tools);
+      edits += agg.edits;
+      commands += agg.commands;
+      reads += agg.reads;
+      searches += agg.searches;
+      others += agg.others;
+      errors += agg.errors;
+      errorDetails.push(...agg.errorDetails);
+      for (const [path, fc] of agg.filesChanged) {
+        const existing = filesMap.get(path);
+        if (existing) {
+          existing.edits += fc.edits;
+          existing.lastStatus = fc.lastStatus;
+        } else {
+          filesMap.set(path, { ...fc });
+        }
       }
     }
   }

@@ -85,7 +85,7 @@ export class EventBridge {
         case "agent_start": send("agent_start"); autoAdvance(); break;
         case "agent_end": send("agent_end"); autoFinish(); sendUsage(); break;
         case "message_start": break;
-        case "message_end": break;
+        case "message_end": sendUsage(); break;  // 每条消息结束就更新用量（实时反馈，不等整个回合结束）
 
         case "compaction_start": {
           const reason = (event as any).reason;

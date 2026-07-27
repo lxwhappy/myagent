@@ -58,6 +58,7 @@ function persistStreamingState(chatSessionId: string) {
     body.subagents = sess.subagents.map(sa => ({
       subId: sa.subId, goal: sa.goal, status: sa.status,
       toolCount: sa.toolCount, tokens: (sa.tokens as any)?.total ?? sa.tokens,
+      tokenBreakdown: sa.tokenBreakdown,
       durationMs: sa.durationMs, summary: sa.summary, error: sa.error, messages: sa.messages,
     }));
   }
@@ -235,7 +236,7 @@ export function useChat() {
         case "subagent_end":
           if (sid && msg.payload) {
             const p = msg.payload;
-            chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, durationMs: p.durationMs, error: p.error });
+            chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, tokenBreakdown: p.tokenBreakdown, durationMs: p.durationMs, error: p.error });
           }
           break;
 
@@ -423,6 +424,7 @@ export function useChat() {
           status: sa.status,
           toolCount: sa.toolCount || 0,
           tokens: sa.tokens,
+          tokenBreakdown: sa.tokenBreakdown,
           durationMs: sa.durationMs,
           summary: sa.summary,
           error: sa.error,
@@ -452,6 +454,11 @@ export function useChat() {
 
   const activeId = store.activeChatSessionId;
   const activeSession = activeId ? store.sessions[activeId] : null;
+  const activeSubId = store.activeSubId;
+  // 钻入子 agent 视图时，取当前子 agent 的 token 明细
+  const activeSub = activeSubId && activeSession
+    ? activeSession.subagents.find(sa => sa.subId === activeSubId)
+    : null;
 
   return {
     messages: activeSession?.messages ?? [],
@@ -464,6 +471,10 @@ export function useChat() {
     todos: activeSession?.todos ?? [],
     agent: activeSession?.agent ?? null,
     agentId: activeSession?.agentId ?? null,
+    // 钻入子 agent 时的 token 明细（独立于主会话，侧栏 token 栏据此切换）
+    subToken: activeSub?.tokenBreakdown ?? null,
+    subDurationMs: activeSub?.durationMs ?? null,
+    subStatus: activeSub?.status ?? null,
     connected: store.connected,
     activeChatSessionId: activeId,
     createChatSession,
@@ -497,6 +508,7 @@ function saveReply(chatSessionId: string) {
         status: sa.status,
         toolCount: sa.toolCount,
         tokens: (sa.tokens as any)?.total ?? sa.tokens,
+        tokenBreakdown: sa.tokenBreakdown,
         durationMs: sa.durationMs,
         summary: sa.summary,
         error: sa.error,

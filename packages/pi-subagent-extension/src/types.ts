@@ -10,6 +10,8 @@ export interface SubagentResult {
   summary: string;
   /** 子 agent 本轮消耗的 token（可选，用于展示） */
   tokens?: number;
+  /** 子 agent token 明细（input/output/cache/total），用于汇总到主会话 */
+  tokenBreakdown?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
   /** 子 agent 执行的工具调用次数 */
   toolCalls?: number;
   /** 总耗时（毫秒） */
