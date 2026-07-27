@@ -7,7 +7,7 @@ import { useChatStore } from "../stores/chat";
 import { MessageItem } from "./MessageItem";
 import { Icon } from "./Icon";
 import { TodoPanel } from "./TodoPanel";
-import { SubagentPanel } from "./SubagentPanel";
+import { SubagentPanel, SubagentProcessDetail } from "./SubagentPanel";
 
 const SUGGESTIONS: Array<{ text: string; icon: string }> = [
   { text: "帮我看看当前目录有什么文件", icon: "i-folder" },
@@ -65,16 +65,20 @@ export function ChatPanel() {
           </div>
         </div>
         <div className="messages">
-          {subMsgs.length === 0 && (
+          {subMsgs.length === 0 ? (
             <div className="empty-state" style={{ minHeight: 120 }}>
               <p style={{ color: "var(--muted)" }}>
                 {activeSub.status === "running" ? "子 agent 正在启动…" : "暂无执行记录"}
               </p>
             </div>
+          ) : (
+            <SubagentProcessDetail
+              messages={subMsgs}
+              status={activeSub.status}
+              currentTool={activeSub.currentTool}
+              toolCount={activeSub.toolCount}
+            />
           )}
-          {subMsgs.map(msg => (
-            <MessageItem key={msg.id} msg={msg} />
-          ))}
           <div ref={bottomRef} />
         </div>
       </div>

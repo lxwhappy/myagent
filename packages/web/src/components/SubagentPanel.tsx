@@ -4,7 +4,11 @@
 // 正在执行的工具、工具调用次数；完成后显示结果摘要 + token/耗时。
 // 直接从 chat store 读取当前会话的 subagents 状态（由 SSE 事件驱动更新）。
 
+import { useState, useEffect, useMemo } from "react";
 import { useChatStore } from "../stores/chat";
+import type { Message } from "../stores/chat";
+import { Icon } from "./Icon";
+import { MessageItem } from "./MessageItem";
 
 export function SubagentPanel() {
   const sid = useChatStore(s => s.activeChatSessionId);
@@ -62,6 +66,65 @@ export function SubagentPanel() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── 子 agent 过程详情：统一折叠面板（顶部摘要栏 + 展开看每条消息的思考/工具） ──
+// 参考设计：顶部摘要「过程详情 · N 条消息 · M 次工具调用」，点击展开/收起整个执行过程。
+// 配色沿用 design system（accent 钴蓝系），非参考图的红色。
+export function SubagentProcessDetail({
+  messages,
+  status,
+  currentTool,
+  toolCount,
+}: {
+  messages: Message[];
+  status: "running" | "done" | "error";
+  currentTool?: string;
+  toolCount: number;
+}) {
+  const running = status === "running";
+  const [open, setOpen] = useState(true);
+
+  // 执行中保持展开，让用户实时看到进度
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running]);
+
+  // 从消息里精确统计工具调用次数（兜底用 store 的 toolCount）
+  const toolCalls = useMemo(
+    () => messages.reduce((sum, m) => sum + (m.tools?.length || 0), 0) || toolCount,
+    [messages, toolCount],
+  );
+
+  const statusText = running ? "执行中" : status === "done" ? "已完成" : "出错";
+
+  return (
+    <div className={`sub-detail${open ? " expanded" : ""}`}>
+      <button type="button" className="sub-detail-header" onClick={() => setOpen(!open)}>
+        <Icon
+          name="i-chevron"
+          size={16}
+          className={`sub-detail-chevron${open ? "" : " collapsed"}`}
+        />
+        <span className="sub-detail-title">过程详情</span>
+        <span className="sub-detail-summary">
+          {messages.length} 条消息 · {toolCalls} 次工具调用
+        </span>
+        <span className="sub-detail-spacer" />
+        {running && currentTool && (
+          <span className="sub-detail-running" title={currentTool}>{currentTool}…</span>
+        )}
+        <span className={`sub-detail-status ${status}`}>{statusText}</span>
+      </button>
+      {open && (
+        <div className="sub-detail-body">
+          {messages.map(msg => (
+            <MessageItem key={msg.id} msg={msg} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
