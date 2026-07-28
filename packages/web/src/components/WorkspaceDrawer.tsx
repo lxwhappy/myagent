@@ -259,11 +259,32 @@ function FileTree({
 export function FilePreviewPane() {
   const ws = useWorkspace();
   const wsStore = useWorkspaceStore();
+  const [viewMode, setViewMode] = useState<"source" | "diff">("source");
+  const [diffData, setDiffData] = useState<string | null | undefined>(undefined); // undefined=未加载, null=无diff, string=diff内容
+  const [diffLoading, setDiffLoading] = useState(false);
 
   const close = () => {
     ws.closeFile();
     wsStore.setDrawerOpen(false);
   };
+
+  // 切换到 diff 模式时加载 diff 数据
+  useEffect(() => {
+    if (viewMode !== "diff" || !ws.currentFile || !wsStore.activeId) return;
+    if (diffData !== undefined) return; // 已加载
+    setDiffLoading(true);
+    fetch(`/api/workspace/${wsStore.activeId}/diff?path=${encodeURIComponent(ws.currentFile.path)}`)
+      .then(r => r.json())
+      .then(d => { setDiffData(d.diff || null); })
+      .catch(() => { setDiffData(null); })
+      .finally(() => setDiffLoading(false));
+  }, [viewMode, ws.currentFile, wsStore.activeId]);
+
+  // 文件切换时重置 diff
+  useEffect(() => {
+    setDiffData(undefined);
+    setViewMode("source");
+  }, [ws.currentFile?.path]);
 
   if (!ws.currentFile) {
     return (
@@ -283,14 +304,29 @@ export function FilePreviewPane() {
         <span className="preview-filename">{ws.currentFile.path.split("/").pop()}</span>
         <span className="preview-lang">{ws.currentFile.language}</span>
         <div className="preview-spacer" />
-        <div className="preview-actions">
-          <button className="preview-btn" onClick={close} title="关闭预览">
-            <Icon name="i-x" size={14} />
-          </button>
+        {/* 源码 / Diff 模式切换 */}
+        <div className="preview-modes">
+          <button
+            className={`preview-mode-btn ${viewMode === "source" ? "active" : ""}`}
+            onClick={() => setViewMode("source")}
+          >源码</button>
+          <button
+            className={`preview-mode-btn ${viewMode === "diff" ? "active" : ""}`}
+            onClick={() => setViewMode("diff")}
+          >Diff</button>
         </div>
+        <button className="preview-btn" onClick={close} title="关闭预览">
+          <Icon name="i-x" size={14} />
+        </button>
       </div>
       <div className="preview-body">
-        {ws.fileLoading ? (
+        {viewMode === "diff" ? (
+          <DiffView
+            diff={diffData}
+            loading={diffLoading}
+            language={ws.currentFile.language}
+          />
+        ) : ws.fileLoading ? (
           <div className="preview-empty">加载中...</div>
         ) : ws.currentFile.language === "markdown" ? (
           <MarkdownPreview content={ws.currentFile.content} />
@@ -471,4 +507,86 @@ function parseSimpleYaml(text: string): Array<{ key: string; value: string }> {
     if (value) pairs.push({ key, value });
   }
   return pairs;
+}
+
+// ── Diff 视图：解析 unified diff 并渲染为着色的行 ──
+function DiffView({ diff, loading, language }: { diff: string | null | undefined; loading: boolean; language: string }) {
+  if (loading) {
+    return <div className="preview-empty">加载 Diff...</div>;
+  }
+
+  if (diff === undefined) {
+    return <div className="preview-empty">准备中...</div>;
+  }
+
+  if (diff === null || !diff.trim()) {
+    return (
+      <div className="preview-empty">
+        <Icon name="i-check" size={32} />
+        <div className="preview-empty-text">该文件无未提交的变更</div>
+      </div>
+    );
+  }
+
+  // 解析 unified diff 行
+  const lines = diff.split("\n");
+  const rendered: React.ReactNode[] = [];
+  let oldLineNum = 0;
+  let newLineNum = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // 跳过 diff header（--- / +++ / diff -- / index 等元信息行）
+    if (line.startsWith("diff --") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++") || line.startsWith("new file") || line.startsWith("deleted file")) {
+      continue;
+    }
+
+    // hunk header: @@ -a,b +c,d @@
+    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunkMatch) {
+      oldLineNum = parseInt(hunkMatch[1]) - 1;
+      newLineNum = parseInt(hunkMatch[2]) - 1;
+      rendered.push(
+        <div key={`hunk-${i}`} className="diff-hunk-header">{line}</div>
+      );
+      continue;
+    }
+
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      newLineNum++;
+      rendered.push(
+        <div key={i} className="diff-line added">
+          <span className="diff-line-num">{newLineNum}</span>
+          <span className="diff-line-sign">+</span>
+          <span className="diff-line-content">{line.slice(1)}</span>
+        </div>
+      );
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      oldLineNum++;
+      rendered.push(
+        <div key={i} className="diff-line removed">
+          <span className="diff-line-num">{oldLineNum}</span>
+          <span className="diff-line-sign">-</span>
+          <span className="diff-line-content">{line.slice(1)}</span>
+        </div>
+      );
+    } else if (line.startsWith(" ")) {
+      oldLineNum++;
+      newLineNum++;
+      rendered.push(
+        <div key={i} className="diff-line context">
+          <span className="diff-line-num">{newLineNum}</span>
+          <span className="diff-line-sign"> </span>
+          <span className="diff-line-content">{line.slice(1)}</span>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <div className="diff-view">
+      {rendered}
+    </div>
+  );
 }

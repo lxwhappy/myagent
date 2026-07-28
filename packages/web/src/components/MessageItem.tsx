@@ -8,7 +8,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import type { Message, ToolExecution, SubagentState } from "../stores/chat";
+import type { Message, ToolExecution, SubagentState, SystemNotice } from "../stores/chat";
 import { MermaidBlock } from "./MermaidBlock";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { getMessageStats } from "../utils/sessionStats";
@@ -16,6 +16,11 @@ import { TaskSummaryCard } from "./TaskSummaryCard";
 import { Icon } from "./Icon";
 
 function MessageItemInner({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
+  // 系统通知（压缩等）— 非对话内容，渲染为特殊卡片
+  if (msg.role === "system" && msg.systemNotice) {
+    return <SystemNoticeCard notice={msg.systemNotice} />;
+  }
+
   const isUser = msg.role === "user";
 
   if (isUser) {
@@ -292,3 +297,48 @@ function truncate(s: string, n: number): string {
 }
 
 export const MessageItem = memo(MessageItemInner);
+
+// ── 系统通知卡片（上下文压缩等） ──
+function SystemNoticeCard({ notice }: { notice: SystemNotice }) {
+  const toK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+
+  if (notice.type === "compaction") {
+    const reasonMap: Record<string, string> = {
+      "approaching_context_window": "上下文窗口即将达上限",
+      "context_window_exceeded": "上下文窗口超出限制",
+      "user_requested": "用户手动触发",
+    };
+    const reasonText = notice.reason ? (reasonMap[notice.reason] || notice.reason) : "自动触发";
+
+    return (
+      <div className="sys-notice compaction">
+        <div className="sys-notice-header">
+          <span className="sys-notice-icon">⚡</span>
+          <span className="sys-notice-title">上下文压缩</span>
+          <span className="sys-notice-reason">{reasonText}</span>
+        </div>
+        <div className="sys-notice-body">
+          {notice.tokensBefore != null && notice.tokensAfter != null && (
+            <>
+              <span className="sys-notice-tokens before">
+                {toK(notice.tokensBefore)}
+              </span>
+              <span className="sys-notice-arrow">→</span>
+              <span className="sys-notice-tokens after">
+                {toK(notice.tokensAfter)}
+              </span>
+              {notice.savedPercent != null && (
+                <span className="sys-notice-saved">
+                  节省 {notice.savedPercent}%
+                </span>
+              )}
+            </>
+          )}
+          {notice.aborted && <span className="sys-notice-aborted">已中止</span>}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}

@@ -192,6 +192,68 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     }
   });
 
+  // ── 获取文件的 git diff（相对于 HEAD）──
+  app.get("/api/workspace/:id/diff", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    const query = req.query as { path: string };
+    const absPath = resolve(ws.path, query.path);
+    const rel = relative(ws.path, absPath);
+    if (rel.startsWith("..")) return reply.code(403).send({ error: "Path outside workspace" });
+
+    try {
+      const { execFile } = await import("child_process");
+      const execGit = (args: string[]): Promise<string> => new Promise((resolve, reject) => {
+        execFile("git", args, { cwd: ws.path, maxBuffer: 1024 * 1024 }, (err, stdout) => {
+          if (err) reject(err);
+          else resolve(stdout);
+        });
+      });
+
+      // 先检查是否在 git 仓库内
+      try {
+        await execGit(["rev-parse", "--is-inside-work-tree"]);
+      } catch {
+        return reply.code(404).send({ error: "Not a git repository" });
+      }
+
+      // 获取 unified diff
+      let diff: string;
+      const relGit = rel.replace(/\\/g, "/");
+      try {
+        // 尝试与 HEAD 比较（已提交的文件）
+        diff = await execGit(["diff", "HEAD", "--", relGit]);
+      } catch {
+        // HEAD 不存在（新仓库）或文件未被跟踪 → 与空树比较
+        try {
+          diff = await execGit(["diff", "--no-index", "/dev/null", relGit]);
+        } catch (err: any) {
+          // git diff --no-index 在有差异时退出码为 1，stdout 仍然有 diff 内容
+          diff = err.stdout || "";
+        }
+      }
+
+      // 如果 diff 为空，可能是未暂存的新文件
+      if (!diff.trim()) {
+        try {
+          diff = await execGit(["diff", "--no-index", "/dev/null", absPath]);
+        } catch (err: any) {
+          diff = err.stdout || "";
+        }
+      }
+
+      return {
+        path: query.path,
+        diff: diff || null,
+        hasChanges: !!diff.trim(),
+      };
+    } catch (err: any) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
   // ── 预览文件服务（原始文件 + 正确 Content-Type，支持相对路径资源解析）──
   // iframe 用真实 URL 加载 HTML 时，其中的 <link href="assets/x.css"> 等相对路径
   // 会被浏览器解析为 /api/workspace/:id/preview/<dir>/assets/x.css 自动加载。

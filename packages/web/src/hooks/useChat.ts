@@ -241,6 +241,44 @@ export function useChat() {
           }
           break;
 
+        // ── 上下文压缩 ──
+        case "compaction_start":
+          if (sid && msg.payload) {
+            console.log(`[compaction] 触发压缩，原因: ${msg.payload.reason}`);
+          }
+          break;
+
+        case "compaction_end":
+          if (sid && msg.payload) {
+            const p = msg.payload;
+            const before = typeof p.tokensBefore === "number" ? p.tokensBefore : null;
+            const after = typeof p.estimatedTokensAfter === "number" ? p.estimatedTokensAfter : null;
+            const saved = (before != null && after != null && before > 0)
+              ? Math.round((1 - after / before) * 100)
+              : null;
+            const notice: any = {
+              type: "compaction",
+              reason: p.reason,
+              tokensBefore: before ?? undefined,
+              tokensAfter: after ?? undefined,
+              savedPercent: saved ?? undefined,
+              aborted: p.aborted,
+            };
+            chat.addSystemNotice(sid, notice);
+            scheduleStreamingPersist(sid);
+            // 持久化 system 消息（saveReply 只存 assistant，这里单独存）
+            const wsState = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
+            const appSid = (window as any).__chatToAppSession?.[sid] ?? wsState?.activeSessionId;
+            if (appSid) {
+              const text = `⚡ 上下文压缩：${before != null ? `${(before/1000).toFixed(1)}K` : "?"} → ${after != null ? `${(after/1000).toFixed(1)}K` : "?"}${saved != null ? `（节省 ${saved}%）` : ""}`;
+              fetch(`/api/sessions/${appSid}/messages`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: "system", content: text }),
+              }).catch(() => {});
+            }
+          }
+          break;
+
         // ── 子 agent 完整事件流（供钻入查看执行过程）──
         case "subagent_event":
           if (sid && msg.payload) { chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event); scheduleStreamingPersist(sid); }
@@ -398,15 +436,26 @@ export function useChat() {
       const chat = useChatStore.getState();
       chat.ensureSession(chatSessionId);
       // 恢复完整消息：content + thinking + tools + skillsUsed + isStreaming（支持刷新回放）
-      const restoredMsgs = (data.messages || []).map((m: any) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        thinking: m.thinking,
-        tools: m.tools,
-        skillsUsed: m.skillsUsed,
-        isStreaming: m.isStreaming === true,  // 恢复"生成中"标记
-      }));
+      const restoredMsgs = (data.messages || []).map((m: any) => {
+        // system 消息恢复为 systemNotice 卡片
+        if (m.role === "system") {
+          return {
+            id: m.id || `sys-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            role: "system" as const,
+            content: "",
+            systemNotice: { type: "compaction" as const, reason: m.content?.includes("压缩") ? "restored" : undefined },
+          };
+        }
+        return {
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          thinking: m.thinking,
+          tools: m.tools,
+          skillsUsed: m.skillsUsed,
+          isStreaming: m.isStreaming === true,
+        };
+      });
       chat.loadMessages(chatSessionId, restoredMsgs);
       // 如果最后一条消息是流式中（刷新前 agent 还在跑），标记会话为 generating，
       // 这样 SSE 重连后后续 delta 会 appendDelta 到这条消息，agent_end 时正常收尾

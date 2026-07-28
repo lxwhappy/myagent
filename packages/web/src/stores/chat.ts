@@ -4,13 +4,24 @@ import { create } from "zustand";
 
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   isStreaming?: boolean;
   thinking?: string;        // 思考过程
   tools?: ToolExecution[];  // 该消息关联的工具调用
   skillsUsed?: SkillUsage[]; // 该消息中加载的 Skills
   images?: AttachedImage[];  // 用户发送的图片（缩略图展示）
+  systemNotice?: SystemNotice; // 系统通知（压缩等）
+}
+
+/** 系统通知（插入消息流中，非对话内容） */
+export interface SystemNotice {
+  type: "compaction";
+  reason?: string;
+  tokensBefore?: number;
+  tokensAfter?: number;
+  savedPercent?: number;
+  aborted?: boolean;
 }
 
 /** 用户消息附带的图片（前端展示用） */
@@ -136,6 +147,7 @@ interface ChatStore {
   setSubagents: (id: string, subs: SubagentState[]) => void;
 
   addUserMessage: (id: string, text: string, images?: AttachedImage[]) => void;
+  addSystemNotice: (id: string, notice: SystemNotice) => void;
   startAssistantMessage: (id: string) => void;
   appendDelta: (id: string, delta: string) => void;
   appendThinking: (id: string, delta: string) => void;
@@ -207,6 +219,11 @@ export const useChatStore = create<ChatStore>((set) => ({
   addUserMessage: (id, text, images) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: [...sess.messages, { id: `u-${msgCounter++}`, role: "user", content: text, images }] } } };
+  }),
+
+  addSystemNotice: (id, notice) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: [...sess.messages, { id: `sys-${msgCounter++}`, role: "system", content: "", systemNotice: notice }] } } };
   }),
 
   startAssistantMessage: (id) => set((s) => {
