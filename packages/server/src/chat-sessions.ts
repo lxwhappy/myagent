@@ -222,6 +222,7 @@ export const chatSessionStore = {
   },
 
   // 富消息：存 thinking + tools + skillsUsed + subagents（assistant 回合用，支持刷新回放）
+  // 按 id 去重：如果 persistStreamingState 已存过同 id 的流式消息，更新而非追加。
   async addRichMessage(id: string, msg: Partial<ChatMessage> & { role: "user" | "assistant"; content: string }): Promise<ChatMessage> {
     await ensureLoaded();
     const s = await loadSession(id);
@@ -229,14 +230,20 @@ export const chatSessionStore = {
       id: msg.id || randomUUID(),
       role: msg.role,
       content: msg.content,
-      timestamp: Date.now(),
+      timestamp: msg.timestamp ?? Date.now(),
       thinking: msg.thinking || undefined,
       tools: msg.tools,
       skillsUsed: msg.skillsUsed,
       subagents: msg.subagents,
     };
     if (s) {
-      s.messages.push(full);
+      const idx = s.messages.findIndex(m => m.id === full.id);
+      if (idx >= 0) {
+        // 已存在（流式存盘已写入）→ 更新，清除 isStreaming 标记
+        s.messages[idx] = { ...full, isStreaming: undefined };
+      } else {
+        s.messages.push(full);
+      }
       s.updatedAt = Date.now();
       await writeSession(s);
     }

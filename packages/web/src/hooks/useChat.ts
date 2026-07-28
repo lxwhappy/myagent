@@ -131,7 +131,7 @@ function scheduleFlush(sid: string) {
   buf.rafId = requestAnimationFrame(flush);
 }
 
-// 立即释放所有缓冲（用于 agent_end / error）
+// 立即释放所有缓冲（用于 agent_end / error）+ 清理 Map 避免内存泄漏
 function flushAllDeltas(sid: string) {
   const buf = deltaBuffers.get(sid);
   if (!buf) return;
@@ -143,6 +143,7 @@ function flushAllDeltas(sid: string) {
     useChatStore.getState().appendDelta(sid, buf.text);
     buf.text = "";
   }
+  deltaBuffers.delete(sid);
 }
 
 export function useChat() {
@@ -242,7 +243,7 @@ export function useChat() {
 
         // ── 子 agent 完整事件流（供钻入查看执行过程）──
         case "subagent_event":
-          if (sid && msg.payload) chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event);
+          if (sid && msg.payload) { chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event); scheduleStreamingPersist(sid); }
           break;
 
         case "error":
@@ -256,7 +257,7 @@ export function useChat() {
             }
             // 确保有一条 assistant message 来显示错误
             const s = useChatStore.getState().sessions[sid];
-            const last = s?.messages[s.messages.length - 1];
+            const last = s?.messages?.[s.messages.length - 1];
             if (!last || last.role !== "assistant" || !last.isStreaming) {
               chat.startAssistantMessage(sid);
             }

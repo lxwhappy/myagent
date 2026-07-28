@@ -9,6 +9,7 @@ export interface FileChange {
   name: string;
   edits: number;
   lastStatus: "done" | "error" | "running";
+  source?: "main" | "subagent";   // 文件变更来源：主会话 or 子 agent
 }
 
 export interface ErrorDetail {
@@ -172,14 +173,16 @@ export function getSessionStats(messages: Message[], subagents?: { messages?: Me
   const errorDetails: ErrorDetail[] = [];
 
   // 收集所有需要统计的消息：主会话 + 各子 agent
-  const allMessageSets: Message[][] = [messages];
+  const allMessageSets: { msgs: Message[]; source: "main" | "subagent" }[] = [
+    { msgs: messages, source: "main" },
+  ];
   if (subagents) {
     for (const sub of subagents) {
-      if (sub.messages?.length) allMessageSets.push(sub.messages);
+      if (sub.messages?.length) allMessageSets.push({ msgs: sub.messages, source: "subagent" });
     }
   }
 
-  for (const msgs of allMessageSets) {
+  for (const { msgs, source } of allMessageSets) {
     for (const msg of msgs) {
       if (!msg.tools) continue;
       const agg = aggregateTools(msg.tools);
@@ -195,8 +198,10 @@ export function getSessionStats(messages: Message[], subagents?: { messages?: Me
         if (existing) {
           existing.edits += fc.edits;
           existing.lastStatus = fc.lastStatus;
+          // 同一文件被多源修改时，保留来源信息（子 agent 优先，更有区分度）
+          if (source === "subagent") existing.source = "subagent";
         } else {
-          filesMap.set(path, { ...fc });
+          filesMap.set(path, { ...fc, source });
         }
       }
     }

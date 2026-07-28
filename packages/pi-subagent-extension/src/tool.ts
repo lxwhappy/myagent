@@ -15,10 +15,12 @@ export interface CreateDelegateToolOptions {
   spawn: SubagentSpawnFn;
   /** 父会话 id（用于隔离 + 事件归属） */
   sessionId: string;
+  /** 主 agent 的工作目录（子 agent 默认继承，LLM 可通过 cwd 参数覆盖） */
+  cwd?: string;
 }
 
 export function createDelegateTool(opts: CreateDelegateToolOptions): ToolDefinition {
-  const { spawn, sessionId } = opts;
+  const { spawn, sessionId, cwd: defaultCwd } = opts;
 
   return {
     name: "delegate_task",
@@ -63,28 +65,24 @@ export function createDelegateTool(opts: CreateDelegateToolOptions): ToolDefinit
     async execute(_toolCallId: string, params: any) {
       const { goal, context, cwd, model } = params;
       if (!goal || typeof goal !== "string") {
+        const text = "错误：delegate_task 需要 goal 参数";
         return {
-          toolName: "delegate_task",
-          summary: "委派失败：缺少 goal",
-          output: "错误：delegate_task 需要 goal 参数",
-          isError: true,
-        } as any;
+          content: [{ type: "text" as const, text }],
+          details: { toolName: "delegate_task", summary: "委派失败：缺少 goal" },
+          output: text, summary: "委派失败：缺少 goal", isError: true,
+        };
       }
 
       const subId = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       const startedAt = Date.now();
 
       try {
-        // onProgress 由 server 端的 spawn 内部已直接 emit 到 event-bus，
-        // 这里传入的回调仅作兜底日志（避免扩展包直接依赖 event-bus）。
         const result = await spawn(
           sessionId,
           goal,
           context,
-          { cwd, model },
-          (e) => {
-            // 兜底：若 server 未自行 emit，这里也不会重复（server 实现负责发事件）
-          },
+          { cwd: cwd ?? defaultCwd, model },
+          (e) => { /* 兜底：server 实现负责 emit */ },
         );
 
         const durationMs = Date.now() - startedAt;
@@ -95,26 +93,30 @@ export function createDelegateTool(opts: CreateDelegateToolOptions): ToolDefinit
         const metaStr = meta.length ? `（${meta.join("，")}）` : "";
 
         if (result.error) {
+          const text = `子 agent 执行失败${metaStr}：\n${result.error}\n\n已产出：\n${result.summary}`;
+          const summary = `❌ 子任务失败: ${goal.slice(0, 30)}`;
           return {
-            toolName: "delegate_task",
-            summary: `❌ 子任务失败: ${goal.slice(0, 30)}`,
-            output: `子 agent 执行失败${metaStr}：\n${result.error}\n\n已产出：\n${result.summary}`,
-            isError: true,
-          } as any;
+            content: [{ type: "text" as const, text }],
+            details: { toolName: "delegate_task", summary },
+            output: text, summary, isError: true,
+          };
         }
 
+        const text = result.summary || "(子 agent 未产生文本输出)";
+        const summary = `✅ 子任务完成: ${goal.slice(0, 30)}${metaStr}`;
         return {
-          toolName: "delegate_task",
-          summary: `✅ 子任务完成: ${goal.slice(0, 30)}${metaStr}`,
-          output: result.summary,
-        } as any;
+          content: [{ type: "text" as const, text }],
+          details: { toolName: "delegate_task", summary },
+          output: text, summary,
+        };
       } catch (err: any) {
+        const text = `delegate_task 执行异常：${err.message}`;
+        const summary = `❌ 委派异常: ${err.message?.slice(0, 50)}`;
         return {
-          toolName: "delegate_task",
-          summary: `❌ 委派异常: ${err.message?.slice(0, 50)}`,
-          output: `delegate_task 执行异常：${err.message}`,
-          isError: true,
-        } as any;
+          content: [{ type: "text" as const, text }],
+          details: { toolName: "delegate_task", summary },
+          output: text, summary, isError: true,
+        };
       }
     },
   };

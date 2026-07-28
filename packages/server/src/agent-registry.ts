@@ -57,7 +57,7 @@ export async function createAgent(
 
   // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）+ delegate_task（按会话隔离）+ analyze_image（按会话隔离）
   const todoTool = createTodoTool(todoStore, chatSessionId);
-  const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId });
+  const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId, cwd });
   const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
   const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, ...mcpTools];
 

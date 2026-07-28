@@ -164,7 +164,19 @@ export class EventBridge {
                   `${t.status === "in_progress" ? "🔄" : "⬜"} ${t.content}`
                 ).join("\n");
                 const reminder = `\n\n⚠️ [任务提醒] 你已连续执行 ${nonTodoToolCount} 个操作但未更新任务清单。请检查进度并更新状态：\n${lines}`;
-                result = typeof result === "string" ? result + reminder : JSON.stringify(result) + reminder;
+                // 安全拼接：只修改 result.content 的文本内容（SDK AgentToolResult 结构）
+                if (result && typeof result === "object" && Array.isArray(result.content)) {
+                  const firstText = result.content.find((c: any) => c.type === "text");
+                  if (firstText && typeof firstText.text === "string") {
+                    firstText.text += reminder;
+                  } else {
+                    result.content.push({ type: "text", text: reminder });
+                  }
+                } else if (typeof result === "string") {
+                  result += reminder;
+                } else {
+                  result = { content: [{ type: "text", text: reminder }] };
+                }
                 driftReminded = true;
               }
             } catch {}

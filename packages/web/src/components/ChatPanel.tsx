@@ -29,16 +29,20 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [dismissedSkills, setDismissedSkills] = useState(false);
 
+  // 只在消息数量变化时滚动到底部（而非每次 messages 引用变化——流式 delta 每帧都变）
+  const msgCount = messages.length;
   useEffect(() => {
     if (activeSubId) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, activeSubId]);
+  }, [msgCount, activeSubId]);
 
+  // 子 agent 消息变化时滚动
   const subMessages = activeSub?.messages;
+  const subMsgCount = subMessages?.length ?? 0;
   useEffect(() => {
     if (!activeSubId) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [subMessages, activeSubId]);
+  }, [subMsgCount, activeSubId]);
 
   const showSkills = skills.length > 0 && !dismissedSkills && !storeNotified;
 

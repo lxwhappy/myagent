@@ -169,7 +169,10 @@ function ChangesPanel({ wsId, openFile }: { wsId?: string; openFile: (path: stri
           <div key={f.path} className="sb-change-item" onClick={() => wsId && openFile(f.path)}>
             <span className={`sb-change-dot ${f.lastStatus === "error" ? "error" : "done"}`} />
             <div className="sb-change-info">
-              <span className="sb-change-name">{f.name}</span>
+              <span className="sb-change-name">
+                {f.name}
+                {f.source === "subagent" && <span className="sb-change-source" title="子 Agent 变更">🤖</span>}
+              </span>
               <span className="sb-change-path">{f.path}</span>
             </div>
             {f.edits > 1 && <span className="sb-change-count">{f.edits}</span>}

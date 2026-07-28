@@ -82,6 +82,10 @@ export const runSubagent: SubagentSpawnFn = async (
   let promptPhase = "init";         // 诊断：当前阶段
   let unsub: (() => void) | undefined;
 
+  // 提前声明，确保 finally 块总能访问（即使异常发生在创建 session 之前）
+  let abortController: AbortController | undefined;
+  let controllers: Set<AbortController> | undefined;
+
   const IDLE_TIMEOUT_MS = 90_000;  // 90 秒无任何活动 → 判定卡死，提前 abort
   const HARD_TIMEOUT_MS = Math.max(timeoutMs, 600_000); // 硬上限 10 分钟
 
@@ -162,11 +166,11 @@ export const runSubagent: SubagentSpawnFn = async (
     promptPhase = "prompt";
     console.log(`[subagent] ${subId.slice(-4)} 开始执行 prompt（${fullPrompt.length} 字符）`);
 
-    const abortController = new AbortController();
+    abortController = new AbortController();
     let timedOutBy: "hard" | "idle" | null = null;
 
     // 注册到活跃子 agent 追踪表（主 agent abort 时可连带终止）
-    let controllers = activeSubagents.get(parentSessionId);
+    controllers = activeSubagents.get(parentSessionId);
     if (!controllers) { controllers = new Set(); activeSubagents.set(parentSessionId, controllers); }
     controllers.add(abortController);
 
@@ -261,8 +265,10 @@ export const runSubagent: SubagentSpawnFn = async (
     return result;
   } finally {
     // 从活跃子 agent 追踪表注销
-    controllers?.delete(abortController);
-    if (controllers && controllers.size === 0) activeSubagents.delete(parentSessionId);
+    if (abortController && controllers) {
+      controllers.delete(abortController);
+      if (controllers.size === 0) activeSubagents.delete(parentSessionId);
+    }
     try { unsub?.(); } catch {}
   }
 };

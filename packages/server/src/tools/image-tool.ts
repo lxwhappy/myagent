@@ -138,23 +138,26 @@ export function createAnalyzeImageTool(chatSessionId: string): ToolDefinition {
     async execute(_toolCallId: string, params: any) {
       const images = takePendingImages(chatSessionId);
       if (images.length === 0) {
+        const text = "当前没有待识别的图片。用户可能已经处理过，或未发送图片。";
         return {
-          toolName: "analyze_image",
-          summary: "无待处理图片",
-          output: "当前没有待识别的图片。用户可能已经处理过，或未发送图片。",
-        } as any;
+          content: [{ type: "text" as const, text }],
+          details: { toolName: "analyze_image", summary: "无待处理图片" },
+          output: text, summary: "无待处理图片",
+        };
       }
 
       const question = params?.question || "请详细描述这张图片的内容。";
       console.log(`[analyze_image] ${chatSessionId.slice(0, 8)} 识别 ${images.length} 张图片，问题: ${question.slice(0, 60)}`);
 
       const description = await recognizeImages(images, question);
+      const text = `图片识别结果（${images.length} 张）：\n\n${description}`;
+      const summary = `🖼 识别 ${images.length} 张图片`;
 
       return {
-        toolName: "analyze_image",
-        summary: `🖼 识别 ${images.length} 张图片`,
-        output: `图片识别结果（${images.length} 张）：\n\n${description}`,
-      } as any;
+        content: [{ type: "text" as const, text }],
+        details: { toolName: "analyze_image", summary },
+        output: text, summary,
+      };
     },
   };
 }

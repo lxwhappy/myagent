@@ -27,6 +27,7 @@ interface WorkspaceState {
 
   drawerOpen: boolean;
   sidebarCollapsed: boolean;
+  sidebarWidth: number;
   previewWidth: number;
   treeWidth: number;
   searchQuery: string;
@@ -47,6 +48,7 @@ interface WorkspaceState {
   setDrawerOpen: (v: boolean) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
+  setSidebarWidth: (w: number) => void;
   setPreviewWidth: (w: number) => void;
   setTreeWidth: (w: number) => void;
   setSearchQuery: (q: string) => void;
@@ -62,6 +64,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   expandedWs: new Set(),
   drawerOpen: false,
   sidebarCollapsed: false,
+  sidebarWidth: 264,
   previewWidth: 520,
   treeWidth: 220,
   searchQuery: "",
@@ -113,6 +116,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setDrawerOpen: (v) => set({ drawerOpen: v }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+  setSidebarWidth: (w) => set({ sidebarWidth: Math.max(200, Math.min(500, w)) }),
   setPreviewWidth: (w) => set({ previewWidth: Math.max(100, Math.min(900, w)) }),
   setTreeWidth: (w) => set({ treeWidth: Math.max(140, Math.min(500, w)) }),
   setSearchQuery: (q) => set({ searchQuery: q }),

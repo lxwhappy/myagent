@@ -175,7 +175,10 @@ export default function App() {
   const activeWs = wsStore.workspaces.find(w => w.id === wsStore.activeId);
 
   return (
-    <div className={`app ${wsStore.sidebarCollapsed ? "sidebar-hidden" : ""}`}>
+    <div
+      className={`app ${wsStore.sidebarCollapsed ? "sidebar-hidden" : ""}`}
+      style={wsStore.sidebarCollapsed ? undefined : { gridTemplateColumns: `${wsStore.sidebarWidth}px 1fr` }}
+    >
       {/* ===== Sidebar (4-zone) ===== */}
       <aside className="sidebar">
         {/* Zone 1: Header — WS Switcher Dropdown + New + Collapse */}
@@ -281,6 +284,29 @@ export default function App() {
             <span className="user-settings-icon"><Icon name="i-settings" size={15} /></span>
           </div>
         </div>
+
+        {/* sidebar 拖拽调宽手柄 */}
+        <div
+          className="sidebar-resize-handle"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = wsStore.sidebarWidth;
+            const onMove = (ev: MouseEvent) => {
+              wsStore.setSidebarWidth(startW + (ev.clientX - startX));
+            };
+            const onUp = () => {
+              document.removeEventListener("mousemove", onMove);
+              document.removeEventListener("mouseup", onUp);
+              document.body.style.cursor = "";
+              document.body.style.userSelect = "";
+            };
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+          }}
+        />
       </aside>
 
       {/* ===== Main ===== */}
