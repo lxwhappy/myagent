@@ -393,4 +393,59 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     await chatSessionStore.remove(id);
     return { ok: true };
   });
+
+  // ── Agent 原始 jsonl 日志（pi-coding-agent 产出的完整 session 记录）──
+  // jsonl 存储在 ~/.pi/agent/sessions/<cwd编码>/ 目录下
+
+  // 列出当前会话工作空间下的所有 jsonl 日志文件
+  app.get("/api/sessions/:id/agent-logs", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const session = await chatSessionStore.get(id);
+    if (!session) return reply.code(404).send({ error: "Session not found" });
+
+    // 找到工作空间路径（从 workspaceId 查）
+    const ws = workspaces.get(session.workspaceId);
+    if (!ws) return { logs: [] };
+
+    // 编码 cwd → 目录名
+    const encoded = ws.path.replace(/\//g, "-").replace(/^-+|-+$/g, "");
+    const dir = join(HOME, ".pi", "agent", "sessions", `--${encoded}--`);
+    if (!existsSync(dir)) return { logs: [] };
+
+    try {
+      const files = await readdir(dir);
+      const logs = [];
+      for (const f of files.filter(f => f.endsWith(".jsonl"))) {
+        const s = await stat(join(dir, f));
+        logs.push({ name: f, size: s.size, mtime: s.mtime.toISOString() });
+      }
+      // 按修改时间倒序
+      logs.sort((a, b) => b.mtime.localeCompare(a.mtime));
+      return { logs, dir };
+    } catch {
+      return { logs: [] };
+    }
+  });
+
+  // 下载单个 jsonl 日志文件
+  app.get("/api/sessions/:id/agent-logs/:filename", async (req, reply) => {
+    const { id, filename } = req.params as { id: string; filename: string };
+    // 安全校验：文件名只能是 .jsonl，不含路径分隔符
+    if (!filename.endsWith(".jsonl") || filename.includes("/") || filename.includes("..")) {
+      return reply.code(400).send({ error: "Invalid filename" });
+    }
+    const session = await chatSessionStore.get(id);
+    if (!session) return reply.code(404).send({ error: "Session not found" });
+    const ws = workspaces.get(session.workspaceId);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    const encoded = ws.path.replace(/\//g, "-").replace(/^-+|-+$/g, "");
+    const filepath = join(HOME, ".pi", "agent", "sessions", `--${encoded}--`, filename);
+    if (!existsSync(filepath)) return reply.code(404).send({ error: "Log file not found" });
+
+    const content = await readFile(filepath, "utf-8");
+    reply.header("Content-Type", "application/jsonl;charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    return content;
+  });
 }

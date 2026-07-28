@@ -1,34 +1,48 @@
-// components/MessageItem.tsx — PiAgent Design System 风格消息渲染
+// components/MessageItem.tsx — 时间线风格消息渲染
+// 设计原则：过程（思考/工具/子agent）和正文在同一条流里按顺序排列，
+// 过程用低调样式（小字、浅色、可折叠），正文正常渲染。
+// 主会话和子 agent 视图共用同一套渲染，样式完全一致。
 
-import { useState, useEffect, memo } from "react";
+import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import type { Message, ToolExecution, SkillUsage } from "../stores/chat";
+import type { Message, ToolExecution, SubagentState } from "../stores/chat";
 import { MermaidBlock } from "./MermaidBlock";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
 import { Icon } from "./Icon";
 
-// memo 包裹：只有 msg 引用变化时才重渲染。
-// 关键：store 的 appendDelta 只对正在流式的消息创建新对象，
-// 历史消息引用不变 → memo 跳过重渲染 → 每个 delta 只重渲染当前流式消息一条。
-// 自定义比较函数：msg 引用相同就跳过（React.memo 默认浅比较即可，这里显式更清晰）
-function MessageItemInner({ msg }: { msg: Message }) {
+function MessageItemInner({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
   const isUser = msg.role === "user";
-  const stats = !isUser && msg.tools && msg.tools.length > 0 ? getMessageStats(msg) : null;
 
   if (isUser) {
     return (
       <div className="msg msg-user">
         <div className="msg-body">
-          <div className="msg-content" style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+          {msg.images && msg.images.length > 0 && (
+            <div className="msg-images">
+              {msg.images.map((img, i) => (
+                <img
+                  key={i}
+                  src={img.previewUrl || `data:${img.mimeType};base64,${img.data}`}
+                  alt={`图片 ${i + 1}`}
+                  className="msg-image-thumb"
+                />
+              ))}
+            </div>
+          )}
+          {msg.content && (
+            <div className="msg-content" style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+          )}
         </div>
       </div>
     );
   }
+
+  const stats = msg.tools && msg.tools.length > 0 ? getMessageStats(msg) : null;
 
   return (
     <div className="msg msg-assistant">
@@ -38,73 +52,79 @@ function MessageItemInner({ msg }: { msg: Message }) {
       <div className="msg-body">
         <div className="msg-author">MyAgent</div>
 
-        {/* 过程面板：思考 + 技能 + 工具，统一折叠，默认收缩，放在正文上方 */}
-        <ProcessPanel msg={msg} />
+        {/* ── 时间线：按发生顺序渲染过程 + 正文 ── */}
+        {/* 1. 思考过程（如果有） */}
+        {msg.thinking && msg.thinking.trim() && (
+          <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
+        )}
 
-        {/* 等待指示器：流式开始但还没有任何内容（首字符延迟期间） */}
+        {/* 2. 工具调用（逐个按顺序显示，delegate_task 特殊渲染为子 agent 卡片） */}
+        {msg.tools?.map(tool => {
+          if (tool.tool === "delegate_task") {
+            // delegate_task：找对应的子 agent 数据，渲染成可跳转卡片
+            const sub = subagents?.[subagents.length - 1]; // 最新一个子 agent
+            return sub ? (
+              <SubagentBlock key={tool.toolCallId} tool={tool} sub={sub} onOpen={() => onOpenSub?.(sub.subId)} />
+            ) : (
+              <ToolBlock key={tool.toolCallId} tool={tool} />
+            );
+          }
+          return <ToolBlock key={tool.toolCallId} tool={tool} />;
+        })}
+
+        {/* 3. 等待指示器（流式开始但还没有任何内容） */}
         {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
           <div className="typing-indicator">
-            <span />
-            <span />
-            <span />
+            <span /><span /><span />
           </div>
         )}
 
-        {/* 消息正文（独立区域，不和过程混在一起） */}
+        {/* 4. 正文（Markdown 渲染） */}
         {msg.content && (
           <div className="msg-content">
             {msg.isStreaming ? (
-              // 流式进行中：纯文本预览（避免每帧重新 parse markdown，大幅减少 CPU）
-              // 流结束后（isStreaming=false）才走完整 ReactMarkdown 渲染
               <>
                 <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
                 <span className="stream-cursor" />
               </>
             ) : (
               <ErrorBoundary fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  pre: ({ children }) => <>{children}</>,
-                  code({ node, className, children, ...props }: any) {
-                    const match = /language-(\w+)/.exec(className || "");
-                    const lang = match?.[1];
-                    const raw = String(children).replace(/\n$/, "");
-                    if (lang === "mermaid") {
-                      return (
-                        <ErrorBoundary
-                          fallback={
-                            <div className="mermaid-error">
-                              <div className="mermaid-error-title">⚠️ 流程图渲染失败</div>
-                              <pre className="mermaid-error-code">{raw}</pre>
-                            </div>
-                          }
-                        >
-                          <MermaidBlock chart={raw} />
-                        </ErrorBoundary>
-                      );
-                    }
-                    // 有语言标签 → 带高亮的代码块
-                    if (match) {
-                      return <CodeBlock language={lang!} value={raw} />;
-                    }
-                    // 无语言标签但含换行 → 纯文本代码块（不用深色背景）
-                    if (raw.includes("\n")) {
-                      return <CodeBlock language="text" value={raw} />;
-                    }
-                    // 单行 → 行内 code
-                    return <code className={className} {...props}>{children}</code>;
-                  },
-                }}
-              >
-                {msg.content}
-              </ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    pre: ({ children }) => <>{children}</>,
+                    code({ node, className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || "");
+                      const lang = match?.[1];
+                      const raw = String(children).replace(/\n$/, "");
+                      if (lang === "mermaid") {
+                        return (
+                          <ErrorBoundary
+                            fallback={
+                              <div className="mermaid-error">
+                                <div className="mermaid-error-title">⚠️ 流程图渲染失败</div>
+                                <pre className="mermaid-error-code">{raw}</pre>
+                              </div>
+                            }
+                          >
+                            <MermaidBlock chart={raw} />
+                          </ErrorBoundary>
+                        );
+                      }
+                      if (match) return <CodeBlock language={lang!} value={raw} />;
+                      if (raw.includes("\n")) return <CodeBlock language="text" value={raw} />;
+                      return <code className={className} {...props}>{children}</code>;
+                    },
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
               </ErrorBoundary>
             )}
           </div>
         )}
 
-        {/* 任务摘要卡 — 仅在有工具调用且流结束后显示 */}
+        {/* 任务摘要卡 */}
         {stats && !msg.isStreaming && (
           <TaskSummaryCard stats={stats} />
         )}
@@ -113,58 +133,61 @@ function MessageItemInner({ msg }: { msg: Message }) {
   );
 }
 
-// ── 过程面板：统一折叠思考+技能+工具过程，默认收缩，放在正文上方 ──
-function ProcessPanel({ msg }: { msg: Message }) {
-  const hasThinking = !!(msg.thinking && msg.thinking.trim());
-  const hasSkills = !!(msg.skillsUsed && msg.skillsUsed.length > 0);
-  const hasTools = !!(msg.tools && msg.tools.length > 0);
-  const hasProcess = hasThinking || hasSkills || hasTools;
-  const runningTool = msg.tools?.find(t => t.status === "running");
-
+// ── 思考过程块：低调样式，默认折叠详情 ──
+function ThinkingBlock({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
   const [open, setOpen] = useState(false);
-
-  // 流式执行中且有工具在跑 → 自动展开（让用户看到实时进度）
-  useEffect(() => {
-    if (msg.isStreaming && runningTool) setOpen(true);
-  }, [msg.isStreaming, !!runningTool]);
-
-  if (!hasProcess) return null;
-
-  // 摘要文本
-  const parts: string[] = [];
-  if (hasThinking) parts.push("思考");
-  if (hasSkills) parts.push(`${msg.skillsUsed!.length} skill`);
-  if (hasTools) parts.push(`${msg.tools!.length} 工具`);
-
   return (
-    <div className={`process-panel${open ? " expanded" : ""}`}>
-      <button type="button" className="process-header" onClick={() => setOpen(!open)}>
-        <span className={`process-icon${runningTool ? " spinning" : ""}`}>
-          {runningTool ? "⚙" : "✓"}
-        </span>
-        <span className="process-title">思考与工具过程</span>
-        <span className="process-summary">{parts.join(" · ")}</span>
-        {runningTool && <span className="process-running">{runningTool.tool}…</span>}
-        <span className="process-chevron">{open ? "收起" : "展开"}</span>
+    <div className={`tl-item tl-thinking${open ? " open" : ""}${streaming ? " streaming" : ""}`}>
+      <button className="tl-header" onClick={() => setOpen(!open)}>
+        <span className="tl-icon">{streaming ? "💭" : "💭"}</span>
+        <span className="tl-label">思考过程</span>
+        <span className="tl-status">{streaming ? "思考中…" : `${Math.ceil(thinking.length / 4)} tok`}</span>
+        <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
       </button>
       {open && (
-        <div className="process-body">
-          {hasThinking && (
-            <ThinkingCard thinking={msg.thinking!} streaming={msg.isStreaming} />
+        <div className="tl-detail">
+          <pre className="tl-text">{thinking}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 工具调用块：低调样式，默认折叠详情 ──
+function ToolBlock({ tool }: { tool: ToolExecution }) {
+  const [open, setOpen] = useState(false);
+  const running = tool.status === "running";
+  const errored = tool.status === "error";
+  const summary = extractToolSummary(tool);
+  const inputText = tool.input != null ? fmtIO(tool.input) : "";
+  const outputText = tool.output != null ? fmtIO(tool.output, 2000) : "";
+
+  return (
+    <div className={`tl-item tl-tool${open ? " open" : ""} tl-${tool.status}`}>
+      <button className="tl-header" onClick={() => setOpen(!open)}>
+        <span className="tl-icon">
+          {running ? "⚙" : errored ? "✕" : "✓"}
+        </span>
+        <span className="tl-label">{tool.tool}</span>
+        <span className="tl-summary" title={summary}>{summary}</span>
+        <span className="tl-status">
+          {running ? "执行中" : errored ? "出错" : ""}
+        </span>
+        <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
+      </button>
+      {open && (
+        <div className="tl-detail">
+          {tool.input != null && (
+            <div className="tl-section">
+              <div className="tl-section-label">input</div>
+              <pre className="tl-code"><code>{inputText}</code></pre>
+            </div>
           )}
-          {hasSkills && (
-            <>
-              {msg.skillsUsed!.map(sk => (
-                <SkillItem key={sk.name} skill={sk} streaming={msg.isStreaming} />
-              ))}
-            </>
-          )}
-          {hasTools && (
-            <>
-              {msg.tools!.map(t => (
-                <ToolCallCard key={t.toolCallId} tool={t} />
-              ))}
-            </>
+          {tool.output != null && (
+            <div className="tl-section">
+              <div className="tl-section-label">output</div>
+              <pre className="tl-code"><code>{outputText}</code></pre>
+            </div>
           )}
         </div>
       )}
@@ -172,18 +195,44 @@ function ProcessPanel({ msg }: { msg: Message }) {
   );
 }
 
-// ── 代码块：DS .code-block + .code-header + 复制按钮 ──
+// ── 子 agent 卡片：和工具卡片同款式，但点击可跳转到子 agent 视图 ──
+function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: SubagentState; onOpen: () => void }) {
+  const running = sub.status === "running";
+  const errored = sub.status === "error";
+  const summary = sub.goal || extractToolSummary(tool);
+  return (
+    <div className={`tl-item tl-subagent tl-${sub.status}`}>
+      <button className="tl-header tl-clickable" onClick={onOpen}>
+        <span className="tl-icon">
+          {running ? "🤖" : errored ? "✕" : "✓"}
+        </span>
+        <span className="tl-label">子 Agent</span>
+        <span className="tl-summary" title={summary}>{summary}</span>
+        <span className="tl-status">
+          {running ? (sub.currentTool ? `${sub.currentTool}…` : "思考中…") :
+           !running && sub.durationMs ? `${(sub.durationMs / 1000).toFixed(1)}s` : ""}
+        </span>
+        <span className="tl-enter">详情 →</span>
+      </button>
+      {!running && sub.summary && (
+        <div className="tl-sub-summary">{sub.summary.slice(0, 200)}{sub.summary.length > 200 ? "…" : ""}</div>
+      )}
+      {errored && sub.error && (
+        <div className="tl-sub-error">{sub.error}</div>
+      )}
+    </div>
+  );
+}
+
+// ── 代码块 ──
 function CodeBlock({ language, value }: { language: string; value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     if (!navigator.clipboard) return;
-    navigator.clipboard
-      .writeText(value)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => {});
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
   };
   return (
     <div className="code-block">
@@ -206,155 +255,28 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
   );
 }
 
-// ── 通用复制按钮 ──
-function CopyButton({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  };
-  return (
-    <button type="button" className="tool-copy-btn" onClick={copy} title="复制">
-      <Icon name={copied ? "i-check" : "i-copy"} size={12} />
-      {label && <span>{copied ? "已复制" : label}</span>}
-    </button>
-  );
-}
-
-// ── 工具调用卡片：DS .tool-call / .tool-call-header / .tool-call-body ──
-function ToolCallCard({ tool }: { tool: ToolExecution }) {
-  const [open, setOpen] = useState(false);
-  const summary = extractToolSummary(tool);
-  const running = tool.status === "running";
-  const errored = tool.status === "error";
-  const verb = verbForTool(tool.tool);
-
-  const statusClass = errored ? "error" : running ? "running" : "done";
-  const statusText = errored ? "出错" : running ? "执行中" : "完成";
-  const iconName = running ? "i-tool" : errored ? "i-x" : "i-check";
-
-  const inputText = tool.input != null ? fmtIO(tool.input) : "";
-  const outputText = tool.output != null ? fmtIO(tool.output, 2000) : "";
-
-  return (
-    <div className={`tool-call${open ? " expanded" : ""}`}>
-      <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
-        <span className="tool-icon-box">
-          <Icon name="i-tool" size={14} />
-        </span>
-        <span className="tool-label">{tool.tool}</span>
-        <span className="tool-spacer" />
-        <span className={`tool-status-pill ${statusClass}`}>{statusText}</span>
-        <Icon name="i-chevron" size={14} className="tool-chevron" />
-      </button>
-      <div className="tool-call-body">
-        <div className="tool-section">
-          {tool.input != null && (
-            <>
-              <div className="tool-section-label">
-                input
-                <CopyButton text={inputText} />
-              </div>
-              <pre className="tool-code"><code>{inputText}</code></pre>
-            </>
-          )}
-          {tool.output != null && (
-            <>
-              <div className="tool-section-label">
-                output
-                <CopyButton text={outputText} />
-              </div>
-              <pre className="tool-code"><code>{outputText}</code></pre>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── 思考卡片：复用 .tool-call 结构 ──
-function ThinkingCard({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={`tool-call${open ? " expanded" : ""}`}>
-      <button type="button" className="tool-call-header" onClick={() => setOpen(!open)}>
-        <span className="tool-icon-box">
-          <Icon name="i-tool" size={14} />
-        </span>
-        <span className="tool-name">思考过程</span>
-        <span className="tool-spacer" />
-        <span className={`tool-status-pill ${streaming ? "running" : "done"}`}>
-          {streaming ? "思考中" : "完成"}
-        </span>
-        <Icon name="i-chevron" size={14} className="tool-chevron" />
-      </button>
-      <div className="tool-call-body">
-        <div className="tool-section">
-          <div className="tool-section-label">
-            内容
-            <CopyButton text={thinking} />
-          </div>
-          <pre className="tool-code"><code>{thinking}</code></pre>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Skill 加载项：DS .skill-item ──
-function SkillItem({ skill, streaming }: { skill: SkillUsage; streaming?: boolean }) {
-  return (
-    <div className="skill-item">
-      <div className="skill-icon">
-        <Icon name={streaming ? "i-zap" : "i-check"} size={18} />
-      </div>
-      <div className="skill-info">
-        <div className="skill-name">{skill.name}</div>
-        <div className="skill-desc">{streaming ? "加载中…" : "已加载"}</div>
-      </div>
-    </div>
-  );
-}
-
 // ── helpers ──
-
 function fmtIO(v: unknown, max = 0): string {
   const s = typeof v === "string" ? v : JSON.stringify(v, null, 2);
   return max && s.length > max ? s.slice(0, max) + "\n…" : s;
 }
 
-function verbForTool(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes("bash") || n.includes("exec") || n.includes("terminal") || n.includes("shell") || n.includes("run")) return "已执行";
-  if (n.includes("read") || n.includes("get") || n.includes("cat") || n.includes("view")) return "已读取";
-  if (n.includes("write") || n.includes("edit") || n.includes("patch") || n.includes("create")) return "已编辑";
-  if (n.includes("search") || n.includes("grep") || n.includes("find") || n.includes("glob")) return "已搜索";
-  if (n.startsWith("mcp__")) return "已调用";
-  return "已使用";
-}
-
 function extractToolSummary(tool: ToolExecution): string {
   const input = tool.input;
   if (!input || typeof input !== "object") {
-    return typeof input === "string" ? truncate(input, 80) : tool.tool;
+    return typeof input === "string" ? truncate(input, 60) : "";
   }
   const o = input as Record<string, unknown>;
   const cmd = pick(o, ["command", "cmd", "script"]);
   const path = pick(o, ["file_path", "path", "filePath", "file", "filename"]);
+  const goal = pick(o, ["goal"]);
   const pattern = pick(o, ["pattern", "query", "regex", "q", "search"]);
-  const url = pick(o, ["url", "uri", "endpoint"]);
-
-  if (cmd) return truncate(String(cmd), 100);
-  if (path) return truncate(String(path), 80);
-  if (pattern) return `"${truncate(String(pattern), 60)}"`;
-  if (url) return truncate(String(url), 80);
+  if (goal) return truncate(String(goal), 60);
+  if (cmd) return truncate(String(cmd), 60);
+  if (path) return truncate(String(path), 60);
+  if (pattern) return `"${truncate(String(pattern), 40)}"`;
   const firstStr = Object.values(o).find(v => typeof v === "string");
-  return firstStr ? truncate(String(firstStr), 60) : tool.tool;
+  return firstStr ? truncate(String(firstStr), 60) : "";
 }
 
 function pick<T>(o: Record<string, unknown>, keys: string[]): T | undefined {
@@ -369,5 +291,4 @@ function truncate(s: string, n: number): string {
   return one.length > n ? one.slice(0, n) + "…" : one;
 }
 
-// React.memo：msg 引用不变时跳过重渲染（历史消息在 delta 更新时引用不变）
 export const MessageItem = memo(MessageItemInner);

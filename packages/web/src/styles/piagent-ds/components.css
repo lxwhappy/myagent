@@ -70,6 +70,7 @@ textarea { resize: none; }
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: 100%; /* 固定行高，防止 aside 内容撑开 grid 行导致 main 溢出 */
   height: 100vh;
   overflow: hidden;
   transition: grid-template-columns var(--motion-base) var(--ease-standard);
@@ -248,7 +249,7 @@ textarea { resize: none; }
 
 .session-item {
   display: flex; align-items: center; gap: var(--space-2);
-  padding: 6px var(--space-2);
+  padding: 4px var(--space-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--motion-fast);
@@ -281,13 +282,18 @@ textarea { resize: none; }
 
 .session-title {
   flex: 1; min-width: 0;
-  font-size: var(--text-sm); font-weight: 500; line-height: 1.35;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px; font-weight: 400; line-height: 1.4;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 /* 右侧：时间 + 删除按钮 */
 .session-meta { flex-shrink: 0; display: flex; align-items: center; }
-.session-time { font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
+.session-time {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px; color: var(--muted); white-space: nowrap;
+}
 
 .session-delete-btn {
   width: 22px; height: 22px; flex-shrink: 0;
@@ -475,6 +481,45 @@ textarea { resize: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-actions { display: flex; align-items: center; gap: var(--space-1); }
+.chat-head-actions { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; margin-left: auto; }
+.chat-download-btn { opacity: 0.6; transition: opacity 0.15s; }
+.chat-download-btn:hover { opacity: 1; }
+.chat-download-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* 下载下拉菜单 */
+.download-menu-wrapper { position: relative; }
+.download-menu-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 99;
+}
+.download-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 100;
+  min-width: 280px; max-width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 4px;
+  max-height: 400px; overflow-y: auto;
+  animation: dm-slide-in 0.15s ease;
+}
+@keyframes dm-slide-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.download-menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border: none; background: transparent;
+  cursor: pointer; text-align: left; border-radius: var(--radius-sm);
+  transition: background 0.12s;
+}
+.download-menu-item:hover { background: var(--bg); }
+.dm-icon { flex-shrink: 0; font-size: 16px; }
+.dm-text { flex: 1; min-width: 0; }
+.dm-title { font-size: 13px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-desc { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+.download-menu-divider { height: 1px; background: var(--border); margin: 4px 8px; }
+.download-menu-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 6px 10px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.download-menu-loading, .download-menu-empty { padding: 12px 10px; font-size: 12px; color: var(--muted); text-align: center; }
+.download-menu-logs { display: flex; flex-direction: column; gap: 1px; }
 
 /* Icon buttons */
 .icon-btn {

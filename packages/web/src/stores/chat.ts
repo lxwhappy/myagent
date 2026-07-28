@@ -10,6 +10,14 @@ export interface Message {
   thinking?: string;        // 思考过程
   tools?: ToolExecution[];  // 该消息关联的工具调用
   skillsUsed?: SkillUsage[]; // 该消息中加载的 Skills
+  images?: AttachedImage[];  // 用户发送的图片（缩略图展示）
+}
+
+/** 用户消息附带的图片（前端展示用） */
+export interface AttachedImage {
+  data: string;       // base64
+  mimeType: string;
+  previewUrl?: string; // 本地预览 URL（不持久化）
 }
 
 export interface SkillUsage {
@@ -127,7 +135,7 @@ interface ChatStore {
   applySubagentEvent: (id: string, subId: string, event: any) => void;
   setSubagents: (id: string, subs: SubagentState[]) => void;
 
-  addUserMessage: (id: string, text: string) => void;
+  addUserMessage: (id: string, text: string, images?: AttachedImage[]) => void;
   startAssistantMessage: (id: string) => void;
   appendDelta: (id: string, delta: string) => void;
   appendThinking: (id: string, delta: string) => void;
@@ -196,9 +204,9 @@ export const useChatStore = create<ChatStore>((set) => ({
     return { sessions: { ...s.sessions, [id]: { ...sess, todos } } };
   }),
 
-  addUserMessage: (id, text) => set((s) => {
+  addUserMessage: (id, text, images) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
-    return { sessions: { ...s.sessions, [id]: { ...sess, messages: [...sess.messages, { id: `u-${msgCounter++}`, role: "user", content: text }] } } };
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: [...sess.messages, { id: `u-${msgCounter++}`, role: "user", content: text, images }] } } };
   }),
 
   startAssistantMessage: (id) => set((s) => {

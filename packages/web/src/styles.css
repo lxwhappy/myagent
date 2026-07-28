@@ -2709,85 +2709,111 @@
   border-radius: var(--radius-sm);
 }
 
-/* ── 过程面板：思考+工具统一折叠，放在正文上方 ── */
-.process-panel {
+/* 用户消息图片缩略图 */
+.msg-images {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 8px;
+}
+.msg-image-thumb {
+  max-width: 200px; max-height: 160px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin-bottom: 10px;
-  overflow: hidden;
-  background: var(--surface);
-  transition: border-color 0.15s;
-}
-.process-panel.expanded { border-color: var(--accent); }
-
-.process-header {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
+  object-fit: contain;
   cursor: pointer;
-  font-size: 13px;
-  color: var(--fg);
-  text-align: left;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
-.process-header:hover { background: var(--bg); }
+.msg-image-thumb:hover { opacity: 0.85; }
 
-.process-icon {
-  flex-shrink: 0;
-  width: 18px; height: 18px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px;
-  color: var(--muted);
-}
-.process-icon.spinning { animation: process-spin 1.2s linear infinite; color: var(--accent); }
-@keyframes process-spin { to { transform: rotate(360deg); } }
-.process-panel.expanded .process-icon:not(.spinning) { color: var(--accent); }
-
-.process-title {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.process-summary {
-  font-size: 12px;
-  color: var(--muted);
-  background: var(--bg);
-  padding: 2px 8px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-
-.process-running {
-  font-size: 12px;
-  color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.process-chevron {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--muted);
-  padding: 2px 8px;
+/* ── 时间线项：思考/工具/子agent 统一低调样式 ── */
+/* 过程和正文在同一条流里，过程用浅色小字，正文正常 */
+.tl-item {
+  margin-bottom: 2px;
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  transition: background 0.12s;
+}
+.tl-item.open { background: var(--bg); }
+
+.tl-header {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 5px 8px;
+  background: transparent; border: none;
+  cursor: pointer; text-align: left;
+  font-size: 12px; color: var(--muted);
+  border-radius: var(--radius-sm);
+  transition: color 0.12s;
+}
+.tl-header:hover { color: var(--fg); }
+
+.tl-icon {
+  flex-shrink: 0; width: 16px; text-align: center; font-size: 12px;
+}
+.tl-running .tl-icon { animation: tl-spin 1.2s linear infinite; }
+@keyframes tl-spin { to { transform: rotate(360deg); } }
+
+.tl-label {
+  font-weight: 500; white-space: nowrap; flex-shrink: 0;
+  font-family: var(--font-mono, monospace); font-size: 11px;
+}
+.tl-summary {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0.7;
+}
+.tl-status {
+  flex-shrink: 0; font-size: 11px; color: var(--accent);
   white-space: nowrap;
 }
-.process-header:hover .process-chevron { color: var(--accent); }
-
-.process-body {
-  padding: 8px 10px 10px;
-  border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 8px;
-  animation: process-slide-in 0.2s ease;
+.tl-chevron {
+  flex-shrink: 0; opacity: 0.4; transition: transform 0.15s, opacity 0.12s;
 }
-@keyframes process-slide-in {
-  from { opacity: 0; max-height: 0; }
-  to { opacity: 1; max-height: 9999px; }
+.tl-chevron.collapsed { transform: rotate(-90deg); }
+.tl-header:hover .tl-chevron { opacity: 0.7; }
+
+/* 展开详情 */
+.tl-detail {
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--border);
+}
+.tl-section { margin-top: 4px; }
+.tl-section-label {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.tl-code {
+  font-size: 12px; line-height: 1.5;
+  background: var(--code-bg); color: var(--code-fg, #e0e0e0);
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  overflow-x: auto; max-height: 300px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.tl-text {
+  font-size: 12px; line-height: 1.6; color: var(--fg);
+  opacity: 0.8;
+  white-space: pre-wrap; word-break: break-word;
+  margin: 0; padding: 6px 8px;
+  max-height: 300px; overflow-y: auto;
+}
+
+/* 状态颜色 */
+.tl-running .tl-label, .tl-running .tl-icon { color: var(--accent); }
+.tl-error .tl-label, .tl-error .tl-icon { color: #e54d42; }
+.tl-error .tl-status { color: #e54d42; }
+
+/* 子 agent 卡片可点击跳转 */
+.tl-clickable:hover { background: var(--bg); }
+.tl-enter {
+  flex-shrink: 0; font-size: 11px; color: var(--accent); opacity: 0.7;
+  white-space: nowrap;
+}
+.tl-clickable:hover .tl-enter { opacity: 1; }
+.tl-sub-summary {
+  padding: 4px 10px 6px; font-size: 12px; line-height: 1.5;
+  color: var(--muted); white-space: pre-wrap;
+  max-height: 80px; overflow-y: auto;
+}
+.tl-sub-error {
+  padding: 4px 10px 6px; font-size: 12px; color: #e54d42;
 }
 
 /* ── 子 agent 过程详情折叠面板（design system 配色） ── */

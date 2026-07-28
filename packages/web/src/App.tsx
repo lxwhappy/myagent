@@ -18,6 +18,8 @@ export default function App() {
   const sessions = useSessions();
   const [showDirBrowser, setShowDirBrowser] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const wsDropdownRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,25 @@ export default function App() {
   const handleSelectSession = (session: ChatSession) => {
     wsStore.setActiveSession(session.id);
     loadSession(session.id, session.id);
+  };
+
+  // 下载当前会话的原始 JSON（后端存储的完整数据：messages/thinking/tools/subagents 等）
+  const downloadCurrentSession = async () => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid) return;
+    // 请求后端拿完整会话 JSON
+    const res = await fetch(`/api/sessions/${sid}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const title = data.title || "session";
+    a.href = url;
+    a.download = `${title}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, wsId: string, sid: string) => {
@@ -271,6 +292,25 @@ export default function App() {
           </button>
           <div className="chat-title-group">
             <h1 className="chat-title">{activeWs?.name ?? "MyAgent"}</h1>
+          </div>
+          <div className="chat-head-actions">
+            <div className="download-menu-wrapper" ref={(el) => { downloadMenuRef.current = el; }}>
+              <button
+                className="icon-btn chat-download-btn"
+                onClick={() => setDownloadMenuOpen(!downloadMenuOpen)}
+                title="下载"
+                disabled={!useChatStore.getState().activeChatSessionId}
+              >
+                <Icon name="i-download" size={16} />
+              </button>
+              {downloadMenuOpen && (
+                <DownloadMenu
+                  sessionId={useChatStore.getState().activeChatSessionId}
+                  onDownloadJson={downloadCurrentSession}
+                  onClose={() => setDownloadMenuOpen(false)}
+                />
+              )}
+            </div>
           </div>
         </header>
         {/* Main Body: chat only (preview is overlay) */}
@@ -459,4 +499,78 @@ function groupSessionsByDate(sessions: ChatSession[]) {
     else groups[3].items.push(s);
   }
   return groups.filter(g => g.items.length > 0);
+}
+
+// ── 下载菜单：会话 JSON + Agent 原始 jsonl 日志列表 ──
+
+function DownloadMenu({ sessionId, onDownloadJson, onClose }: {
+  sessionId: string | null;
+  onDownloadJson: () => void;
+  onClose: () => void;
+}) {
+  const [logs, setLogs] = useState<{ name: string; size: number; mtime: string }[] | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`/api/sessions/${sessionId}/agent-logs`)
+      .then(r => r.json())
+      .then(d => setLogs(d.logs || []))
+      .catch(() => setLogs([]));
+  }, [sessionId]);
+
+  const downloadLog = (filename: string) => {
+    if (!sessionId) return;
+    // 直接用浏览器导航触发下载（后端设置了 Content-Disposition）
+    window.open(`/api/sessions/${sessionId}/agent-logs/${encodeURIComponent(filename)}`, "_blank");
+  };
+
+  const fmtSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  };
+
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  return (
+    <>
+      <div className="download-menu-overlay" onClick={onClose} />
+      <div className="download-menu">
+        <button className="download-menu-item" onClick={() => { onDownloadJson(); onClose(); }}>
+          <span className="dm-icon">📄</span>
+          <div className="dm-text">
+            <div className="dm-title">会话记录 (JSON)</div>
+            <div className="dm-desc">含思考/工具/子Agent，可直接导入</div>
+          </div>
+        </button>
+        <div className="download-menu-divider" />
+        <div className="download-menu-label">Agent 原始日志 (JSONL)</div>
+        {logs === null ? (
+          <div className="download-menu-loading">加载中…</div>
+        ) : logs.length === 0 ? (
+          <div className="download-menu-empty">暂无日志文件</div>
+        ) : (
+          <div className="download-menu-logs">
+            {logs.map(log => (
+              <button
+                key={log.name}
+                className="download-menu-item download-menu-log"
+                onClick={() => downloadLog(log.name)}
+                title={log.name}
+              >
+                <span className="dm-icon">📋</span>
+                <div className="dm-text">
+                  <div className="dm-title">{log.name.slice(0, 30)}…</div>
+                  <div className="dm-desc">{fmtSize(log.size)} · {fmtTime(log.mtime)}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }

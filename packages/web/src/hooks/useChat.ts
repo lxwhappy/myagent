@@ -332,7 +332,9 @@ export function useChat() {
     if (!sess || sess.isGenerating) return;
 
     const isFirst = sess.messages.length === 0;
-    useChatStore.getState().addUserMessage(sid!, text);
+    // 存图片到用户消息（前端展示缩略图用）
+    const userImages = images?.map(img => ({ data: img.data, mimeType: img.mimeType }));
+    useChatStore.getState().addUserMessage(sid!, text, userImages);
 
     const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
     if (ws?.activeSessionId) {

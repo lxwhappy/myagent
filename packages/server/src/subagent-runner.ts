@@ -26,6 +26,25 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 180_000; // 3 分钟兜底
 
+// ── 活跃子 agent 追踪表 ──
+// 按 parentSessionId 记录所有正在运行的子 agent 的 AbortController，
+// 主 agent abort/destroy 时通过 abortSubagents() 连带终止。
+const activeSubagents = new Map<string, Set<AbortController>>();
+
+/** 终止指定父会话下所有活跃的子 agent（主 agent abort/destroy 时调用） */
+export function abortSubagents(parentSessionId: string): number {
+  const controllers = activeSubagents.get(parentSessionId);
+  if (!controllers || controllers.size === 0) return 0;
+  const count = controllers.size;
+  for (const ctrl of controllers) {
+    try { ctrl.abort(); } catch {}
+  }
+  controllers.clear();
+  activeSubagents.delete(parentSessionId);
+  if (count > 0) console.log(`[subagent] 父会话 ${parentSessionId.slice(0, 8)} abort，连带终止 ${count} 个子 agent`);
+  return count;
+}
+
 /** 子 agent 执行器（实现 SubagentSpawnFn） */
 export const runSubagent: SubagentSpawnFn = async (
   parentSessionId,
@@ -146,6 +165,11 @@ export const runSubagent: SubagentSpawnFn = async (
     const abortController = new AbortController();
     let timedOutBy: "hard" | "idle" | null = null;
 
+    // 注册到活跃子 agent 追踪表（主 agent abort 时可连带终止）
+    let controllers = activeSubagents.get(parentSessionId);
+    if (!controllers) { controllers = new Set(); activeSubagents.set(parentSessionId, controllers); }
+    controllers.add(abortController);
+
     // 硬超时定时器
     const hardTimer = setTimeout(() => {
       timedOutBy = "hard";
@@ -236,6 +260,9 @@ export const runSubagent: SubagentSpawnFn = async (
     });
     return result;
   } finally {
+    // 从活跃子 agent 追踪表注销
+    controllers?.delete(abortController);
+    if (controllers && controllers.size === 0) activeSubagents.delete(parentSessionId);
     try { unsub?.(); } catch {}
   }
 };

@@ -14,7 +14,8 @@ import { eventBridge } from "./event-bridge.js";
 import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
 import { createTodoTool, createDelegateTool, customTools, todoStore } from "./tools/index.js";
-import { runSubagent } from "./subagent-runner.js";
+import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js";
+import { runSubagent, abortSubagents } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
 
 export interface AgentEntry {
@@ -54,10 +55,11 @@ export async function createAgent(
 
   const mcpTools = mcpManager.toToolDefinitions();
 
-  // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）+ delegate_task（按会话隔离）
+  // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）+ delegate_task（按会话隔离）+ analyze_image（按会话隔离）
   const todoTool = createTodoTool(todoStore, chatSessionId);
   const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId });
-  const allCustomTools = [...customTools, todoTool, delegateTool, ...mcpTools];
+  const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
+  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, ...mcpTools];
 
   const { session } = await createAgentSession({
     model,
@@ -108,6 +110,12 @@ export function getAgent(chatSessionId: string): AgentSession | undefined {
   return registry.get(chatSessionId)?.agent;
 }
 
+/** 获取 agent 当前模型的 input 能力（["text"] 或 ["text","image"]），用于判断是否需要图片工具兜底 */
+export function getAgentModelInput(chatSessionId: string): string[] {
+  const model = registry.get(chatSessionId)?.agent.model as any;
+  return model?.input ?? ["text"];
+}
+
 // 动态切换思考级别（在 prompt 前调用，对下一轮 agent 回合生效）
 // setThinkingLevel 内部会 clamp 到当前模型支持的范围。
 export function setThinkingLevel(chatSessionId: string, level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"): boolean {
@@ -124,6 +132,8 @@ export function setThinkingLevel(chatSessionId: string, level: "off" | "minimal"
 export function destroyAgent(chatSessionId: string): void {
   const entry = registry.get(chatSessionId);
   if (!entry) return;
+  // 连带终止该会话下所有活跃的子 agent
+  abortSubagents(chatSessionId);
   entry.unsubscribe();
   try { entry.agent.abort(); } catch {}
   registry.delete(chatSessionId);
