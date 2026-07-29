@@ -33,6 +33,9 @@ const ICONS: Record<string, string> = {
   "i-activity": "M22 12h-4l-3 9L9 3l-3 9H2",
   "i-arrow-r": "M9 18l6-6-6-6",
   "i-trash": "M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6 M10 11v6 M14 11v6",
+  "i-lightbulb": "M15 14c.2-1 .7-1.7 1.5-2.5C17.9 10.4 18 9 18 8a6 6 0 0 0-12 0c0 1 .1 2.4 1.5 3.5.8.8 1.3 1.5 1.5 2.5 M9 18h6 M10 22h4",
+  "i-bot-robot": "M12 8V4H8 M12 8V4h4 M8 14v.01 M16 14v.01 M11 18h2 M12 2v2 M2 9a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3z",
+  "i-loader": "M12 2a10 10 0 1 1-7 2.9",
 };
 
 interface IconProps {
@@ -45,6 +48,10 @@ interface IconProps {
 export const Icon = memo(function Icon({ name, size = 18, className = "icon", ...rest }: IconProps) {
   const path = ICONS[name];
   if (!path) return null;
+  const paths = path.split("M").map((seg, i) =>
+    i === 0 ? null : <path key={i} d={"M" + seg} />
+  ).filter(Boolean);
+  const isSpin = className.includes("icon-spin");
   return (
     <svg
       className={className}
@@ -60,9 +67,7 @@ export const Icon = memo(function Icon({ name, size = 18, className = "icon", ..
       role={rest["aria-label"] ? "img" : undefined}
       {...rest}
     >
-      {path.split("M").map((seg, i) =>
-        i === 0 ? null : <path key={i} d={"M" + seg} />
-      )}
+      {isSpin ? <g className="spin-group">{paths}</g> : paths}
     </svg>
   );
 });

@@ -13,6 +13,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
 import { Icon } from "./Icon";
+import { Spinner } from "./Spinner";
 
 function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void; retryStatus?: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null }) {
   // 系统通知（压缩等）— 非对话内容，渲染为特殊卡片
@@ -155,7 +156,7 @@ function ThinkingBlock({ thinking, streaming }: { thinking: string; streaming?: 
   return (
     <div className={`tl-item tl-thinking${open ? " open" : ""}${streaming ? " streaming" : ""}`}>
       <button className="tl-header" onClick={() => setOpen(!open)}>
-        <span className="tl-icon">{streaming ? "💭" : "💭"}</span>
+        <span className="tl-icon"><Icon name="i-lightbulb" size={13} /></span>
         <span className="tl-label">思考过程</span>
         <span className="tl-status">{streaming ? "思考中…" : `${Math.ceil(thinking.length / 4)} tok`}</span>
         <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
@@ -220,7 +221,7 @@ function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: Subage
     <div className={`tl-item tl-subagent tl-${sub.status}`}>
       <button className="tl-header tl-clickable" onClick={onOpen}>
         <span className="tl-icon">
-          {running ? "🤖" : errored ? "✕" : "✓"}
+          {running ? <Icon name="i-loader" size={13} className="icon-spin" /> : errored ? <Icon name="i-x" size={13} /> : <Icon name="i-check" size={13} />}
         </span>
         <span className="tl-label">子 Agent</span>
         <span className="tl-summary" title={summary}>{summary}</span>

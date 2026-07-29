@@ -594,6 +594,11 @@ textarea { resize: none; }
 .retry-text { color: var(--text); font-weight: 500; }
 .retry-error { color: var(--muted); font-size: 12px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.icon-spin { display: inline-block; }
+.icon-spin .spin-group { transform-origin: 12px 12px; animation: spin 0.9s linear infinite; }
+
+/* 纯 CSS spinner — border 旋转，比 SVG 平滑 */
+.spinner { display: inline-block; border-style: solid; border-color: currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
 
 /* ════════════════════════════════════════════════════════════════════════════
  * 10. Code Block

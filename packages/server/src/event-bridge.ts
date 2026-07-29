@@ -200,11 +200,20 @@ export class EventBridge {
               }
             } catch {}
           }
+          // 修正：grep/find 等命令 exit 1（无匹配）不是真正的错误
+          let isError = (event as any).isError;
+          if (isError && result && typeof result === "object" && Array.isArray(result.content)) {
+            const text = result.content.find((c: any) => c.type === "text")?.text ?? "";
+            // 终端命令 exit 1 且无 stdout 输出 → 多为 grep/find 未匹配，不是报错
+            if (/^\(no output\)\nCommand exited with code 1$/.test(text.trim())) {
+              isError = false;
+            }
+          }
           send("tool_execution_end", {
             toolCallId: (event as any).toolCallId,
             tool: toolName,
             result,
-            isError: (event as any).isError,
+            isError,
           });
           break;
         }
