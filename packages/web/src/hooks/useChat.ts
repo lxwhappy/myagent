@@ -506,7 +506,9 @@ export function useChat() {
       // 重新读取 store（前面的 set 已更新 state，旧 chat 引用是 stale 的）
       const fresh = useChatStore.getState();
       const sess = fresh.sessions[chatSessionId];
-      if (sess && (!sess.agentCreated || forceCwd)) {
+      // 会话正在生成中 → agent 仍在服务端运行，不要重建（重建会 destroy + abortSubagents 杀掉子 agent）
+      const stillGenerating = sess?.isGenerating === true;
+      if (sess && !stillGenerating && (!sess.agentCreated || forceCwd)) {
         const cwd = forceCwd ?? (() => {
           const ws = useWorkspaceStore.getState();
           const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
@@ -514,6 +516,10 @@ export function useChat() {
         })();
         // 优先用该会话已绑定的 Agent，否则用当前选中的
         sseClient.createAgent(chatSessionId, { cwd, agentId: sess.agentId ?? useAgentsStore.getState().activeAgentId });
+      }
+      if (stillGenerating) {
+        // agent 仍在运行，标记为已创建，SSE 重连后会继续接收事件
+        useChatStore.getState().setAgentCreated(chatSessionId, []);
       }
       fresh.setActiveChatSession(chatSessionId);
     } catch (e) { console.error("Failed to load session:", e); }
