@@ -87,6 +87,25 @@ export class EventBridge {
         case "message_start": break;
         case "message_end": sendUsage(); break;  // 每条消息结束就更新用量（实时反馈，不等整个回合结束）
 
+        // ── 自动重试：SDK 在 API 失败时自动重试，转发给前端显示状态 ──
+        case "auto_retry_start": {
+          const e = event as any;
+          console.log(`[retry] ${chatSessionId.slice(0, 8)} 自动重试 ${e.attempt}/${e.maxAttempts}，${e.delayMs}ms 后重试，错误: ${(e.errorMessage || "").slice(0, 80)}`);
+          send("auto_retry_start", {
+            attempt: e.attempt, maxAttempts: e.maxAttempts,
+            delayMs: e.delayMs, errorMessage: e.errorMessage,
+          });
+          break;
+        }
+        case "auto_retry_end": {
+          const e = event as any;
+          if (!e.success) {
+            console.log(`[retry] ${chatSessionId.slice(0, 8)} 重试失败（共 ${e.attempt} 次）: ${(e.finalError || "").slice(0, 80)}`);
+          }
+          send("auto_retry_end", { success: e.success, attempt: e.attempt, finalError: e.finalError });
+          break;
+        }
+
         case "compaction_start": {
           const reason = (event as any).reason;
           console.log(`\n========== [COMPACTION] START  session=${chatSessionId.slice(0, 8)}  reason=${reason} ==========`);

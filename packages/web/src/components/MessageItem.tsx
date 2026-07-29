@@ -6,8 +6,7 @@
 import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { CodeBlock as CodeHighlight } from "./CodeBlock";
 import type { Message, ToolExecution, SubagentState, SystemNotice } from "../stores/chat";
 import { MermaidBlock } from "./MermaidBlock";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -15,7 +14,7 @@ import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
 import { Icon } from "./Icon";
 
-function MessageItemInner({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
+function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void; retryStatus?: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null }) {
   // 系统通知（压缩等）— 非对话内容，渲染为特殊卡片
   if (msg.role === "system" && msg.systemNotice) {
     return <SystemNoticeCard notice={msg.systemNotice} />;
@@ -79,9 +78,21 @@ function MessageItemInner({ msg, subagents, onOpenSub }: { msg: Message; subagen
 
         {/* 3. 等待指示器（流式开始但还没有任何内容） */}
         {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
-          <div className="typing-indicator">
-            <span /><span /><span />
-          </div>
+          retryStatus ? (
+            <div className="retry-indicator">
+              <span className="retry-icon">⟳</span>
+              <span className="retry-text">
+                API 重试中（第 {retryStatus.attempt}/{retryStatus.maxAttempts} 次）…
+              </span>
+              <span className="retry-error" title={retryStatus.errorMessage}>
+                {retryStatus.errorMessage.slice(0, 60)}
+              </span>
+            </div>
+          ) : (
+            <div className="typing-indicator">
+              <span /><span /><span />
+            </div>
+          )
         )}
 
         {/* 4. 正文（Markdown 渲染） */}
@@ -248,14 +259,11 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <SyntaxHighlighter
+      <CodeHighlight
         language={language}
-        style={oneDark}
-        PreTag="div"
+        content={value}
         customStyle={{ margin: 0, background: "var(--code-bg)" }}
-      >
-        {value}
-      </SyntaxHighlighter>
+      />
     </div>
   );
 }

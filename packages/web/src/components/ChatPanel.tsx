@@ -21,6 +21,7 @@ export function ChatPanel() {
   const setActiveSub = useChatStore(s => s.setActiveSub);
   const sid = useChatStore(s => s.activeChatSessionId);
   const subagents = useChatStore(s => sid ? s.sessions[sid]?.subagents : undefined) ?? [];
+  const retryStatus = useChatStore(s => sid ? s.sessions[sid]?.retryStatus : null) ?? null;
   const activeSub = useChatStore(s => {
     if (!activeSubId || !sid) return undefined;
     return s.sessions[sid]?.subagents.find(sa => sa.subId === activeSubId);
@@ -135,12 +136,13 @@ export function ChatPanel() {
         )}
 
         {/* 消息列表：subagents 和 onOpenSub 传给 MessageItem，让 delegate_task 渲染为可跳转卡片 */}
-        {messages.map(msg => (
+        {messages.map((msg, i) => (
           <MessageItem
             key={msg.id}
             msg={msg}
             subagents={subagents}
             onOpenSub={setActiveSub}
+            retryStatus={msg.isStreaming && i === messages.length - 1 ? retryStatus : undefined}
           />
         ))}
 

@@ -2,8 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
 import type { FileItem } from "../hooks/workspace-types";
 import { Icon } from "./Icon";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { CodeBlock } from "./CodeBlock";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useChatStore } from "../stores/chat";
@@ -339,14 +338,12 @@ export function FilePreviewPane() {
             path={ws.currentFile.path}
           />
         ) : (
-          <SyntaxHighlighter
+          <CodeBlock
             language={ws.currentFile.language}
-            style={oneDark}
+            content={ws.currentFile.content}
             showLineNumbers
             customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)" }}
-          >
-            {ws.currentFile.content}
-          </SyntaxHighlighter>
+          />
         )}
       </div>
     </div>
@@ -430,14 +427,12 @@ function HtmlPreview({ content, filename, language, wsId, path }: {
             />
           )
         ) : (
-          <SyntaxHighlighter
+          <CodeBlock
             language={language}
-            style={oneDark}
+            content={content}
             showLineNumbers
             customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)", height: "100%" }}
-          >
-            {content}
-          </SyntaxHighlighter>
+          />
         )}
       </div>
     </div>

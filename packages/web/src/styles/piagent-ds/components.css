@@ -588,6 +588,13 @@ textarea { resize: none; }
 .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 .stream-cursor::after { content: '▎'; color: var(--accent); animation: blink 1s step-end infinite; }
 
+/* Retry indicator */
+.retry-indicator { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); margin: var(--space-1) 0; background: var(--warn-bg, rgba(255, 180, 0, 0.08)); border-radius: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.retry-icon { display: inline-block; animation: spin 1.2s linear infinite; color: var(--warn, #e8a330); font-size: 15px; }
+.retry-text { color: var(--text); font-weight: 500; }
+.retry-error { color: var(--muted); font-size: 12px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
 /* ════════════════════════════════════════════════════════════════════════════
  * 10. Code Block
  * ════════════════════════════════════════════════════════════════════════════ */

@@ -115,10 +115,16 @@ interface SessionChatState {
   subagents: SubagentState[];   // 活跃/刚完成的子 agent（delegate_task）
   agentId?: string;            // 该会话使用的 Agent 预设 id
   agent?: AgentInfo;           // 该会话使用的 Agent 显示信息
+  retryStatus?: {              // API 自动重试状态（SDK retry）
+    attempt: number;
+    maxAttempts: number;
+    delayMs: number;
+    errorMessage: string;
+  } | null;
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [] });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], retryStatus: null });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
@@ -156,6 +162,7 @@ interface ChatStore {
   addToolStart: (id: string, exec: Partial<ToolExecution> & { toolCallId: string }) => void;
   updateToolEnd: (id: string, toolCallId: string, result: unknown, isError: boolean) => void;
   addSkillUsed: (id: string, skill: SkillUsage) => void;
+  setRetryStatus: (id: string, status: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -321,6 +328,11 @@ export const useChatStore = create<ChatStore>((set) => ({
       }
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+  }),
+
+  setRetryStatus: (id, status) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, retryStatus: status } } };
   }),
 
   // ── 子 agent（delegate_task）状态 ──

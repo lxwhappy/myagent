@@ -1,14 +1,20 @@
 import { resolve } from "path";
 import dotenv from "dotenv";
 
-// workspace 根目录 = myagent 项目根
-// import.meta.dirname 在 tsx 运行时 = packages/server/src，回退 3 级到项目根
+// .env 自动加载 —— 多路径探测：
+//   1. 环境变量 AGENT_DOTENV（显式指定）
+//   2. 当前工作目录 ./  .env（打包模式：用户从任意目录启动）
+//   3. 项目根 .env（开发模式：packages/server/src → 回退 3 级）
 const _dir = import.meta.dirname;
-const _projectRoot = resolve(_dir, "..", "..", "..");
-
-// .env 自动加载（项目根）——必须最先执行，且显式指定路径，
-// 否则 server 以 packages/server 为 cwd 时会读不到项目根的 .env
-dotenv.config({ path: resolve(_projectRoot, ".env") });
+const _devProjectRoot = resolve(_dir, "..", "..", "..");
+const _dotenvCandidates = [
+  process.env.AGENT_DOTENV,
+  resolve(process.cwd(), ".env"),
+  resolve(_devProjectRoot, ".env"),
+].filter(Boolean);
+for (const _p of _dotenvCandidates) {
+  dotenv.config({ path: _p! });
+}
 
 // ── API Key 多源兜底 ──
 // 默认 provider 是 zai-coding-cn（智谱国内 open.bigmodel.cn），它读的环境变量名是
@@ -35,6 +41,6 @@ export const config = {
   host: process.env.HOST || "0.0.0.0",
   defaultProvider: process.env.AGENT_PROVIDER || "zai-coding-cn",
   defaultModel: process.env.AGENT_MODEL || "glm-4.7",
-  workDir: process.env.AGENT_WORK_DIR || _projectRoot,
+  workDir: process.env.AGENT_WORK_DIR || process.cwd(),
   corsOrigin: process.env.CORS_ORIGIN || "*",
 };

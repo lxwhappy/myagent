@@ -284,6 +284,21 @@ export function useChat() {
           if (sid && msg.payload) { chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event); scheduleStreamingPersist(sid); }
           break;
 
+        // ── API 自动重试：SDK 在请求失败时自动重试，显示状态避免界面卡死 ──
+        case "auto_retry_start":
+          if (sid && msg.payload) {
+            chat.setRetryStatus(sid, {
+              attempt: msg.payload.attempt,
+              maxAttempts: msg.payload.maxAttempts,
+              delayMs: msg.payload.delayMs,
+              errorMessage: msg.payload.errorMessage,
+            });
+          }
+          break;
+        case "auto_retry_end":
+          if (sid) { chat.setRetryStatus(sid, null); }
+          break;
+
         case "error":
           console.error("[agent error]", msg.payload);
           if (sid) {

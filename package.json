@@ -5,7 +5,12 @@
     "dev": "pnpm -r --parallel dev",
     "dev:server": "pnpm --filter server dev",
     "dev:web": "pnpm --filter web dev",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "build:release": "node scripts/build-release.mjs",
+    "pack:release": "node scripts/build-release.mjs && cd dist-release && npm pack"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "dependencies": {
+    "esbuild": "^0.28.1"
+  }
 }

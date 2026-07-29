@@ -17,6 +17,7 @@ data/
 
 # Output files
 output/
+dist-release/
 
 # Hermes agent workspace
 .hermes/
