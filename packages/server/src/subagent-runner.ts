@@ -116,7 +116,15 @@ export const runSubagent: SubagentSpawnFn = async (
     });
 
     unsub = session.subscribe((event: any) => {
-      lastActivity = Date.now(); // 任何事件都更新活动时间
+      // 只对"真正有产出"的事件更新 lastActivity：
+      // text_delta / thinking_delta / tool_execution_start / tool_execution_end
+      // 不含 auto_retry_*（否则 API 重试会不断喂活空闲检测器，导致卡死检测失效）
+      const isProductive =
+        event.type === "tool_execution_start" ||
+        event.type === "tool_execution_end" ||
+        (event.type === "message_update" && event.assistantMessageEvent);
+      if (isProductive) lastActivity = Date.now();
+
       switch (event.type) {
         case "agent_start":
           fwd({ type: "agent_start" });
@@ -174,40 +182,44 @@ export const runSubagent: SubagentSpawnFn = async (
     if (!controllers) { controllers = new Set(); activeSubagents.set(parentSessionId, controllers); }
     controllers.add(abortController);
 
-    // 硬超时定时器
-    const hardTimer = setTimeout(() => {
-      timedOutBy = "hard";
-      abortController.abort();
-    }, HARD_TIMEOUT_MS);
+    // ── 硬超时：独立 Promise 直接参与 race，不依赖 abort 事件链 ──
+    // （abort 事件监听器在某些场景下可能不可靠，用 setTimeout + Promise 最稳）
+    const hardTimeoutPromise = new Promise<"hard">((resolve) => {
+      const t = setTimeout(() => { timedOutBy = "hard"; resolve("hard"); }, HARD_TIMEOUT_MS);
+      // 允许 unref 以避免阻止进程退出（race 结束后 Promise 自然失效）
+      t.unref?.();
+    });
 
-    // 空闲检测定时器：每 10 秒检查一次，如果超过 IDLE_TIMEOUT_MS 没活动就 abort
-    const idleChecker = setInterval(() => {
-      const idle = Date.now() - lastActivity;
-      if (idle > IDLE_TIMEOUT_MS) {
-        console.log(`[subagent] ${subId.slice(-4)} 空闲 ${Math.round(idle / 1000)}s，判定卡死，abort`);
-        timedOutBy = "idle";
-        abortController.abort();
-      }
-    }, 10_000);
+    // ── 空闲检测：每 10 秒检查一次 ──
+    // 注意：lastActivity 只在"真正有产出"的事件中更新（text_delta/tool_execution），
+    // auto_retry 等内部事件不算活动（否则 API 重试会不断喂活空闲检测器）
+    const idleTimeoutPromise = new Promise<"idle">((resolve) => {
+      const checker = setInterval(() => {
+        const idle = Date.now() - lastActivity;
+        if (idle > IDLE_TIMEOUT_MS) {
+          clearInterval(checker);
+          timedOutBy = "idle";
+          resolve("idle");
+        }
+      }, 10_000);
+      checker.unref?.();
+    });
 
     try {
-      // session.prompt() 不直接接受 AbortSignal，但我们可以在 abort 时主动调 session.abort()
-      // 用一个竞速：prompt 完成 vs abort 信号
-      const promptDone = session.prompt(fullPrompt).then(() => true);
-      const aborted = new Promise<false>((resolve) => {
-        abortController.signal.addEventListener("abort", () => {
-          session.abort().catch(() => {});
-          resolve(false);
-        });
-      });
+      // 三方竞速：prompt 完成 vs 硬超时 vs 空闲超时
+      const promptDone = session.prompt(fullPrompt).then(() => "done" as const);
+      const winner = await Promise.race([promptDone, hardTimeoutPromise, idleTimeoutPromise]);
 
-      const completed = await Promise.race([promptDone, aborted]);
-      clearTimeout(hardTimer);
-      clearInterval(idleChecker);
+      // 清理定时器
+      if (winner !== "hard") hardTimeoutPromise; // Promise 自行 GC
+      // 终止子 agent（无论是否超时，prompt 可能还在后台跑）
+      if (winner !== "done") {
+        try { await session.abort(); } catch {}
+      }
 
-      if (!completed) {
+      if (winner !== "done") {
         // 被 abort（硬超时或空闲超时）
-        const reason = timedOutBy === "idle"
+        const reason = winner === "idle"
           ? `子 agent 卡死（${Math.round(IDLE_TIMEOUT_MS / 1000)}s 无活动），已中止`
           : `子 agent 执行超时（${Math.round(HARD_TIMEOUT_MS / 1000)}s 硬上限）`;
         console.log(`[subagent] ${subId.slice(-4)} 超时中止: ${reason}`);
@@ -223,9 +235,9 @@ export const runSubagent: SubagentSpawnFn = async (
 
       console.log(`[subagent] ${subId.slice(-4)} 执行完成，产出 ${textBuf.length} 字，${toolCalls} 次工具调用`);
     } catch (err: any) {
-      clearTimeout(hardTimer);
-      clearInterval(idleChecker);
       throw err;
+    } finally {
+      abortController.abort(); // 确保追踪表清理
     }
 
     // ── 成功：收集结果 ──

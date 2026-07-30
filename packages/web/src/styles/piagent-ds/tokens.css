@@ -111,3 +111,47 @@
   --code-fg: #cdd6f4;                  /* 代码文字 */
   --code-dim: #6c7086;                 /* 代码注释/语言标签 */
 }
+
+/* ══════════════════════════════════════════════════════════════
+ * Dark Theme — [data-theme="dark"]
+ * 深色配色与浅色 token 一一对应，只覆盖颜色相关变量。
+ * 字体/间距/圆角/动效等结构变量保持不变。
+ * ══════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  /* ── Surface ── */
+  --bg: #1a1b26;                       /* 页面背景 — 深靛蓝黑 */
+  --surface: #24253a;                  /* 卡片/面板背景 */
+  --surface-warm: #2a2b40;             /* 暖色表面 */
+
+  /* ── Foreground ── */
+  --fg: #c8d0f0;                       /* 主要文字 — 柔和蓝白 */
+  --fg-2: #b0b8d8;                     /* 次要文字 */
+  --muted: #7a82a8;                    /* 辅助文字 */
+  --meta: #6a72a0;                     /* 元数据文字 */
+
+  /* ── Border ── */
+  --border: #3b3d5a;                   /* 标准边框 */
+  --border-soft: #2e3048;              /* 轻量分隔线 */
+
+  /* ── Accent — 钴蓝在深底上略提亮，增强可读性 ── */
+  --accent: #5b8def;                   /* 提亮后的钴蓝 */
+  --accent-on: #ffffff;
+  --accent-hover: color-mix(in oklab, var(--accent), white 12%);
+  --accent-active: color-mix(in oklab, var(--accent), white 22%);
+  --accent-tint: color-mix(in oklab, var(--accent), transparent 85%);
+
+  /* ── Semantic — 深底上提亮 ── */
+  --success: #3fd66a;
+  --warn: #f0c040;
+  --danger: #f4545d;
+
+  /* ── Elevation — 深色模式阴影改为更深的发光边框 ── */
+  --elev-ring: 0 0 0 1px var(--border);
+  --elev-raised: 0 2px 8px rgba(0, 0, 0, 0.35);
+
+  /* ── Code Theme — 深色模式代码块背景融入 ── */
+  --code-bg: #16161e;
+  --code-bg-2: #11111b;
+  --code-fg: #cdd6f4;
+  --code-dim: #585b70;
+}

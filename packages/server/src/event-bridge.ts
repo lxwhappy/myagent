@@ -200,12 +200,13 @@ export class EventBridge {
               }
             } catch {}
           }
-          // 修正：grep/find 等命令 exit 1（无匹配）不是真正的错误
+          // 修正：bash 命令 exit 1 且无 stdout 输出 → 多为 grep/find 未匹配、test 条件不满足等，
+          // 不是真正的执行错误，不应标记为 isError（否则前端显示 ✕ 误导用户）
           let isError = (event as any).isError;
           if (isError && result && typeof result === "object" && Array.isArray(result.content)) {
             const text = result.content.find((c: any) => c.type === "text")?.text ?? "";
-            // 终端命令 exit 1 且无 stdout 输出 → 多为 grep/find 未匹配，不是报错
-            if (/^\(no output\)\nCommand exited with code 1$/.test(text.trim())) {
+            // 匹配 "(no output)" 后跟 exit code 1（实际格式含双换行 \n\n，之前正则只匹配单 \n 导致漏判）
+            if (/^\(no output\)\s*\n+Command exited with code 1$/.test(text.trim())) {
               isError = false;
             }
           }

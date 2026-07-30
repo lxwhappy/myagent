@@ -11,6 +11,7 @@ import { useAgentsStore } from "./stores/agents";
 import { useSessions } from "./hooks/useSessions";
 import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { useThemeStore } from "./stores/theme";
 
 export default function App() {
   const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo, subToken, subDurationMs, subStatus } = useChat();
@@ -23,6 +24,7 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const wsDropdownRef = useRef<HTMLDivElement>(null);
+  const { mode: themeMode, resolved: themeResolved, toggle: toggleTheme } = useThemeStore();
 
   useEffect(() => {
     (window as any).__wsStore = useWorkspaceStore;
@@ -277,11 +279,22 @@ export default function App() {
         {/* Zone 4: Footer — Token + User */}
         <div className="sb-footer">
           <SidebarTokenRow usage={usage} modelInfo={modelInfo} subToken={subToken} subDurationMs={subDurationMs} subStatus={subStatus} />
-          <div className="user-row" onClick={() => setShowSettings(true)}>
-            <div className="user-avatar">鑫</div>
-            <span className="user-name-sb">小鑫</span>
+          <div className="user-row">
+            <div className="user-avatar" onClick={() => setShowSettings(true)}>鑫</div>
+            <span className="user-name-sb" onClick={() => setShowSettings(true)}>小鑫</span>
             <span className="user-plan-tag">{modelInfo?.provider ?? "zai"}</span>
-            <span className="user-settings-icon"><Icon name="i-settings" size={15} /></span>
+            <div className="user-row-actions">
+              <button
+                className="theme-toggle-btn"
+                onClick={toggleTheme}
+                title={themeMode === "auto" ? `跟随系统（当前：${themeResolved === "dark" ? "深色" : "浅色"}）— 点击切换` : (themeResolved === "dark" ? "深色模式" : "浅色模式")}
+              >
+                <Icon name={themeResolved === "dark" ? "i-sun" : "i-moon"} size={16} />
+              </button>
+              <button className="settings-toggle-btn" onClick={() => setShowSettings(true)} title="设置">
+                <Icon name="i-settings" size={15} />
+              </button>
+            </div>
           </div>
         </div>
 

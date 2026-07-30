@@ -1,4 +1,29 @@
 /* ============================================================
+   MyAgent — 自定义样式（基于 PiAgent Design System）
+   ============================================================
+
+/* ── 主题切换过渡动画 ── */
+[data-theme] *,
+[data-theme] *::before,
+[data-theme] *::after {
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    fill 0.25s ease,
+    stroke 0.25s ease,
+    box-shadow 0.25s ease;
+}
+[data-theme] .typing-indicator *,
+[data-theme] .stream-cursor,
+[data-theme] .spinner,
+[data-theme] .icon-spin,
+[data-theme] .retry-icon,
+[data-theme] .msg {
+  transition: none !important;
+}
+
+ ============================================================
 
 
 
@@ -2534,52 +2559,116 @@
 
 /* ============================================================
    Markdown 渲染样式 — assistant 消息内的 GFM 元素
+   排版追求：通透、层次分明、细节精致
    ============================================================ */
 
+/* 正文基础 */
+.msg-assistant .msg-content {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--fg, #1a1a1a);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
 /* 标题 */
-.msg-content h1 { font-size: 1.5em; font-weight: 700; margin: var(--space-4) 0 var(--space-2); line-height: 1.3; }
-.msg-content h2 { font-size: 1.3em; font-weight: 700; margin: var(--space-4) 0 var(--space-2); line-height: 1.3; }
-.msg-content h3 { font-size: 1.15em; font-weight: 600; margin: var(--space-3) 0 var(--space-2); line-height: 1.3; }
-.msg-content h4 { font-size: 1em; font-weight: 600; margin: var(--space-3) 0 var(--space-1); }
-.msg-content h5, .msg-content h6 { font-size: 0.9em; font-weight: 600; margin: var(--space-2) 0 var(--space-1); color: var(--muted); }
-.msg-content h1:first-child, .msg-content h2:first-child, .msg-content h3:first-child { margin-top: 0; }
+.msg-content h1 { font-size: 1.45em; font-weight: 700; margin: 1.4em 0 0.5em; line-height: 1.3; letter-spacing: -0.01em; }
+.msg-content h2 { font-size: 1.25em; font-weight: 700; margin: 1.3em 0 0.5em; line-height: 1.3; letter-spacing: -0.01em; }
+.msg-content h3 { font-size: 1.12em; font-weight: 650; margin: 1.2em 0 0.4em; line-height: 1.35; }
+.msg-content h4 { font-size: 1em; font-weight: 650; margin: 1.1em 0 0.3em; }
+.msg-content h5, .msg-content h6 { font-size: 0.9em; font-weight: 600; margin: 1em 0 0.3em; color: var(--muted); }
+.msg-content h1:first-child, .msg-content h2:first-child, .msg-content h3:first-child,
+.msg-content h4:first-child, .msg-content h5:first-child, .msg-content h6:first-child { margin-top: 0; }
+
+/* 标题底部细线（仅 h1/h2）增加层次 */
+.msg-content h1 { padding-bottom: 0.3em; border-bottom: 1px solid var(--border, rgba(0,0,0,0.06)); }
+
+/* 段落 */
+.msg-content p { margin: 0 0 0.85em; }
+.msg-content p:last-child { margin-bottom: 0; }
+
+/* 列表 — 自定义标记颜色，更有层次 */
+.msg-content ul, .msg-content ol { margin: 0 0 0.85em; padding-left: 1.5em; }
+.msg-content li { margin-bottom: 0.35em; line-height: 1.7; }
+.msg-content li:last-child { margin-bottom: 0; }
+.msg-content li::marker { color: var(--accent, #3b82f6); }
+/* 有序列表数字用稍粗字重 */
+.msg-content ol li::marker { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* 嵌套列表收紧间距 */
+.msg-content ul ul, .msg-content ol ol, .msg-content ul ol, .msg-content ol ul { margin: 0.35em 0 0; }
+
+/* strong / em */
+.msg-content strong { font-weight: 680; }
+.msg-content em { font-style: italic; }
 
 /* 分隔线 */
-.msg-content hr { border: none; border-top: 1px solid var(--border); margin: var(--space-4) 0; }
+.msg-content hr { border: none; border-top: 1px solid var(--border, rgba(0,0,0,0.08)); margin: 1.5em 0; }
 
-/* 引用块 */
+/* 引用块 — 更精致 */
 .msg-content blockquote {
-  border-left: 3px solid var(--accent);
-  padding: var(--space-1) var(--space-3);
-  margin: var(--space-3) 0;
-  color: var(--muted);
-  background: var(--bg);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-left: 3px solid var(--accent, #3b82f6);
+  padding: 0.3em 0 0.3em 1em;
+  margin: 1em 0;
+  color: var(--muted, #666);
+  background: color-mix(in oklab, var(--accent, #3b82f6), transparent 94%);
+  border-radius: 0 6px 6px 0;
 }
 .msg-content blockquote p:last-child { margin-bottom: 0; }
 
-/* 表格 */
+/* 表格 — 更精致的边框和交替背景 */
 .msg-content table {
   width: 100%;
   border-collapse: collapse;
-  margin: var(--space-3) 0;
+  margin: 1em 0;
   font-size: 0.9em;
+  border-radius: 6px;
+  overflow: hidden;
 }
 .msg-content th, .msg-content td {
-  border: 1px solid var(--border);
-  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  padding: 0.4em 0.65em;
   text-align: left;
 }
-.msg-content th { background: var(--bg); font-weight: 600; }
-.msg-content tr:nth-child(even) td { background: color-mix(in oklab, var(--bg), transparent 50%); }
+.msg-content th {
+  background: color-mix(in oklab, var(--accent, #3b82f6), transparent 90%);
+  font-weight: 650;
+  font-size: 0.88em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.msg-content tr:nth-child(even) td { background: color-mix(in oklab, var(--fg, #000), transparent 97%); }
 
 /* 图片 */
-.msg-content img { max-width: 100%; border-radius: var(--radius-sm); margin: var(--space-2) 0; }
+.msg-content img { max-width: 100%; border-radius: 8px; margin: 0.5em 0; }
 
 /* 任务列表 */
-.msg-content input[type="checkbox"] { margin-right: var(--space-1); }
+.msg-content input[type="checkbox"] { margin-right: 0.4em; vertical-align: baseline; transform: translateY(1px); }
+.msg-content li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
 
-/* 行内 code 样式由 DS .msg-content code 提供（浅灰背景），不覆盖 */
+/* 行内 code — 更精致：微边框 + 等宽 */
+.msg-content code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.87em;
+  background: color-mix(in oklab, var(--fg, #000), transparent 93%);
+  border: 1px solid var(--border, rgba(0,0,0,0.06));
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  font-weight: 450;
+}
+
+/* 纯文本代码块 code 不应用行内 code 的样式（微边框/背景/缩放），
+   它有自己的等宽 CJK 字体和 white-space: pre。用 :not 排除。 */
+.msg-content .code-plain code {
+  font-family: "Sarasa Mono SC", "JetBrains Mono", "Noto Sans Mono CJK SC", ui-monospace, monospace;
+  font-size: 13px;
+  background: none; border: none; padding: 0; border-radius: 0; font-weight: 400;
+}
+
+/* 链接 */
+.msg-content a { color: var(--accent, #3b82f6); text-decoration: none; font-weight: 500; }
+.msg-content a:hover { text-decoration: underline; }
+.msg-content a code { color: inherit; }
 
 /* 用户消息气泡：DS accent-tint（90% 白）太淡几乎看不见，用 accent 半透明叠加 */
 .msg-user .msg-content {

@@ -436,7 +436,6 @@ textarea { resize: none; }
   padding: var(--space-1);
   margin: 0 calc(-1 * var(--space-1));
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: background var(--motion-fast);
 }
 .user-row:hover { background: var(--bg); }
@@ -447,10 +446,12 @@ textarea { resize: none; }
   display: flex; align-items: center; justify-content: center;
   font-weight: 600; font-size: 13px;
   flex-shrink: 0;
+  cursor: pointer;
 }
 .user-name-sb {
   flex: 1; font-size: var(--text-sm); font-weight: 500;
   min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
 }
 .user-plan-tag {
   font-size: 10px; font-weight: 600;
@@ -458,8 +459,30 @@ textarea { resize: none; }
   padding: 1px 6px; border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
-.user-settings-icon { color: var(--muted); flex-shrink: 0; transition: color var(--motion-fast); }
-.user-row:hover .user-settings-icon { color: var(--fg); }
+
+/* Footer 操作按钮组（主题切换 + 设置） */
+.user-row-actions {
+  display: flex; align-items: center; gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.theme-toggle-btn,
+.settings-toggle-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border: none; background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+.theme-toggle-btn:hover,
+.settings-toggle-btn:hover {
+  color: var(--fg);
+  background: var(--surface);
+}
+.theme-toggle-btn .icon,
+.settings-toggle-btn .icon { width: 16px; height: 16px; }
 
 /* ════════════════════════════════════════════════════════════════════════════
  * 8. Chat Header
@@ -556,18 +579,7 @@ textarea { resize: none; }
 .msg-author { font-size: var(--text-xs); font-weight: 600; color: var(--muted); margin-bottom: var(--space-1); }
 .msg-assistant .msg-content { font-size: 15px; line-height: 1.65; }
 
-/* Markdown rendering */
-.msg-content p { margin-bottom: var(--space-3); }
-.msg-content p:last-child { margin-bottom: 0; }
-.msg-content ul, .msg-content ol { margin-bottom: var(--space-3); padding-left: var(--space-5); }
-.msg-content li { margin-bottom: var(--space-1); line-height: 1.65; }
-.msg-content strong { font-weight: 600; }
-.msg-content code {
-  font-family: var(--font-mono); font-size: 13px;
-  background: var(--bg); padding: 2px 6px; border-radius: 4px;
-}
-.msg-content a { color: var(--accent); text-decoration: none; }
-.msg-content a:hover { text-decoration: underline; }
+/* Markdown rendering — 详细样式见 styles.css「Markdown 渲染样式」区块，统一管理避免冲突 */
 
 /* User message */
 .msg-user { justify-content: flex-end; }
@@ -635,6 +647,29 @@ textarea { resize: none; }
   font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
   color: var(--code-fg); white-space: pre;
   background: none; padding: 0;
+}
+
+/* 纯文本代码块（text/plain 语言）— 绕过 SyntaxHighlighter，保证空格对齐不被破坏。
+   CJK 等宽对齐：中文系统字体在 JetBrains Mono 下宽度 ≈ 1.667×（不是 2×），
+   导致 AI 生成的 ASCII 框线图右侧错位。用 CSS text-transform 不可行，
+   改用 font-feature-settings + letter-spacing 补偿不行——真正可靠的方式是
+   用一个中文等宽字体。这里用 fallback 链：优先 Sarasa（如果安装了），
+   否则用 PingFang SC（macOS 自带），并设 font-size 使中文宽度精确匹配。*/
+.code-plain {
+  margin: 0; padding: var(--space-4);
+  overflow-x: auto;
+  background: var(--code-bg);
+}
+.code-plain code {
+  /* Sarasa Mono SC 优先 — 它的 CJK 字符恰好等于 2× ASCII 宽度（完美等宽对齐），
+     解决 AI 生成的 ASCII 框线图在中英文混排时右侧错位的问题。
+     没安装 Sarasa 时 fallback 到系统等宽字体。*/
+  font-family: "Sarasa Mono SC", "JetBrains Mono", "Noto Sans Mono CJK SC", ui-monospace, monospace;
+  font-size: 13px; line-height: 1.7;
+  color: var(--code-fg); white-space: pre;
+  background: none; padding: 0; border: none;
+  tab-size: 4;
+  -moz-tab-size: 4;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════

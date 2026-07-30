@@ -114,9 +114,35 @@ export function setupSSEGateway(app: FastifyInstance) {
       } catch {}
 
       // 不 await — 事件通过 SSE 流式返回
-      agent.prompt(message, { images: promptImages as any }).catch((err: any) => {
-        emit({ type: "error", chatSessionId: id, payload: { message: `Agent error: ${err?.message ?? "Unknown"}` }, ts: Date.now() });
-      });
+      // ── 空闲超时保护 ──
+      // session.prompt() 在 API 429（余额不足）等场景下可能卡死
+      // （既不 resolve 也不 reject），.catch() 永远等不到。
+      // 用一个临时订阅者追踪活动，长时间无事件就 abort + emit error 解锁前端。
+      const IDLE_TIMEOUT_MS = 180_000; // 3 分钟无任何事件判定卡死
+      let lastActivity = Date.now();
+      const idleUnsub = agent.subscribe?.(() => { lastActivity = Date.now(); });
+      const idleChecker = setInterval(() => {
+        if (Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
+          clearInterval(idleChecker);
+          idleUnsub?.();
+          console.error(`[prompt] ${id.slice(0, 8)} 卡死（${IDLE_TIMEOUT_MS / 1000}s 无响应），自动中止`);
+          agent.abort().catch(() => {});
+          emit({
+            type: "error", chatSessionId: id,
+            payload: { message: `Agent ${IDLE_TIMEOUT_MS / 1000}s 无响应，疑似 API 异常（余额不足/限流/网络）。已自动中止，请检查后重试。` },
+            ts: Date.now(),
+          });
+        }
+      }, 15_000);
+      idleChecker.unref?.();
+
+      const cleanup = () => { clearInterval(idleChecker); idleUnsub?.(); };
+      agent.prompt(message, { images: promptImages as any })
+        .then(() => { cleanup(); })
+        .catch((err: any) => {
+          cleanup();
+          emit({ type: "error", chatSessionId: id, payload: { message: `Agent error: ${err?.message ?? "Unknown"}` }, ts: Date.now() });
+        });
       reply.send({ success: true });
     } catch (err: any) {
       reply.status(500).send({ error: err?.message ?? "Unknown" });

@@ -251,6 +251,11 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
       window.setTimeout(() => setCopied(false), 1500);
     }).catch(() => {});
   };
+
+  // text/plain 语言（文本流程图、ASCII art 等）跳过 SyntaxHighlighter，
+  // 用纯 <pre> 渲染——高亮器会拆分 token 破坏空格对齐，纯文本必须原样保留。
+  const isPlainText = language === "text" || language === "plain" || language === "plaintext";
+
   return (
     <div className="code-block">
       <div className="code-header">
@@ -260,11 +265,17 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <CodeHighlight
-        language={language}
-        content={value}
-        customStyle={{ margin: 0, background: "var(--code-bg)" }}
-      />
+      {isPlainText ? (
+        <pre className="code-plain">
+          <code>{value}</code>
+        </pre>
+      ) : (
+        <CodeHighlight
+          language={language}
+          content={value}
+          customStyle={{ margin: 0, background: "var(--code-bg)" }}
+        />
+      )}
     </div>
   );
 }
