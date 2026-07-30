@@ -339,17 +339,16 @@ export default function App() {
             </div>
           </div>
         </header>
-        {/* Main Body: chat only (preview is overlay) */}
+        {/* Main Body: chat + preview as flex siblings */}
         <div className="main-body">
           <div className="chat-pane">
             <ChatPanel />
             <InputBar />
           </div>
-        </div>
 
-        {/* 右侧预览抽屉（overlay，可拖拽调宽） */}
+        {/* 右侧预览面板（flex 子元素，可拖拽调宽） */}
         {wsStore.drawerOpen && (
-          <div className="preview-drawer" style={{ width: wsStore.previewWidth }}>
+          <div className="preview-pane-wrap" style={{ width: wsStore.previewWidth }}>
             <div
               className="preview-resize-handle"
               onMouseDown={(e) => {
@@ -375,6 +374,7 @@ export default function App() {
             <FilePreviewPane />
           </div>
         )}
+        </div>
       </main>
 
       {showDirBrowser && (

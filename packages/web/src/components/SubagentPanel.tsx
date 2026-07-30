@@ -35,7 +35,7 @@ export function SubagentPanel() {
           >
             <div className="subagent-head">
               <span className="subagent-icon">
-                {running ? <Icon name="i-loader" size={14} className="icon-spin" /> : sa.status === "done" ? <Icon name="i-check" size={14} /> : <Icon name="i-x" size={14} />}
+                {running ? <Spinner size={14} /> : sa.status === "done" ? <Icon name="i-check" size={14} /> : <Icon name="i-x" size={14} />}
               </span>
               <span className="subagent-goal" title={sa.goal}>{sa.goal}</span>
               <span className="subagent-enter">点击查看 →</span>

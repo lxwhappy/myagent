@@ -303,7 +303,7 @@ textarea { resize: none; }
   transition: all var(--motion-fast);
 }
 .session-item:hover .session-delete-btn { opacity: 0.5; }
-.session-delete-btn:hover { background: var(--danger); color: var(--accent-on); opacity: 1 !important; }
+.session-delete-btn:hover { color: var(--danger); opacity: 1 !important; }
 
 @keyframes session-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -597,8 +597,8 @@ textarea { resize: none; }
 .icon-spin { display: inline-block; }
 .icon-spin .spin-group { transform-origin: 12px 12px; animation: spin 0.9s linear infinite; }
 
-/* 纯 CSS spinner — border 旋转，比 SVG 平滑 */
-.spinner { display: inline-block; border-style: solid; border-color: currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+/* 纯 CSS spinner — 浅色轨道 + accent 头部，对齐 .session-spinner 设计语言 */
+.spinner { display: inline-block; border-style: solid; border-color: var(--accent-tint); border-top-color: var(--accent); border-radius: 50%; animation: spin 1.6s linear infinite; vertical-align: middle; }
 
 /* ════════════════════════════════════════════════════════════════════════════
  * 10. Code Block

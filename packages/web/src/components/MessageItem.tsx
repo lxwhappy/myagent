@@ -221,7 +221,7 @@ function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: Subage
     <div className={`tl-item tl-subagent tl-${sub.status}`}>
       <button className="tl-header tl-clickable" onClick={onOpen}>
         <span className="tl-icon">
-          {running ? <Icon name="i-loader" size={13} className="icon-spin" /> : errored ? <Icon name="i-x" size={13} /> : <Icon name="i-check" size={13} />}
+          {running ? <Spinner size={13} /> : errored ? <Icon name="i-x" size={13} /> : <Icon name="i-check" size={13} />}
         </span>
         <span className="tl-label">子 Agent</span>
         <span className="tl-summary" title={summary}>{summary}</span>

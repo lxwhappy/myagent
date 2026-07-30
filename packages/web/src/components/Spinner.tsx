@@ -1,4 +1,5 @@
-// 纯 CSS spinner — 比 SVG 旋转更平滑，无光栅化抖动
+// 纯 CSS spinner — border 旋转，配合 design system 颜色
+// 轨道 accent-tint + 头部 accent，与 .session-spinner 设计语言一致
 
 interface SpinnerProps {
   size?: number;
@@ -12,7 +13,7 @@ export function Spinner({ size = 14, className = "" }: SpinnerProps) {
       style={{
         width: size,
         height: size,
-        borderWidth: Math.max(2, Math.round(size / 6)),
+        borderWidth: size >= 24 ? 2 : 1.5,
       }}
     />
   );

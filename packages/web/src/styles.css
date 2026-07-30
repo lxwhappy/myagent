@@ -2215,16 +2215,14 @@
 .preview-pane { display: flex !important; }
 
 /* ============================================================
-   预览抽屉 — 右侧 overlay 滑入面板
+   预览面板 — 右侧 flex 子元素，push 布局（同左侧栏行为）
    ============================================================ */
-.preview-drawer {
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  z-index: 30;
+.preview-pane-wrap {
+  flex-shrink: 0;
+  position: relative;
   border-left: 1px solid var(--border);
-  box-shadow: -4px 0 16px rgba(0,0,0,0.08);
-  animation: previewSlideIn var(--motion-base) var(--ease-standard);
   overflow: hidden;
+  animation: previewSlideIn var(--motion-base) var(--ease-standard);
 }
 /* 左边拖拽手柄 */
 .preview-resize-handle {
@@ -2244,15 +2242,12 @@
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* 抽屉里的 preview-pane 撑满 */
-.preview-drawer .preview-pane {
+/* 面板里的 preview-pane 撑满 */
+.preview-pane-wrap .preview-pane {
   display: flex !important;
   width: 100% !important;
   height: 100%;
 }
-
-/* main 需要 relative 让预览抽屉 absolute 定位 */
-.main { position: relative; }
 
 /* ═════════════════════════════════════════════════════════════════
    TODO 任务进度面板 — 参考图风格
