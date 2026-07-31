@@ -3182,6 +3182,42 @@
 }
 .msg-image-thumb:hover { opacity: 0.85; }
 
+/* ── 过程区：统一折叠面板 ── */
+.process-section {
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.process-header {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 5px 8px;
+  background: color-mix(in oklab, var(--accent), transparent 94%);
+  border: none; cursor: pointer; text-align: left;
+  font-size: 12px; color: var(--muted);
+  transition: background 0.12s, color 0.12s;
+}
+.process-header:hover {
+  background: color-mix(in oklab, var(--accent), transparent 88%);
+  color: var(--fg);
+}
+.process-label {
+  font-weight: 500; flex-shrink: 0;
+  font-family: var(--font-mono, monospace); font-size: 11px;
+}
+.process-summary {
+  opacity: 0.6; font-size: 11px; flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+}
+.process-time {
+  margin-left: auto; flex-shrink: 0;
+  font-size: 11px; color: var(--accent); opacity: 0.8;
+  font-family: var(--font-mono, monospace);
+}
+.process-body {
+  padding: 4px 6px 6px;
+}
+
 /* ── 时间线项：思考/工具/子agent 统一低调样式 ── */
 /* 过程和正文在同一条流里，过程用浅色小字，正文正常 */
 .tl-item {

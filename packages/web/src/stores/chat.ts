@@ -6,6 +6,7 @@ import { create } from "zustand";
 export interface DebugLLMEvent {
   type: "llm";
   model?: string;
+  thinking?: string;  // 该轮 LLM 调用的思考内容（从 thinking_delta 快照）
   usage?: {
     input: number;
     output: number;
@@ -63,6 +64,7 @@ export interface ToolExecution {
   output?: unknown;
   isError?: boolean;
   status: "running" | "done" | "error";
+  precedingThinking?: string; // 该工具调用之前的模型思考段（交替渲染用）
   durationMs?: number;   // Debug: 工具执行耗时
   startTs?: number;      // Debug: 工具执行开始时间戳
 }
@@ -192,7 +194,9 @@ export const useChatStore = create<ChatStore>((set) => ({
   sessions: {},
   activeChatSessionId: null,
   connected: false,
-  thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") === "1"; } catch { return false; } })(),
+  // 思考默认开启：localStorage 未设过(首次)或显式设为 "1" → 开；仅当显式 "0" → 关。
+  // 这样老用户若手动关过仍保持关闭，新用户/未操作过的人默认能看到 agent 推理过程。
+  thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") !== "0"; } catch { return true; } })(),
   activeSubId: null,
 
   setConnected: (v) => set({ connected: v }),
@@ -325,8 +329,12 @@ export const useChatStore = create<ChatStore>((set) => ({
   addToolStart: (id, exec) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     const msgs = [...sess.messages]; const last = msgs[msgs.length - 1];
-    const tool: ToolExecution = { toolCallId: exec.toolCallId, tool: exec.tool ?? "unknown", input: exec.input, status: "running" };
-    if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, tools: [...(last.tools || []), tool] };
+    if (last?.role === "assistant") {
+      // 把当前累积的 thinking 快照到新工具上，然后重置缓冲——实现思考-工具交替
+      const currentThinking = (last.thinking || "").trim();
+      const tool: ToolExecution = { toolCallId: exec.toolCallId, tool: exec.tool ?? "unknown", input: exec.input, status: "running", precedingThinking: currentThinking || undefined };
+      msgs[msgs.length - 1] = { ...last, thinking: "", tools: [...(last.tools || []), tool] };
+    }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),
 
@@ -363,7 +371,9 @@ export const useChatStore = create<ChatStore>((set) => ({
     const msgs = [...sess.messages];
     const last = msgs[msgs.length - 1];
     if (last?.role === "assistant") {
-      msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), evt] };
+      // 快照当前累积的 thinking 到本次 LLM 调用记录
+      const thinking = (last.thinking || "").trim();
+      msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), { ...evt, thinking: thinking || undefined }] };
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),
@@ -409,7 +419,10 @@ export const useChatStore = create<ChatStore>((set) => ({
         }
         case "tool_execution_start": {
           const last = msgs[msgs.length - 1];
-          if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, tools: [...(last.tools || []), { toolCallId: event.toolCallId, tool: event.tool, input: event.input, status: "running" }] };
+          if (last?.role === "assistant") {
+            const ct = (last.thinking || "").trim();
+            msgs[msgs.length - 1] = { ...last, thinking: "", tools: [...(last.tools || []), { toolCallId: event.toolCallId, tool: event.tool, input: event.input, status: "running", precedingThinking: ct || undefined }] };
+          }
           break;
         }
         case "tool_execution_end": {

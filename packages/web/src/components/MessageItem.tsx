@@ -3,7 +3,7 @@
 // 过程用低调样式（小字、浅色、可折叠），正文正常渲染。
 // 主会话和子 agent 视图共用同一套渲染，样式完全一致。
 
-import { useState, memo } from "react";
+import { useState, memo, Fragment } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock as CodeHighlight } from "./CodeBlock";
@@ -59,27 +59,10 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
       <div className="msg-body">
         <div className="msg-author">MyAgent</div>
 
-        {/* ── 时间线：按发生顺序渲染过程 + 正文 ── */}
-        {/* 1. 思考过程（如果有） */}
-        {msg.thinking && msg.thinking.trim() && (
-          <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
-        )}
+        {/* ── 过程区：统一折叠/展开 + 总用时 ── */}
+        <ProcessSection msg={msg} subagents={subagents} onOpenSub={onOpenSub} />
 
-        {/* 2. 工具调用（逐个按顺序显示，delegate_task 特殊渲染为子 agent 卡片） */}
-        {msg.tools?.map(tool => {
-          if (tool.tool === "delegate_task") {
-            // delegate_task：找对应的子 agent 数据，渲染成可跳转卡片
-            const sub = subagents?.[subagents.length - 1]; // 最新一个子 agent
-            return sub ? (
-              <SubagentBlock key={tool.toolCallId} tool={tool} sub={sub} onOpen={() => onOpenSub?.(sub.subId)} />
-            ) : (
-              <ToolBlock key={tool.toolCallId} tool={tool} />
-            );
-          }
-          return <ToolBlock key={tool.toolCallId} tool={tool} />;
-        })}
-
-        {/* 3. 等待指示器（流式开始但还没有任何内容） */}
+        {/* 等待指示器（流式开始但还没有任何内容） */}
         {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
           retryStatus ? (
             <div className="retry-indicator">
@@ -164,6 +147,82 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
           <DebugTimeline msg={msg} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── 过程区：统一折叠/展开，显示总用时 + 步骤数 ──
+function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
+  const [open, setOpen] = useState(true);
+  const tools = msg.tools || [];
+  const hasInterleaved = tools.some(t => t.precedingThinking?.trim());
+  const hasThinking = !!(msg.thinking && msg.thinking.trim()) || hasInterleaved;
+  const hasTools = tools.length > 0;
+  const hasContent = hasThinking || hasTools;
+
+  // 步骤数 = 思考段数 + 工具数
+  const thinkCount = (hasInterleaved ? tools.filter(t => t.precedingThinking?.trim()).length : 0)
+    + (msg.thinking && msg.thinking.trim() ? 1 : 0)
+    + (!hasInterleaved && msg.thinking && msg.thinking.trim() ? 0 : 0); // avoid double count
+  const stepCount = tools.length + (hasInterleaved ? tools.filter(t => t.precedingThinking?.trim()).length : (msg.thinking && msg.thinking.trim() ? 1 : 0));
+
+  // 总用时：从最早 startTs 到最晚 endTs
+  const allStarts: number[] = [];
+  const allEnds: number[] = [];
+  for (const e of msg.debugEvents || []) {
+    if (e.startTs) allStarts.push(e.startTs);
+    if (e.endTs) allEnds.push(e.endTs);
+  }
+  for (const t of tools) {
+    if (t.startTs) allStarts.push(t.startTs);
+    if (t.startTs && t.durationMs) allEnds.push(t.startTs + t.durationMs);
+  }
+  const earliest = allStarts.length ? Math.min(...allStarts) : 0;
+  const latest = allEnds.length ? Math.max(...allEnds) : 0;
+  const totalMs = msg.isStreaming ? (earliest ? Date.now() - earliest : 0) : (earliest && latest ? latest - earliest : 0);
+
+  const fmtMs = (ms: number) => ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`;
+
+  if (!hasContent) return null;
+
+  return (
+    <div className={`process-section${open ? " open" : ""}`}>
+      <button className="process-header" onClick={() => setOpen(!open)}>
+        <Icon name="i-activity" size={13} />
+        <span className="process-label">过程</span>
+        <span className="process-summary">{stepCount} 步</span>
+        {totalMs > 0 && <span className="process-time">{fmtMs(totalMs)}</span>}
+        <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
+      </button>
+      {open && (
+        <div className="process-body">
+          {!hasInterleaved && msg.thinking && msg.thinking.trim() && (
+            <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
+          )}
+          {tools.map(tool => (
+            <Fragment key={tool.toolCallId}>
+              {hasInterleaved && tool.precedingThinking?.trim() && (
+                <ThinkingBlock thinking={tool.precedingThinking} />
+              )}
+              {tool.tool === "delegate_task" ? (
+                (() => {
+                  const sub = subagents?.[subagents.length - 1];
+                  return sub ? (
+                    <SubagentBlock tool={tool} sub={sub} onOpen={() => onOpenSub?.(sub.subId)} />
+                  ) : (
+                    <ToolBlock tool={tool} />
+                  );
+                })()
+              ) : (
+                <ToolBlock tool={tool} />
+              )}
+            </Fragment>
+          ))}
+          {hasInterleaved && msg.thinking && msg.thinking.trim() && (
+            <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -474,9 +533,11 @@ function DebugTimeline({ msg }: { msg: Message }) {
 
 // ── 时间线节点：LLM 调用 ──
 function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: number; isFinal: boolean }) {
+  const [expanded, setExpanded] = useState(false);
   const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
   const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
   const fmtTime = (ts?: number) => ts ? new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, minute: "2-digit", second: "2-digit" }) : "";
+  const hasThinking = !!evt.thinking?.trim();
 
   return (
     <div className="dbg-step dbg-step-llm">
@@ -488,11 +549,20 @@ function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: n
           <span className="dbg-step-title">{isFinal ? "生成回复" : "思考决策"}</span>
           {evt.model && <span className="dbg-step-tag">{evt.model}</span>}
           {evt.startTs && <span className="dbg-step-time" title={`开始 ${fmtTime(evt.startTs)}${evt.endTs ? ` → 结束 ${fmtTime(evt.endTs)}` : ""}`}>🕐 {fmtTime(evt.startTs)}</span>}
+          {hasThinking && <button className="dbg-expand-btn" onClick={() => setExpanded(!expanded)}>{expanded ? "收起" : "思考"}</button>}
         </div>
         <div className="dbg-step-detail">
           {!isFinal && <span className="dbg-step-desc">模型分析任务，决定下一步操作</span>}
           {isFinal && <span className="dbg-step-desc">模型生成最终文本回复</span>}
         </div>
+        {expanded && hasThinking && (
+          <div className="dbg-step-io">
+            <div className="dbg-io-section">
+              <div className="dbg-io-label">思考过程</div>
+              <pre className="dbg-io-code">{evt.thinking}</pre>
+            </div>
+          </div>
+        )}
         <div className="dbg-step-metrics">
           {evt.firstTokenMs != null && <span className="dbg-metric" title="首 token 延迟">⏱ 首token {toMs(evt.firstTokenMs)}</span>}
           <span className="dbg-metric" title="本次调用总耗时">⏳ {toMs(evt.durationMs)}</span>

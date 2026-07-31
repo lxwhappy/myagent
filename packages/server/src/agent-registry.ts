@@ -65,9 +65,7 @@ export async function createAgent(
     model,
     cwd,
     resourceLoader: loader,
-    thinkingLevel: "off",
-    // 性能优化：排除可被 bash 替代的内置工具（find/ls/grep），
-    // 减少 GLM-4.7 处理工具定义的 prefill 延迟（每减 3 个工具约省 1-2s 首 token）
+    thinkingLevel: "medium",
     excludeTools: ["find", "ls"],
     customTools: allCustomTools,
   });
