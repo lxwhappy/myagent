@@ -203,13 +203,25 @@ export function useChat() {
           break;
 
         case "message_end":
+          // Debug: 记录每次 LLM 调用的 token 明细 + 耗时 + 时间戳
+          if (sid && msg.payload?.debug) {
+            chat.addDebugLLM(sid, {
+              type: "llm",
+              model: msg.payload.model,
+              usage: msg.payload.usage,
+              durationMs: msg.payload.debug.llmDurationMs,
+              firstTokenMs: msg.payload.debug.firstTokenMs,
+              startTs: msg.payload.debug.startTs,
+              endTs: msg.payload.debug.endTs,
+            });
+          }
           break; // 不做 finish，等 agent_end
 
         case "tool_execution_start":
           if (sid) { chat.addToolStart(sid, { toolCallId: msg.payload.toolCallId, tool: msg.payload.tool, input: msg.payload.input }); scheduleStreamingPersist(sid); }
           break;
         case "tool_execution_end":
-          if (sid) { chat.updateToolEnd(sid, msg.payload.toolCallId, msg.payload.result, msg.payload.isError); scheduleStreamingPersist(sid); }
+          if (sid) { chat.updateToolEnd(sid, msg.payload.toolCallId, msg.payload.result, msg.payload.isError, msg.payload?.debug); scheduleStreamingPersist(sid); }
           break;
 
         case "usage_update":

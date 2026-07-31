@@ -4,8 +4,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useDebugStore } from "../stores/debug";
 
-type Tab = "models" | "skills" | "mcp" | "workspace";
+type Tab = "models" | "skills" | "mcp" | "workspace" | "debug";
 
 interface ModelInfo {
   id: string;
@@ -58,12 +59,14 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
           <button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}>⚡ Skills</button>
           <button className={tab === "mcp" ? "active" : ""} onClick={() => setTab("mcp")}>🔌 MCP</button>
           <button className={tab === "workspace" ? "active" : ""} onClick={() => setTab("workspace")}>📁 工作空间</button>
+          <button className={tab === "debug" ? "active" : ""} onClick={() => setTab("debug")}>🔧 Debug</button>
         </div>
         <div className="settings-body">
           {tab === "models" && <ModelsTab />}
           {tab === "skills" && <SkillsTab />}
           {tab === "mcp" && <McpTab />}
           {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
+          {tab === "debug" && <DebugTab />}
         </div>
       </div>
     </div>
@@ -509,6 +512,35 @@ function WorkspaceTab({ onSwitchWorkspace, onAddWorkspace, onClose }: {
       </div>
       <div className="settings-hint" style={{ marginTop: 12 }}>
         点击切换工作空间；✕ 仅从列表移除，不删除磁盘文件。
+      </div>
+    </div>
+  );
+}
+
+// ── Debug 模式 Tab ──
+function DebugTab() {
+  const enabled = useDebugStore(s => s.enabled);
+  const toggle = useDebugStore(s => s.toggle);
+
+  return (
+    <div className="settings-debug">
+      <div className="settings-debug-intro">
+        Debug 模式会在对话区展示 Agent 的内部运行过程，帮助你理解每一步发生了什么：
+        <ul>
+          <li>每个工具调用的执行耗时（ms）</li>
+          <li>每次 LLM API 调用的首 token 时间和总耗时</li>
+          <li>每次 LLM 调用的精确 token 明细（输入/输出/缓存读写/费用）</li>
+          <li>上下文压缩、自动重试等内部事件的触发时机</li>
+        </ul>
+      </div>
+      <label className="settings-debug-toggle">
+        <input type="checkbox" checked={enabled} onChange={toggle} />
+        <span>启用 Debug 模式</span>
+      </label>
+      <div className="settings-hint">
+        {enabled
+          ? "✅ 已开启 — 对话区的每条 AI 回复下方会显示详细的时间线。"
+          : "关闭 — 对话区不显示调试信息。"}
       </div>
     </div>
   );

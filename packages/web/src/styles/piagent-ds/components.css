@@ -782,6 +782,7 @@ textarea { resize: none; }
   padding: var(--space-3) var(--space-6) var(--space-4);
 }
 .input-wrapper {
+  position: relative;
   max-width: 820px; margin: 0 auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);

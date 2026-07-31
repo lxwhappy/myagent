@@ -2,6 +2,25 @@
 
 import { create } from "zustand";
 
+/** Debug: 单次 LLM 调用的明细记录 */
+export interface DebugLLMEvent {
+  type: "llm";
+  model?: string;
+  usage?: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    reasoning?: number;
+    totalTokens: number;
+    cost?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  };
+  durationMs?: number;
+  firstTokenMs?: number;
+  startTs?: number;    // 调用开始时间戳
+  endTs?: number;      // 调用结束时间戳
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
@@ -12,6 +31,7 @@ export interface Message {
   skillsUsed?: SkillUsage[]; // 该消息中加载的 Skills
   images?: AttachedImage[];  // 用户发送的图片（缩略图展示）
   systemNotice?: SystemNotice; // 系统通知（压缩等）
+  debugEvents?: DebugLLMEvent[]; // Debug: LLM 调用明细
 }
 
 /** 系统通知（插入消息流中，非对话内容） */
@@ -43,6 +63,8 @@ export interface ToolExecution {
   output?: unknown;
   isError?: boolean;
   status: "running" | "done" | "error";
+  durationMs?: number;   // Debug: 工具执行耗时
+  startTs?: number;      // Debug: 工具执行开始时间戳
 }
 
 /** 子 agent 运行状态（delegate_task 工具触发的隔离子任务） */
@@ -160,9 +182,10 @@ interface ChatStore {
   finishAssistantMessage: (id: string) => void;
   forceResetGenerating: (id: string) => void;
   addToolStart: (id: string, exec: Partial<ToolExecution> & { toolCallId: string }) => void;
-  updateToolEnd: (id: string, toolCallId: string, result: unknown, isError: boolean) => void;
+  updateToolEnd: (id: string, toolCallId: string, result: unknown, isError: boolean, debug?: { durationMs?: number; startTs?: number }) => void;
   addSkillUsed: (id: string, skill: SkillUsage) => void;
   setRetryStatus: (id: string, status: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null) => void;
+  addDebugLLM: (id: string, evt: DebugLLMEvent) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -307,12 +330,12 @@ export const useChatStore = create<ChatStore>((set) => ({
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),
 
-  updateToolEnd: (id, toolCallId, result, isError) => set((s) => {
+  updateToolEnd: (id, toolCallId, result, isError, debug) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     const msgs = [...sess.messages];
     const last = msgs[msgs.length - 1];
     if (last?.role === "assistant" && last.tools) {
-      msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === toolCallId ? { ...t, output: result, isError, status: isError ? "error" : "done" } : t) };
+      msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === toolCallId ? { ...t, output: result, isError, status: isError ? "error" : "done", durationMs: debug?.durationMs, startTs: debug?.startTs } as ToolExecution : t) };
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),
@@ -333,6 +356,16 @@ export const useChatStore = create<ChatStore>((set) => ({
   setRetryStatus: (id, status) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, retryStatus: status } } };
+  }),
+
+  addDebugLLM: (id, evt) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    const msgs = [...sess.messages];
+    const last = msgs[msgs.length - 1];
+    if (last?.role === "assistant") {
+      msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), evt] };
+    }
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),
 
   // ── 子 agent（delegate_task）状态 ──

@@ -2657,6 +2657,251 @@
   font-weight: 450;
 }
 
+/* 单行代码（来自代码围栏的独占一行命令）：去框，与 inline code 风格一致 */
+.msg-content code.code-line {
+  display: inline-block;
+  margin: 0;
+  padding: 0.12em 0.4em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.87em;
+  background: color-mix(in oklab, var(--fg, #000), transparent 93%);
+  border: none;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-weight: 450;
+}
+.msg-content code.code-line + code.code-line {
+  margin-left: 0.3em;
+}
+
+/* 命令块（多行 shell）：浅底轻量，无语言标签，Copy 悬浮右上角 */
+.cmd-block {
+  position: relative;
+  margin: var(--space-2) 0;
+}
+.cmd-pre {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.65;
+  background: color-mix(in oklab, var(--fg, #000), transparent 93%);
+  border: none;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+.cmd-pre code {
+  font-family: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.cmd-copy {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.cmd-block:hover .cmd-copy { opacity: 1; }
+.cmd-copy:hover { background: color-mix(in oklab, var(--fg, #000), transparent 88%); }
+
+/* ── Debug 时间线 ── */
+.debug-tl {
+  margin: var(--space-2) 0;
+  border: 1px dashed var(--border, rgba(0,0,0,0.1));
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+}
+.debug-tl-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  background: color-mix(in oklab, var(--fg, #000), transparent 96%);
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+}
+.debug-tl-header:hover { background: color-mix(in oklab, var(--fg, #000), transparent 92%); }
+.debug-tl-icon { font-size: 12px; }
+.debug-tl-label { font-weight: 600; color: var(--fg); }
+.debug-tl-summary {
+  flex: 1;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.debug-tl-body {
+  padding: 8px 10px;
+}
+.debug-tl-totals {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.06));
+}
+.debug-total-item {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* 时间线容器 + 左侧竖线 */
+.debug-timeline {
+  position: relative;
+  padding-left: 18px;
+}
+.debug-timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  bottom: 4px;
+  width: 1.5px;
+  background: var(--border, rgba(0,0,0,0.1));
+}
+
+/* 每个时间线节点 */
+.dbg-step {
+  position: relative;
+  padding-bottom: 10px;
+}
+.dbg-step:last-child { padding-bottom: 0; }
+
+/* 节点圆点 */
+.dbg-dot {
+  position: absolute;
+  left: -18px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bg, #fff);
+  z-index: 1;
+}
+.dbg-dot-llm { background: var(--accent, #3b82f6); }
+.dbg-dot-tool { background: var(--success, #22c55e); }
+.dbg-dot-err { background: var(--danger, #ef4444); }
+
+/* 节点内容 */
+.dbg-step-content {
+  min-width: 0;
+}
+.dbg-step-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.dbg-step-num {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--fg, #000), transparent 92%);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.dbg-step-icon { font-size: 12px; flex-shrink: 0; }
+.dbg-step-title { font-size: 12px; font-weight: 600; color: var(--fg); }
+.dbg-step-tag {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: color-mix(in oklab, var(--fg, #000), transparent 94%);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.dbg-step-time {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.dbg-step-summary {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dbg-step-detail { margin: 1px 0 2px; }
+.dbg-step-desc { font-size: 10.5px; color: var(--muted); }
+
+/* 指标行 */
+.dbg-step-metrics {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.dbg-metric {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  color: var(--muted);
+}
+.dbg-metric-tok { color: var(--accent); font-weight: 600; }
+
+/* 工具展开按钮 + 输入输出 */
+.dbg-expand-btn {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.dbg-expand-btn:hover { text-decoration: underline; }
+.dbg-step-io {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dbg-io-section { min-width: 0; }
+.dbg-io-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 1px;
+}
+.dbg-io-code {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 10.5px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: color-mix(in oklab, var(--fg, #000), transparent 95%);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
 /* 纯文本代码块 code 不应用行内 code 的样式（微边框/背景/缩放），
    它有自己的等宽 CJK 字体和 white-space: pre。用 :not 排除。 */
 .msg-content .code-plain code {

@@ -80,12 +80,58 @@ export class EventBridge {
       } catch {}
     };
 
+    // ── Debug 计时追踪 ──
+    // 记录每个 LLM 调用和工具调用的耗时，附带在事件 payload 里推给前端
+    const llmTimings = new Map<string, { startTs: number; firstTokenTs?: number }>();
+    const toolTimings = new Map<string, number>();
+
     const handler = async (event: AgentSessionEvent) => {
       switch (event.type) {
         case "agent_start": send("agent_start"); autoAdvance(); break;
         case "agent_end": send("agent_end"); autoFinish(); sendUsage(); break;
-        case "message_start": break;
-        case "message_end": sendUsage(); break;  // 每条消息结束就更新用量（实时反馈，不等整个回合结束）
+        case "message_start": {
+          // 记录 LLM 调用开始时间（用 message 自带的 timestamp，比 Date.now 更准）
+          const msg = (event as any).message;
+          if (msg?.timestamp) {
+            llmTimings.set("current", { startTs: msg.timestamp });
+          }
+          break;
+        }
+        case "message_update": {
+          const ae = (event as any).assistantMessageEvent;
+          if (!ae) break;
+          // 首个 text_delta 或 thinking_delta → 记录首 token 时间
+          if ((ae.type === "text_delta" || ae.type === "thinking_delta") && typeof ae.delta === "string") {
+            const t = llmTimings.get("current");
+            if (t && !t.firstTokenTs) t.firstTokenTs = Date.now();
+          }
+          if (ae.type === "text_delta" && typeof ae.delta === "string") {
+            send("message_update", { delta: ae.delta });
+          } else if (ae.type === "thinking_delta" && typeof ae.delta === "string") {
+            send("thinking_delta", { delta: ae.delta });
+          }
+          break;
+        }
+        case "message_end": {
+          // 附带本次 LLM 调用的完整 token 明细 + 耗时
+          const msg = (event as any).message;
+          const t = llmTimings.get("current");
+          const now = Date.now();
+          const debug = t ? {
+            startTs: t.startTs,
+            endTs: now,
+            llmDurationMs: now - t.startTs,
+            firstTokenMs: t.firstTokenTs ? t.firstTokenTs - t.startTs : undefined,
+          } : undefined;
+          if (msg?.usage) {
+            send("message_end", { usage: msg.usage, model: msg.model, debug });
+          } else {
+            send("message_end", { debug });
+          }
+          llmTimings.delete("current");
+          sendUsage();  // 每条消息结束就更新累计用量
+          break;
+        }
 
         // ── 自动重试：SDK 在 API 失败时自动重试，转发给前端显示状态 ──
         case "auto_retry_start": {
@@ -139,7 +185,9 @@ export class EventBridge {
 
         case "tool_execution_start": {
           const toolName = (event as any).toolName;
+          const toolCallId = (event as any).toolCallId;
           const args = (event as any).args;
+          toolTimings.set(toolCallId, Date.now());  // 记录工具开始时间
           if (toolName === "read" && args) {
             const filePath = typeof args === "string" ? args : (args.path || args.filePath || "");
             if (typeof filePath === "string" && /SKILL\.md$/i.test(filePath)) {
@@ -149,7 +197,7 @@ export class EventBridge {
             }
           }
           send("tool_execution_start", {
-            toolCallId: (event as any).toolCallId,
+            toolCallId,
             tool: toolName,
             input: args,
           });
@@ -210,11 +258,17 @@ export class EventBridge {
               isError = false;
             }
           }
+          const toolCallId = (event as any).toolCallId;
+          const startTs = toolTimings.get(toolCallId);
+          const now = Date.now();
+          const durationMs = startTs ? now - startTs : undefined;
+          toolTimings.delete(toolCallId);
           send("tool_execution_end", {
-            toolCallId: (event as any).toolCallId,
+            toolCallId,
             tool: toolName,
             result,
             isError,
+            debug: durationMs != null ? { startTs, endTs: now, durationMs } : undefined,
           });
           break;
         }

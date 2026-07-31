@@ -7,15 +7,17 @@ import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock as CodeHighlight } from "./CodeBlock";
-import type { Message, ToolExecution, SubagentState, SystemNotice } from "../stores/chat";
+import type { Message, ToolExecution, SubagentState, SystemNotice, DebugLLMEvent } from "../stores/chat";
 import { MermaidBlock } from "./MermaidBlock";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { getMessageStats } from "../utils/sessionStats";
 import { TaskSummaryCard } from "./TaskSummaryCard";
 import { Icon } from "./Icon";
 import { Spinner } from "./Spinner";
+import { useDebugStore } from "../stores/debug";
 
 function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void; retryStatus?: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null }) {
+  const debugEnabled = useDebugStore(s => s.enabled);
   // 系统通知（压缩等）— 非对话内容，渲染为特殊卡片
   if (msg.role === "system" && msg.systemNotice) {
     return <SystemNoticeCard notice={msg.systemNotice} />;
@@ -109,11 +111,14 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    pre: ({ children }) => <>{children}</>,
-                    code({ node, className, children, ...props }: any) {
-                      const match = /language-(\w+)/.exec(className || "");
+                    pre({ children }: any) {
+                      // block code（围栏代码块）：从子 <code> 提取原始文本 + 语言，按行数选择渲染方式
+                      const codeEl: any = Array.isArray(children) ? children[0] : children;
+                      if (!codeEl?.props) return <>{children}</>;
+                      const className = codeEl.props.className || "";
+                      const match = /language-(\w+)/.exec(className);
                       const lang = match?.[1];
-                      const raw = String(children).replace(/\n$/, "");
+                      const raw = String(codeEl.props.children ?? "").replace(/\n$/, "");
                       if (lang === "mermaid") {
                         return (
                           <ErrorBoundary
@@ -128,8 +133,16 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
                           </ErrorBoundary>
                         );
                       }
-                      if (match) return <CodeBlock language={lang!} value={raw} />;
-                      if (raw.includes("\n")) return <CodeBlock language="text" value={raw} />;
+                      // shell 命令（bash/sh/zsh 等）：轻量命令块，无语言标签无深色框
+                      const isShell = ["bash", "sh", "shell", "zsh", "fish"].includes(lang ?? "");
+                      if (isShell) return <CommandBlock value={raw} />;
+                      // 多行代码：完整 CodeBlock（带语言标签 + Copy）
+                      if (raw.includes("\n")) return <CodeBlock language={lang ?? "text"} value={raw} />;
+                      // 单行代码：轻量独占一行，无标题栏无 Copy
+                      return <code className="code-line">{raw}</code>;
+                    },
+                    code({ className, children, ...props }: any) {
+                      // 仅处理 inline code（`foo`），block code 由 pre 组件处理
                       return <code className={className} {...props}>{children}</code>;
                     },
                   }}
@@ -144,6 +157,11 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
         {/* 任务摘要卡 */}
         {stats && !msg.isStreaming && (
           <TaskSummaryCard stats={stats} />
+        )}
+
+        {/* Debug 时间线：每步耗时 + token 明细 */}
+        {debugEnabled && !msg.isStreaming && (
+          <DebugTimeline msg={msg} />
         )}
       </div>
     </div>
@@ -237,6 +255,26 @@ function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: Subage
       {errored && sub.error && (
         <div className="tl-sub-error">{sub.error}</div>
       )}
+    </div>
+  );
+}
+
+// ── 命令块（shell）：浅底轻量，无语言标签，仅 Copy ──
+function CommandBlock({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+  return (
+    <div className="cmd-block">
+      <pre className="cmd-pre"><code>{value}</code></pre>
+      <button type="button" className="cmd-copy" onClick={copy} title="复制">
+        <Icon name={copied ? "i-check" : "i-copy"} size={13} />
+      </button>
     </div>
   );
 }
@@ -361,4 +399,159 @@ function SystemNoticeCard({ notice }: { notice: SystemNotice }) {
   }
 
   return null;
+}
+
+// ── Debug 时间线：按执行顺序展示 agent 回合内每一步做了什么 ──
+function DebugTimeline({ msg }: { msg: Message }) {
+  const [open, setOpen] = useState(false);
+  const llmEvents = msg.debugEvents || [];
+  const tools = msg.tools || [];
+
+  if (llmEvents.length === 0 && tools.length === 0) return null;
+
+  const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
+  const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
+
+  // 重建统一时间线：LLM 和工具交替（LLM₁ → tool₁ → LLM₂ → tool₂ → … → LLMₙ最终回复）
+  const timeline: Array<
+    { kind: "llm"; idx: number; evt: DebugLLMEvent; isFinal: boolean } |
+    { kind: "tool"; idx: number; tool: ToolExecution }
+  > = [];
+  {
+    let li = 0, ti = 0;
+    while (li < llmEvents.length || ti < tools.length) {
+      if (li < llmEvents.length) {
+        timeline.push({ kind: "llm", idx: li, evt: llmEvents[li], isFinal: li === llmEvents.length - 1 && ti >= tools.length });
+        li++;
+      }
+      if (ti < tools.length) {
+        timeline.push({ kind: "tool", idx: ti, tool: tools[ti] });
+        ti++;
+      }
+    }
+  }
+
+  // 汇总
+  const totalMs = llmEvents.reduce((s, e) => s + (e.durationMs ?? 0), 0)
+    + tools.reduce((s, t) => s + (t.durationMs ?? 0), 0);
+  const totalInput = llmEvents.reduce((s, e) => s + (e.usage?.input ?? 0), 0);
+  const totalOutput = llmEvents.reduce((s, e) => s + (e.usage?.output ?? 0), 0);
+  const totalCost = llmEvents.reduce((s, e) => s + (e.usage?.cost?.total ?? 0), 0);
+
+  return (
+    <div className={`debug-tl${open ? " open" : ""}`}>
+      <button className="debug-tl-header" onClick={() => setOpen(!open)}>
+        <span className="debug-tl-icon">🔬</span>
+        <span className="debug-tl-label">内部过程</span>
+        <span className="debug-tl-summary">
+          {timeline.length} 步 · {toMs(totalMs)}
+          {totalCost > 0 && ` · $${totalCost.toFixed(4)}`}
+        </span>
+        <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
+      </button>
+      {open && (
+        <div className="debug-tl-body">
+          {/* 汇总 */}
+          <div className="debug-tl-totals">
+            <span className="debug-total-item" title="输入 token">↑{toTok(totalInput)}</span>
+            <span className="debug-total-item" title="输出 token">↓{toTok(totalOutput)}</span>
+            {totalCost > 0 && <span className="debug-total-item" title="费用">${totalCost.toFixed(4)}</span>}
+          </div>
+
+          {/* 统一时间线 */}
+          <div className="debug-timeline">
+            {timeline.map((item, i) => item.kind === "llm" ? (
+              <DebugLLMRow key={`tl-${i}`} evt={item.evt} stepNum={i + 1} isFinal={item.isFinal} />
+            ) : (
+              <DebugToolRow key={`tl-${i}`} tool={item.tool} stepNum={i + 1} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 时间线节点：LLM 调用 ──
+function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: number; isFinal: boolean }) {
+  const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
+  const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
+  const fmtTime = (ts?: number) => ts ? new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, minute: "2-digit", second: "2-digit" }) : "";
+
+  return (
+    <div className="dbg-step dbg-step-llm">
+      <div className="dbg-dot dbg-dot-llm" />
+      <div className="dbg-step-content">
+        <div className="dbg-step-head">
+          <span className="dbg-step-num">#{stepNum}</span>
+          <span className="dbg-step-icon">🧠</span>
+          <span className="dbg-step-title">{isFinal ? "生成回复" : "思考决策"}</span>
+          {evt.model && <span className="dbg-step-tag">{evt.model}</span>}
+          {evt.startTs && <span className="dbg-step-time" title={`开始 ${fmtTime(evt.startTs)}${evt.endTs ? ` → 结束 ${fmtTime(evt.endTs)}` : ""}`}>🕐 {fmtTime(evt.startTs)}</span>}
+        </div>
+        <div className="dbg-step-detail">
+          {!isFinal && <span className="dbg-step-desc">模型分析任务，决定下一步操作</span>}
+          {isFinal && <span className="dbg-step-desc">模型生成最终文本回复</span>}
+        </div>
+        <div className="dbg-step-metrics">
+          {evt.firstTokenMs != null && <span className="dbg-metric" title="首 token 延迟">⏱ 首token {toMs(evt.firstTokenMs)}</span>}
+          <span className="dbg-metric" title="本次调用总耗时">⏳ {toMs(evt.durationMs)}</span>
+          {evt.usage && (
+            <>
+              <span className="dbg-metric dbg-metric-tok" title="Token 用量">
+                ↑{toTok(evt.usage.input)} ↓{toTok(evt.usage.output)}
+              </span>
+              {evt.usage.cacheRead > 0 && <span className="dbg-metric" title="缓存命中">🗄 {toTok(evt.usage.cacheRead)}</span>}
+              {evt.usage.reasoning != null && evt.usage.reasoning > 0 && <span className="dbg-metric" title="思考 token">💭 {toTok(evt.usage.reasoning)}</span>}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 时间线节点：工具调用 ──
+function DebugToolRow({ tool, stepNum }: { tool: ToolExecution; stepNum: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
+  const fmtTime = (ts?: number) => ts ? new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, minute: "2-digit", second: "2-digit" }) : "";
+  const summary = extractToolSummary(tool);
+  const inputText = tool.input != null ? fmtIO(tool.input) : "";
+  const outputText = tool.output != null ? fmtIO(tool.output, 3000) : "";
+
+  return (
+    <div className={`dbg-step dbg-step-tool${tool.isError ? " errored" : ""}`}>
+      <div className={`dbg-dot ${tool.isError ? "dbg-dot-err" : "dbg-dot-tool"}`} />
+      <div className="dbg-step-content">
+        <div className="dbg-step-head">
+          <span className="dbg-step-num">#{stepNum}</span>
+          <span className="dbg-step-icon">{tool.isError ? "❌" : "⚡"}</span>
+          <span className="dbg-step-title">{tool.tool}</span>
+          {summary && <span className="dbg-step-summary" title={summary}>{summary}</span>}
+          {tool.startTs && <span className="dbg-step-time" title={`执行时间 ${fmtTime(tool.startTs)}`}>🕐 {fmtTime(tool.startTs)}</span>}
+          <span className="dbg-metric" title="执行耗时">⏳ {toMs(tool.durationMs)}</span>
+          <button className="dbg-expand-btn" onClick={() => setExpanded(!expanded)}>
+            {expanded ? "收起" : "详情"}
+          </button>
+        </div>
+        {expanded && (
+          <div className="dbg-step-io">
+            {inputText && (
+              <div className="dbg-io-section">
+                <div className="dbg-io-label">输入</div>
+                <pre className="dbg-io-code">{inputText}</pre>
+              </div>
+            )}
+            {outputText && (
+              <div className="dbg-io-section">
+                <div className="dbg-io-label">{tool.isError ? "错误" : "输出"}</div>
+                <pre className="dbg-io-code">{outputText}</pre>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

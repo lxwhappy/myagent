@@ -282,7 +282,7 @@ export default function App() {
           <div className="user-row">
             <div className="user-avatar" onClick={() => setShowSettings(true)}>鑫</div>
             <span className="user-name-sb" onClick={() => setShowSettings(true)}>小鑫</span>
-            <span className="user-plan-tag">{modelInfo?.provider ?? "zai"}</span>
+            <span className="user-plan-tag">{modelInfo?.name ?? modelInfo?.model ?? "zai"}</span>
             <div className="user-row-actions">
               <button
                 className="theme-toggle-btn"
