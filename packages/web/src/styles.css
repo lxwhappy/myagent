@@ -1145,10 +1145,11 @@
 /* 弹窗主体容器（SettingsPanel / AgentManager 共用） */
 .settings-modal {
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   box-shadow: 0 20px 60px rgba(0,0,0,0.2);
   display: flex;
   flex-direction: column;
+  width: min(780px, 94vw);
   max-height: 88vh;
   box-sizing: border-box;
 }
@@ -1180,26 +1181,49 @@
   background: var(--accent-tint);
   color: var(--accent-active);
 }
-.settings-tabs {
+/* 左侧导航 + 右侧内容布局 */
+.settings-layout {
+  flex: 1;
   display: flex;
-  gap: 4px;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--border);
+  overflow: hidden;
 }
-.settings-tabs button {
-  padding: 7px 16px;
+.settings-nav {
+  flex-shrink: 0;
+  width: 160px;
+  border-right: 1px solid var(--border);
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.14s;
+  transition: all var(--motion-fast) var(--ease-standard);
+  text-align: left;
 }
-.settings-tabs button:hover {
+.settings-nav-item:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+.settings-nav-item.active {
   background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
 }
+.settings-nav-icon { font-size: 15px; flex-shrink: 0; line-height: 1; }
+.settings-nav-label { flex: 1; }
+
 .settings-body {
   flex: 1;
   overflow-y: auto;

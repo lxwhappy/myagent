@@ -47,6 +47,15 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
 }) {
   const [tab, setTab] = useState<Tab>("models");
 
+  const NAV_ITEMS: { key: Tab; icon: string; label: string }[] = [
+    { key: "models", icon: "🤖", label: "模型" },
+    { key: "skills", icon: "⚡", label: "Skills" },
+    { key: "extensions", icon: "📦", label: "扩展" },
+    { key: "mcp", icon: "🔌", label: "MCP" },
+    { key: "workspace", icon: "📁", label: "工作空间" },
+    { key: "debug", icon: "🔧", label: "Debug" },
+  ];
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
@@ -54,21 +63,27 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
           <h2>设置</h2>
           <button className="settings-close" onClick={onClose} title="关闭">✕</button>
         </div>
-        <div className="settings-tabs">
-          <button className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>🤖 模型</button>
-          <button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}>⚡ Skills</button>
-          <button className={tab === "extensions" ? "active" : ""} onClick={() => setTab("extensions")}>📦 扩展</button>
-          <button className={tab === "mcp" ? "active" : ""} onClick={() => setTab("mcp")}>🔌 MCP</button>
-          <button className={tab === "workspace" ? "active" : ""} onClick={() => setTab("workspace")}>📁 工作空间</button>
-          <button className={tab === "debug" ? "active" : ""} onClick={() => setTab("debug")}>🔧 Debug</button>
-        </div>
-        <div className="settings-body">
-          {tab === "models" && <ModelsTab />}
-          {tab === "skills" && <SkillsTab />}
-          {tab === "extensions" && <ExtensionsTab />}
-          {tab === "mcp" && <McpTab />}
-          {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
-          {tab === "debug" && <DebugTab />}
+        <div className="settings-layout">
+          <nav className="settings-nav">
+            {NAV_ITEMS.map(item => (
+              <button
+                key={item.key}
+                className={`settings-nav-item ${tab === item.key ? "active" : ""}`}
+                onClick={() => setTab(item.key)}
+              >
+                <span className="settings-nav-icon">{item.icon}</span>
+                <span className="settings-nav-label">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="settings-body">
+            {tab === "models" && <ModelsTab />}
+            {tab === "skills" && <SkillsTab />}
+            {tab === "extensions" && <ExtensionsTab />}
+            {tab === "mcp" && <McpTab />}
+            {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
+            {tab === "debug" && <DebugTab />}
+          </div>
         </div>
       </div>
     </div>
