@@ -3114,6 +3114,11 @@
   background: var(--bg); padding: 1px 6px; border-radius: 8px;
 }
 .agent-mgr-desc { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-mgr-prompt {
+  font-size: 11px; color: var(--muted); opacity: 0.7;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+}
 .agent-mgr-model { font-size: 11px; color: var(--muted); font-family: var(--mono, monospace); }
 .agent-mgr-current { color: var(--accent); font-size: 10px; flex-shrink: 0; }
 .agent-mgr-actions { display: flex; gap: 4px; flex-shrink: 0; }
@@ -3162,6 +3167,45 @@
 }
 .agent-edit-prompt:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 .agent-edit-hint { font-size: 11px; color: var(--muted); }
+.agent-fullprompt-link {
+  background: none; border: none; padding: 0; margin-left: 8px;
+  font-size: 11px; color: var(--accent); cursor: pointer;
+  text-decoration: none;
+}
+.agent-fullprompt-link:hover { text-decoration: underline; }
+.agent-fullprompt-box {
+  margin-top: 6px; max-height: 400px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); padding: 8px;
+}
+.agent-fullprompt-section {
+  margin-bottom: 8px; padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+.agent-fullprompt-section:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.agent-fullprompt-label {
+  display: flex; align-items: center; gap: 5px; width: 100%;
+  background: none; border: none; padding: 4px 0; cursor: pointer;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  transition: opacity 0.12s;
+}
+.agent-fullprompt-label:hover { opacity: 0.8; }
+.agent-fullprompt-chevron { font-size: 10px; opacity: 0.6; }
+.agent-fullprompt-count { margin-left: auto; font-weight: 400; opacity: 0.5; font-size: 10px; }
+.agent-fullprompt-pre {
+  margin: 0; padding: 8px 10px;
+  font-size: 11px; line-height: 1.6; color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--surface); border-radius: var(--radius-sm);
+}
+.agent-fullprompt-raw {
+  background: none; border: none; padding: 4px 0;
+  font-size: 11px; color: var(--accent); cursor: pointer;
+}
+.agent-fullprompt-raw:hover { text-decoration: underline; }
+.agent-fullprompt-rawtext { opacity: 0.6; }
 .agent-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .settings-close-btn {
   padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);

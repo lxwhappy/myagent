@@ -104,6 +104,11 @@ export function AgentManager({ onClose, onSwitchActive }: { onClose: () => void;
                       {a.isBuiltIn && <span className="agent-mgr-builtin">内置</span>}
                     </span>
                     {a.description && <span className="agent-mgr-desc">{a.description}</span>}
+                    {a.systemPrompt && (
+                      <span className="agent-mgr-prompt" title={a.systemPrompt}>
+                        {a.systemPrompt.length > 80 ? a.systemPrompt.slice(0, 80) + "…" : a.systemPrompt}
+                      </span>
+                    )}
                     {a.model && <span className="agent-mgr-model">{a.model}</span>}
                   </div>
                   {activeAgentId === a.id && <span className="agent-mgr-current" title="当前使用">●</span>}
@@ -206,7 +211,12 @@ export function AgentManager({ onClose, onSwitchActive }: { onClose: () => void;
                 placeholder={"定义这个 Agent 的人设、专长、语气、规则…\n例如：\n你是一位资深前端工程师，擅长 React 和 TypeScript。\n回答要简洁，给出可直接运行的代码。"}
                 rows={8}
               />
-              <span className="agent-edit-hint">这段指令会追加到项目 AGENTS.md 之后，对使用该 Agent 的会话生效。</span>
+              <div className="agent-edit-hint">
+                这段指令会追加到项目 AGENTS.md 之后，对使用该 Agent 的会话生效。
+                {!editing.isNew && editing.id && (
+                  <FullPromptBtn agentId={editing.id} />
+                )}
+              </div>
             </div>
 
             <div className="agent-edit-actions">
@@ -366,6 +376,96 @@ function AgentMcpSelector({ enabledMcpServers, onChange }: { enabledMcpServers: 
           );
         })}
       </div>
+    </>
+  );
+}
+
+// ── 查看完整系统提示词（分段展示：SDK默认 / Agent角色指令 / 项目上下文 / Skills / 工作目录） ──
+interface PromptSection {
+  label: string;
+  content: string;
+  source: "sdk" | "agent" | "project" | "skills" | "cwd";
+}
+const SECTION_STYLE: Record<string, { color: string; icon: string }> = {
+  sdk:     { color: "var(--muted)",     icon: "🤖" },
+  agent:   { color: "var(--accent)",    icon: "✏️" },
+  project: { color: "var(--success)",   icon: "📄" },
+  skills:  { color: "var(--warn)",      icon: "⚡" },
+  cwd:     { color: "var(--muted)",     icon: "📁" },
+};
+
+function FullPromptBtn({ agentId }: { agentId: string }) {
+  const [open, setOpen] = useState(false);
+  const [sections, setSections] = useState<PromptSection[] | null>(null);
+  const [full, setFull] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [showRaw, setShowRaw] = useState(false);
+
+  const toggleSection = (i: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
+  const load = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && sections === null) {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/system-prompt`);
+        const d = await res.json();
+        if (res.ok) { setSections(d.sections || []); setFull(d.full || ""); }
+        else setError(d.error || "获取失败");
+      } catch (e: any) { setError(e.message); }
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" className="agent-fullprompt-link" onClick={load}>
+        {open ? "收起 ▴" : "查看完整系统提示词 ▾"}
+      </button>
+      {open && (
+        <div className="agent-fullprompt-box">
+          {loading && <div className="settings-loading">加载中…</div>}
+          {error && <div className="ext-error">{error}</div>}
+          {sections && (
+            <>
+              {sections.map((s, i) => {
+                const st = SECTION_STYLE[s.source] || SECTION_STYLE.sdk;
+                const isOpen = expanded.has(i);
+                return (
+                  <div key={i} className="agent-fullprompt-section">
+                    <button
+                      type="button"
+                      className="agent-fullprompt-label"
+                      style={{ color: st.color }}
+                      onClick={() => toggleSection(i)}
+                    >
+                      <span className="agent-fullprompt-chevron">{isOpen ? "▾" : "▸"}</span>
+                      {st.icon} {s.label}
+                      <span className="agent-fullprompt-count">{s.content.length} 字</span>
+                    </button>
+                    {isOpen && <pre className="agent-fullprompt-pre">{s.content}</pre>}
+                  </div>
+                );
+              })}
+              <button type="button" className="agent-fullprompt-raw" onClick={() => setShowRaw(!showRaw)}>
+                {showRaw ? "隐藏原文" : "查看完整原文"}
+              </button>
+              {showRaw && full && <pre className="agent-fullprompt-pre agent-fullprompt-rawtext">{full}</pre>}
+            </>
+          )}
+        </div>
+      )}
     </>
   );
 }

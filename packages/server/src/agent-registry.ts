@@ -221,6 +221,106 @@ export function getAgentCwd(chatSessionId: string): string | undefined {
   return registry.get(chatSessionId)?.cwd;
 }
 
+/** 获取 agent 的完整系统提示词（SDK 默认 + AGENTS.md + 角色指令） */
+export function getAgentSystemPrompt(chatSessionId: string): string | undefined {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return undefined;
+  try {
+    return (entry.agent as any).systemPrompt as string;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 遍历所有活跃 session，返回 [{ sid, systemPrompt }] */
+export function getAllActiveSystemPrompts(): Array<{ sid: string; systemPrompt: string }> {
+  const result: Array<{ sid: string; systemPrompt: string }> = [];
+  for (const [sid, entry] of registry) {
+    try {
+      const sp = (entry.agent as any).systemPrompt as string;
+      if (sp) result.push({ sid, systemPrompt: sp });
+    } catch {}
+  }
+  return result;
+}
+
+/**
+ * 把完整 systemPrompt 按来源切分成结构化分段。
+ * 拼接顺序（system-prompt.js）：
+ *   SDK默认(含Available tools + Guidelines)
+ *   → appendSection(Agent角色指令)
+ *   → <project_context>(AGENTS.md等)
+ *   → Available skills
+ *   → Current working directory
+ */
+export interface PromptSection {
+  label: string;
+  content: string;
+  source: "sdk" | "agent" | "project" | "skills" | "cwd";
+}
+
+export function parseSystemPrompt(full: string): PromptSection[] {
+  const sections: PromptSection[] = [];
+
+  // 标记及其在完整字符串中的位置
+  const markers = {
+    projectCtx: full.indexOf("<project_context>"),
+    projectCtxEnd: full.indexOf("</project_context>"),
+    skills: full.indexOf("The following skills"),
+    cwd: full.indexOf("Current working directory:"),
+  };
+  const hasCtx = markers.projectCtx >= 0 && markers.projectCtxEnd >= 0;
+  const hasSkills = markers.skills >= 0;
+  const hasCwd = markers.cwd >= 0;
+
+  // 辅助：获取 SDK 默认的结束位置（之后到 project_context/skills/cwd 之间的是 Agent 角色指令）
+  const sdkEndMarkers = ["Always read pi .md files completely", "- When working on pi topics"];
+  let sdkEnd = -1;
+  for (const m of sdkEndMarkers) {
+    const idx = full.indexOf(m);
+    if (idx >= 0) { sdkEnd = idx + m.length; break; }
+  }
+
+  // 计算各段的边界
+  const agentStart = sdkEnd >= 0 ? sdkEnd : 0;
+  const afterSdk = Math.min(
+    ...[hasCtx ? markers.projectCtx : Infinity,
+        hasSkills ? markers.skills : Infinity,
+        hasCwd ? markers.cwd : Infinity,
+        full.length].filter(v => v >= 0)
+  );
+
+  // 1. SDK 默认
+  const sdkPart = sdkEnd >= 0 ? full.slice(0, afterSdk).trim() : full.slice(0, agentStart).trim();
+  if (sdkPart) sections.push({ label: "SDK 默认", content: sdkPart, source: "sdk" });
+
+  // 2. Agent 角色指令（sdkEnd 之后，到 project_context / skills / cwd 之前）
+  if (sdkEnd >= 0 && afterSdk > sdkEnd) {
+    const agentPart = full.slice(sdkEnd, afterSdk).trim();
+    if (agentPart) sections.push({ label: "Agent 角色指令", content: agentPart, source: "agent" });
+  }
+
+  // 3. 项目上下文
+  if (hasCtx) {
+    const ctxContent = full.slice(markers.projectCtx, markers.projectCtxEnd + "</project_context>".length).trim();
+    sections.push({ label: "项目上下文 (AGENTS.md)", content: ctxContent, source: "project" });
+  }
+
+  // 4. Skills
+  if (hasSkills) {
+    const skillsEnd = hasCwd && markers.cwd > markers.skills ? markers.cwd : full.length;
+    const skillsContent = full.slice(markers.skills, skillsEnd).trim();
+    sections.push({ label: "Skills", content: skillsContent, source: "skills" });
+  }
+
+  // 5. 工作目录
+  if (hasCwd) {
+    sections.push({ label: "工作目录", content: full.slice(markers.cwd).trim(), source: "cwd" });
+  }
+
+  return sections;
+}
+
 /** 获取会话所属的工作空间 ID */
 export function getAgentWorkspaceId(chatSessionId: string): string | undefined {
   return registry.get(chatSessionId)?.workspaceId;
