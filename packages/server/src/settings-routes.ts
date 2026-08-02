@@ -8,6 +8,7 @@ import { config } from "./config.js";
 import { mcpManager } from "./mcp-manager.js";
 import { DefaultResourceLoader, DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { todoStore } from "./tools/index.js";
+import { getExtensionToolCounts } from "./agent-registry.js";
 
 export function setupSettingsRoutes(app: FastifyInstance) {
   // ── 模型列表 ──
@@ -160,14 +161,21 @@ export function setupSettingsRoutes(app: FastifyInstance) {
       const themes = resolved.themes?.map((r: any) => ({ path: r.path, enabled: r.enabled }));
 
       // 为每个 package 附加资源统计
+      // 扩展的实际工具数是运行时注册的，resolve() 只返回入口文件（=1）。
+      // 从活跃 session 拿真实注册的工具数（如果有 session 的话）。
+      const extToolCounts = getExtensionToolCounts();
       const enriched = packages.map((pkg: any) => {
         const installedPath = pkg.installedPath;
+        const pkgName = pkg.source?.replace(/^(npm:|git:)/, "");
         let resourceCount = { skills: 0, tools: 0, prompts: 0 };
         if (installedPath) {
-          // 统计该路径下的资源
           resourceCount.skills = skills?.filter((s: any) => s.path?.startsWith(installedPath)).length ?? 0;
           resourceCount.tools = extensions?.filter((e: any) => e.path?.startsWith(installedPath)).length ?? 0;
           resourceCount.prompts = prompts?.filter((p: any) => p.path?.startsWith(installedPath)).length ?? 0;
+        }
+        // 用活跃 session 的真实工具数覆盖 resolve 的入口文件计数
+        if (pkgName && extToolCounts[pkgName] !== undefined) {
+          resourceCount.tools = extToolCounts[pkgName];
         }
         return { ...pkg, ...resourceCount };
       });

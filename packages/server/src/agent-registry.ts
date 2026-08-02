@@ -202,3 +202,26 @@ export function destroyAll(): void {
 }
 
 export function getCount(): number { return registry.size; }
+
+/**
+ * 从活跃 session 获取各扩展实际注册的工具数量。
+ * resolve() 只返回入口文件数（1个），工具是运行时动态注册的，
+ * 只有从 session.getAllTools() 才能拿到真实工具列表。
+ * 返回 { "pi-web-access": 4, "@juicesharp/rpiv-todo": 1, ... }
+ */
+export function getExtensionToolCounts(): Record<string, number> {
+  for (const entry of registry.values()) {
+    const allTools: any[] = (entry.agent as any).getAllTools?.() ?? [];
+    const counts: Record<string, number> = {};
+    for (const t of allTools) {
+      const src: string = t.sourceInfo?.source || "";
+      // npm:pi-web-access → pi-web-access
+      const pkg = src.startsWith("npm:") || src.startsWith("git:")
+        ? src.replace(/^(npm:|git:)/, "")
+        : (t.sourceInfo?.path ? (t.sourceInfo.path.split("/node_modules/")[1]?.split("/")[0] ?? "") : "");
+      if (pkg) counts[pkg] = (counts[pkg] || 0) + 1;
+    }
+    return counts;
+  }
+  return {};
+}
