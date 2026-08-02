@@ -15,6 +15,7 @@ import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
 import { createTodoTool, createDelegateTool, customTools, todoStore } from "./tools/index.js";
 import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js";
+import { webSearchTool, webFetchTool } from "./tools/web-tool.js";
 import { runSubagent, abortSubagents } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
 
@@ -23,6 +24,8 @@ export interface AgentEntry {
   cwd: string;
   createdAt: number;
   unsubscribe: () => void;
+  /** skill name → SKILL.md filePath（用于 /skillname 语法预处理） */
+  skillPaths: Map<string, string>;
 }
 
 // 全局注册表：chatSessionId → AgentEntry
@@ -53,25 +56,43 @@ export async function createAgent(
   const model = getModel(provider, modelId);
   if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
 
-  const mcpTools = mcpManager.toToolDefinitions();
+  const allMcpTools = mcpManager.toToolDefinitions();
+  // 按 Agent 配置的 enabledMcpServers 白名单过滤（默认空=不启用任何 MCP server）
+  const enabledServers = agentCfg?.enabledMcpServers ?? [];
+  const mcpTools = enabledServers.length > 0
+    ? allMcpTools.filter(t => {
+        // MCP 工具名格式: mcp__<server>__<tool>
+        const parts = t.name.split("__");
+        return parts.length >= 2 && enabledServers.includes(parts[1]);
+      })
+    : [];
 
-  // 组装所有自定义工具：MCP + weather/time + todo（按会话隔离）+ delegate_task（按会话隔离）+ analyze_image（按会话隔离）
+  // 组装所有自定义工具：todo + delegate + analyze_image + web_search + web_fetch + (已过滤的)MCP
   const todoTool = createTodoTool(todoStore, chatSessionId);
   const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId, cwd });
   const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
-  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, ...mcpTools];
+  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, ...mcpTools];
+
+  // 合并 excludeTools：基础排除 + per-agent 禁用工具
+  const excludeTools = ["find", "ls", ...(agentCfg?.disabledTools ?? [])];
 
   const { session } = await createAgentSession({
     model,
     cwd,
     resourceLoader: loader,
     thinkingLevel: "medium",
-    excludeTools: ["find", "ls"],
+    excludeTools,
     customTools: allCustomTools,
   });
 
   const skillsResult = loader.getSkills();
   const skills = skillsResult.skills.map(s => ({ name: s.name, description: s.description }));
+
+  // 构建 skill name → filePath 映射（用于 /skillname 语法预处理）
+  const skillPaths = new Map<string, string>();
+  for (const s of skillsResult.skills) {
+    if (s.filePath) skillPaths.set(s.name, s.filePath);
+  }
 
   // 绑定事件 → event-bus
   const unsubscribe = eventBridge.bind(chatSessionId, session);
@@ -81,6 +102,35 @@ export async function createAgent(
     cwd,
     createdAt: Date.now(),
     unsubscribe,
+    skillPaths,
+  });
+
+  // 构建带来源分类的工具列表（用 SDK sourceInfo 分类，比硬编码准确）
+  const mcpNames = new Set(mcpTools.map(t => t.name));
+  const allToolsRaw: any[] = (session as any).getAllTools?.() ?? [];
+  const toolsWithSource = allToolsRaw.map((t: any) => {
+    const name: string = t.name;
+    const rawSource: string = t.sourceInfo?.source || "";
+    const sourcePath: string = t.sourceInfo?.path || "";
+
+    let group: string;
+    let pkg: string | undefined;
+    if (rawSource === "builtin") {
+      group = "builtin";
+    } else if (rawSource.startsWith("npm:") || rawSource.startsWith("git:")) {
+      group = "extension";
+      pkg = rawSource.replace(/^(npm:|git:)/, "");
+    } else if (rawSource === "local" || rawSource === "auto") {
+      if (mcpNames.has(name)) { group = "mcp"; }
+      else {
+        group = "extension";
+        pkg = sourcePath.split("/node_modules/")[1]?.split("/")[0];
+      }
+    } else {
+      // source=sdk → customTools（<sdk:xxx>）
+      group = "custom";
+    }
+    return { name, source: group, pkg };
   });
 
   // 发送 agent_created 事件
@@ -93,6 +143,10 @@ export async function createAgent(
       model: { provider, model: modelId, name: model.name, contextWindow: (model as any).contextWindow ?? 0 },
       mcpTools: mcpTools.length,
       todos: existingTodos,
+      tools: toolsWithSource.map(t => t.name),
+      toolsWithSource,
+      disabledTools: agentCfg?.disabledTools ?? [],
+      enabledMcpServers: enabledServers,
       agent: agentCfg
         ? { id: agentCfg.id, name: agentCfg.name, icon: agentCfg.icon }
         : { id: "default", name: "MyAgent", icon: "🤖" },
@@ -106,6 +160,11 @@ export async function createAgent(
 
 export function getAgent(chatSessionId: string): AgentSession | undefined {
   return registry.get(chatSessionId)?.agent;
+}
+
+/** 获取会话的 skill name → filePath 映射（用于 /skillname 语法预处理） */
+export function getSkillPaths(chatSessionId: string): Map<string, string> | undefined {
+  return registry.get(chatSessionId)?.skillPaths;
 }
 
 /** 获取 agent 当前模型的 input 能力（["text"] 或 ["text","image"]），用于判断是否需要图片工具兜底 */

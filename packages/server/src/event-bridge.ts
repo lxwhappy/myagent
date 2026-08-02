@@ -90,11 +90,8 @@ export class EventBridge {
         case "agent_start": send("agent_start"); autoAdvance(); break;
         case "agent_end": send("agent_end"); autoFinish(); sendUsage(); break;
         case "message_start": {
-          // 记录 LLM 调用开始时间（用 message 自带的 timestamp，比 Date.now 更准）
-          const msg = (event as any).message;
-          if (msg?.timestamp) {
-            llmTimings.set("current", { startTs: msg.timestamp });
-          }
+          // 记录 LLM 调用开始时间（用服务器本地时间，和 message_end 的 Date.now() 一致）
+          llmTimings.set("current", { startTs: Date.now() });
           break;
         }
         case "message_update": {
@@ -127,6 +124,19 @@ export class EventBridge {
             send("message_end", { usage: msg.usage, model: msg.model, debug });
           } else {
             send("message_end", { debug });
+          }
+          // API 调用日志：每次 LLM 调用结束打印模型 / token / 耗时
+          {
+            const u = msg?.usage;
+            const dur = debug?.llmDurationMs;
+            const durStr = dur != null ? (dur < 1000 ? `${dur}ms` : `${(dur / 1000).toFixed(1)}s`) : "—";
+            const tokStr = u
+              ? `↑${u.input ?? 0} ↓${u.output ?? 0}` +
+                (u.cacheRead ? ` 🗄${u.cacheRead}` : "") +
+                (u.reasoning ? ` 💭${u.reasoning}` : "") +
+                (u.cost?.total ? ` $${u.cost.total.toFixed(4)}` : "")
+              : "(无 usage)";
+            console.log(`[llm] ${chatSessionId.slice(0, 8)} ${msg?.model || "?"} · ${durStr} · ${tokStr}`);
           }
           llmTimings.delete("current");
           sendUsage();  // 每条消息结束就更新累计用量

@@ -12,6 +12,8 @@ export interface AgentConfig {
   systemPrompt: string;
   icon: string;
   model?: string;
+  disabledTools?: string[];
+  enabledMcpServers?: string[];
   isBuiltIn?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -29,7 +31,7 @@ export const useAgentsStore = create<{
   getById: (id: string) => AgentConfig | undefined;
   getActive: () => AgentConfig;
   create: (input: { name: string; description?: string; systemPrompt?: string; icon?: string; model?: string }) => Promise<AgentConfig | null>;
-  update: (id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model">>) => Promise<boolean>;
+  update: (id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model" | "disabledTools" | "enabledMcpServers">>) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
 }>((set, get) => ({
   agents: [],

@@ -3,7 +3,7 @@
 // 过程用低调样式（小字、浅色、可折叠），正文正常渲染。
 // 主会话和子 agent 视图共用同一套渲染，样式完全一致。
 
-import { useState, memo, Fragment } from "react";
+import { useState, useRef, useEffect, memo, Fragment } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock as CodeHighlight } from "./CodeBlock";
@@ -62,24 +62,8 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
         {/* ── 过程区：统一折叠/展开 + 总用时 ── */}
         <ProcessSection msg={msg} subagents={subagents} onOpenSub={onOpenSub} />
 
-        {/* 等待指示器（流式开始但还没有任何内容） */}
-        {msg.isStreaming && !msg.content && !(msg.thinking && msg.thinking.trim()) && !(msg.tools && msg.tools.length) && (
-          retryStatus ? (
-            <div className="retry-indicator">
-              <span className="retry-icon">⟳</span>
-              <span className="retry-text">
-                API 重试中（第 {retryStatus.attempt}/{retryStatus.maxAttempts} 次）…
-              </span>
-              <span className="retry-error" title={retryStatus.errorMessage}>
-                {retryStatus.errorMessage.slice(0, 60)}
-              </span>
-            </div>
-          ) : (
-            <div className="typing-indicator">
-              <span /><span /><span />
-            </div>
-          )
-        )}
+        {/* 统一生成状态指示器（重试/等待/初始三合一，同时只显示一个） */}
+        <GeneratingStatus msg={msg} retryStatus={retryStatus} />
 
         {/* 4. 正文（Markdown 渲染） */}
         {msg.content && (
@@ -151,9 +135,69 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
   );
 }
 
+// ── 统一生成状态指示器 ──
+// 状态优先级：重试 > 等待超时(>5s静默) > 初始等待(无内容)
+// 同一时刻只渲染一个，避免多个 spinner 同时出现
+function GeneratingStatus({ msg, retryStatus }: { msg: Message; retryStatus?: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null }) {
+  const [elapsed, setElapsed] = useState(0);
+  const lastActivityRef = useRef(Date.now());
+
+  // 每当 content/thinking/tools 变化 → 重置静默计时
+  const activityKey = `${msg.content?.length ?? 0}:${msg.thinking?.length ?? 0}:${msg.tools?.length ?? 0}`;
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+    setElapsed(0);
+  }, [activityKey]);
+
+  // 流式中每秒 tick
+  useEffect(() => {
+    if (!msg.isStreaming) return;
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - lastActivityRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [msg.isStreaming]);
+
+  if (!msg.isStreaming) return null;
+
+  const hasContent = !!(msg.content || (msg.thinking?.trim()) || (msg.tools?.length));
+
+  // 1. API 重试中
+  if (retryStatus) {
+    return (
+      <div className="retry-indicator">
+        <span className="retry-icon">⟳</span>
+        <span className="retry-text">API 重试中（第 {retryStatus.attempt}/{retryStatus.maxAttempts} 次）…</span>
+        <span className="retry-error" title={retryStatus.errorMessage}>{retryStatus.errorMessage.slice(0, 60)}</span>
+      </div>
+    );
+  }
+
+  // 2. 已有内容但静默 >5s → 显示等待计时
+  if (hasContent && elapsed >= 5) {
+    return (
+      <div className="gen-waiting">
+        <Spinner size={12} />
+        <span>等待响应中… {elapsed}s</span>
+      </div>
+    );
+  }
+
+  // 3. 初始等待（还没有任何内容）
+  if (!hasContent) {
+    return (
+      <div className="typing-indicator">
+        <span /><span /><span />
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ── 过程区：统一折叠/展开，显示总用时 + 步骤数 ──
 function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const tools = msg.tools || [];
   const hasInterleaved = tools.some(t => t.precedingThinking?.trim());
   const hasThinking = !!(msg.thinking && msg.thinking.trim()) || hasInterleaved;
@@ -199,7 +243,10 @@ function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents
           {!hasInterleaved && msg.thinking && msg.thinking.trim() && (
             <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
           )}
-          {tools.map(tool => (
+          {tools.map(tool => {
+            // read SKILL.md → 渲染为技能加载块
+            const skillName = detectSkillRead(tool);
+            return (
             <Fragment key={tool.toolCallId}>
               {hasInterleaved && tool.precedingThinking?.trim() && (
                 <ThinkingBlock thinking={tool.precedingThinking} />
@@ -213,11 +260,14 @@ function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents
                     <ToolBlock tool={tool} />
                   );
                 })()
+              ) : skillName ? (
+                <SkillBlock tool={tool} skillName={skillName} />
               ) : (
                 <ToolBlock tool={tool} />
               )}
             </Fragment>
-          ))}
+            );
+          })}
           {hasInterleaved && msg.thinking && msg.thinking.trim() && (
             <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
           )}
@@ -241,6 +291,32 @@ function ThinkingBlock({ thinking, streaming }: { thinking: string; streaming?: 
       {open && (
         <div className="tl-detail">
           <pre className="tl-text">{thinking}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 技能加载块：读 SKILL.md 时渲染为醒目的技能步骤 ──
+function SkillBlock({ tool, skillName }: { tool: ToolExecution; skillName: string }) {
+  const [open, setOpen] = useState(false);
+  const running = tool.status === "running";
+  const outputText = tool.output != null ? fmtIO(tool.output, 2000) : "";
+  return (
+    <div className={`tl-item tl-skill${open ? " open" : ""} tl-${tool.status}`}>
+      <button className="tl-header" onClick={() => setOpen(!open)}>
+        <span className="tl-icon">{running ? <Spinner size={13} /> : "⚡"}</span>
+        <span className="tl-label">加载技能</span>
+        <span className="tl-summary">{skillName}</span>
+        <span className="tl-status">{running ? "加载中…" : ""}</span>
+        <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
+      </button>
+      {open && outputText && (
+        <div className="tl-detail">
+          <div className="tl-section">
+            <div className="tl-section-label">SKILL.md</div>
+            <pre className="tl-code"><code>{outputText}</code></pre>
+          </div>
         </div>
       )}
     </div>
@@ -381,6 +457,20 @@ function CodeBlock({ language, value }: { language: string; value: string }) {
 function fmtIO(v: unknown, max = 0): string {
   const s = typeof v === "string" ? v : JSON.stringify(v, null, 2);
   return max && s.length > max ? s.slice(0, max) + "\n…" : s;
+}
+
+/** 检测一个工具调用是否在读取 SKILL.md，返回技能名或 undefined */
+function detectSkillRead(tool: ToolExecution): string | undefined {
+  if (tool.tool !== "read") return undefined;
+  const input = tool.input;
+  let filePath = "";
+  if (typeof input === "string") filePath = input;
+  else if (input && typeof input === "object") {
+    const o = input as Record<string, unknown>;
+    filePath = String(o.file_path ?? o.path ?? o.filePath ?? o.file ?? "");
+  }
+  const m = filePath.match(/\/([^/]+)\/SKILL\.md$/i);
+  return m ? m[1] : undefined;
 }
 
 function extractToolSummary(tool: ToolExecution): string {

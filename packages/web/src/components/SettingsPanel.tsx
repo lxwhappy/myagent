@@ -6,7 +6,7 @@ import { Icon } from "./Icon";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useDebugStore } from "../stores/debug";
 
-type Tab = "models" | "skills" | "mcp" | "workspace" | "debug";
+type Tab = "models" | "skills" | "extensions" | "mcp" | "workspace" | "debug";
 
 interface ModelInfo {
   id: string;
@@ -57,6 +57,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
         <div className="settings-tabs">
           <button className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>🤖 模型</button>
           <button className={tab === "skills" ? "active" : ""} onClick={() => setTab("skills")}>⚡ Skills</button>
+          <button className={tab === "extensions" ? "active" : ""} onClick={() => setTab("extensions")}>📦 扩展</button>
           <button className={tab === "mcp" ? "active" : ""} onClick={() => setTab("mcp")}>🔌 MCP</button>
           <button className={tab === "workspace" ? "active" : ""} onClick={() => setTab("workspace")}>📁 工作空间</button>
           <button className={tab === "debug" ? "active" : ""} onClick={() => setTab("debug")}>🔧 Debug</button>
@@ -64,6 +65,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
         <div className="settings-body">
           {tab === "models" && <ModelsTab />}
           {tab === "skills" && <SkillsTab />}
+          {tab === "extensions" && <ExtensionsTab />}
           {tab === "mcp" && <McpTab />}
           {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
           {tab === "debug" && <DebugTab />}
@@ -542,6 +544,139 @@ function DebugTab() {
           ? "✅ 已开启 — 对话区的每条 AI 回复下方会显示详细的时间线。"
           : "关闭 — 对话区不显示调试信息。"}
       </div>
+    </div>
+  );
+}
+
+// ── 扩展管理 ──
+interface ExtPackage {
+  source: string;
+  scope: "user" | "project";
+  filtered: boolean;
+  installedPath?: string;
+  skills: number;
+  tools: number;
+  prompts: number;
+}
+
+function ExtensionsTab() {
+  const [packages, setPackages] = useState<ExtPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [installSource, setInstallSource] = useState("");
+  const [action, setAction] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    fetch("/api/extensions").then(r => r.json()).then(d => {
+      setPackages(d.packages || []);
+      setError(d.error || null);
+      setLoading(false);
+    }).catch(() => { setLoading(false); });
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleInstall = async () => {
+    const src = installSource.trim();
+    if (!src) return;
+    setAction(`安装 ${src}…`);
+    setError(null);
+    try {
+      const res = await fetch("/api/extensions/install", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: src }),
+      });
+      const d = await res.json();
+      if (!d.ok) setError(d.error);
+      else setInstallSource("");
+      load();
+    } catch (e: any) { setError(e.message); }
+    setAction(null);
+  };
+
+  const handleUninstall = async (source: string) => {
+    setAction(`卸载 ${source}…`);
+    setError(null);
+    try {
+      const res = await fetch("/api/extensions/uninstall", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      });
+      const d = await res.json();
+      if (!d.ok) setError(d.error);
+      load();
+    } catch (e: any) { setError(e.message); }
+    setAction(null);
+  };
+
+  const sourceIcon = (source: string) => {
+    if (source.startsWith("npm:")) return "📦";
+    if (source.startsWith("git:")) return "🔧";
+    return "📁";
+  };
+  const sourceName = (source: string) => {
+    return source.replace(/^(npm:|git:)/, "").replace(/^@/, "").split("/").pop() || source;
+  };
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">
+        扩展管理
+        {packages.length > 0 && <span className="settings-count">{packages.length}</span>}
+      </div>
+      <p className="settings-desc">
+        安装第三方扩展来添加工具、技能、提示模板。
+        来源格式：<code>npm:@scope/name</code>、<code>git:https://...</code>、<code>./local/path</code>
+      </p>
+
+      <div className="ext-install-bar">
+        <input
+          className="ext-input"
+          type="text"
+          placeholder="npm:@scope/package-name"
+          value={installSource}
+          onChange={(e) => setInstallSource(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleInstall()}
+          disabled={!!action}
+        />
+        <button className="ext-install-btn" onClick={handleInstall} disabled={!installSource.trim() || !!action}>
+          安装
+        </button>
+      </div>
+
+      {error && <div className="ext-error">{error}</div>}
+      {action && <div className="ext-action">{action}</div>}
+
+      {loading ? (
+        <div className="ext-empty">加载中…</div>
+      ) : packages.length === 0 ? (
+        <div className="ext-empty">还没有安装任何扩展</div>
+      ) : (
+        <div className="ext-list">
+          {packages.map((pkg, i) => (
+            <div key={i} className="ext-card">
+              <div className="ext-card-icon">{sourceIcon(pkg.source)}</div>
+              <div className="ext-card-info">
+                <div className="ext-card-name">{sourceName(pkg.source)}</div>
+                <div className="ext-card-source" title={pkg.source}>{pkg.source}</div>
+                <div className="ext-card-meta">
+                  <span className="ext-badge">{pkg.scope === "user" ? "全局" : "项目"}</span>
+                  {pkg.skills > 0 && <span className="ext-badge">⚡ {pkg.skills}</span>}
+                  {pkg.tools > 0 && <span className="ext-badge">🔧 {pkg.tools}</span>}
+                  {pkg.prompts > 0 && <span className="ext-badge">📝 {pkg.prompts}</span>}
+                  {!pkg.installedPath && <span className="ext-badge ext-badge-warn">未安装</span>}
+                </div>
+              </div>
+              <button className="ext-uninstall-btn" onClick={() => handleUninstall(pkg.source)} disabled={!!action} title="卸载">
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="ext-hint">安装/卸载后需新建会话生效</div>
     </div>
   );
 }

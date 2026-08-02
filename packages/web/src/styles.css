@@ -1503,6 +1503,100 @@
   color: var(--muted);
   margin-top: 4px;
 }
+
+/* ── 扩展管理 ── */
+.ext-install-bar { display: flex; gap: 8px; margin: 12px 0; }
+.ext-input {
+  flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; background: var(--surface); color: var(--fg);
+  font-family: var(--font-mono, monospace);
+}
+.ext-input:focus { outline: none; border-color: var(--accent); }
+.ext-install-btn {
+  padding: 8px 20px; border: none; border-radius: var(--radius-sm);
+  background: var(--accent); color: var(--accent-on); font-size: 13px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+}
+.ext-install-btn:hover { background: var(--accent-hover); }
+.ext-install-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ext-list { display: flex; flex-direction: column; gap: 8px; }
+.ext-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); transition: border-color 0.12s;
+}
+.ext-card:hover { border-color: var(--accent-tint, rgba(47,111,235,0.15)); }
+.ext-card-icon { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+.ext-card-info { flex: 1; min-width: 0; }
+.ext-card-name { font-size: 13px; font-weight: 600; color: var(--fg); margin-bottom: 2px; }
+.ext-card-source {
+  font-size: 11px; color: var(--muted); font-family: var(--font-mono, monospace);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ext-card-meta { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.ext-badge {
+  font-size: 10px; padding: 2px 6px; border-radius: 10px;
+  background: color-mix(in oklab, var(--accent), transparent 90%);
+  color: var(--accent);
+}
+.ext-badge-warn {
+  background: color-mix(in oklab, var(--warn, #eab308), transparent 88%);
+  color: var(--warn, #eab308);
+}
+.ext-uninstall-btn {
+  flex-shrink: 0; border: none; background: transparent; cursor: pointer;
+  font-size: 16px; padding: 4px 6px; border-radius: var(--radius-sm); opacity: 0.5;
+  transition: opacity 0.12s, background 0.12s;
+}
+.ext-uninstall-btn:hover { opacity: 1; background: color-mix(in oklab, var(--danger, #dc2626), transparent 90%); }
+.ext-uninstall-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.ext-error {
+  padding: 8px 12px; margin-bottom: 8px; font-size: 12px;
+  background: color-mix(in oklab, var(--danger, #dc2626), transparent 92%);
+  color: var(--danger, #dc2626); border-radius: var(--radius-sm);
+}
+.ext-action { padding: 8px 12px; font-size: 12px; color: var(--accent); }
+.ext-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
+.ext-hint { margin-top: 12px; font-size: 11px; color: var(--muted); }
+
+/* ── Agent 工具开关 ── */
+.agent-tools-hint { font-weight: 400; font-size: 11px; color: var(--muted); }
+.agent-tools-summary { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.agent-tools-group { margin-bottom: 10px; }
+.agent-tools-group-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  margin-bottom: 5px; display: flex; align-items: center; gap: 4px;
+}
+.agent-tools-group-count {
+  font-weight: 400; opacity: 0.6;
+}
+.agent-tools-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-tool-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+  background: var(--bg); cursor: pointer; font-size: 12px;
+  font-family: var(--font-mono, monospace); color: var(--fg);
+  transition: all 0.12s;
+}
+.agent-tool-chip.on {
+  border-color: var(--accent); background: var(--accent-tint); color: var(--accent);
+}
+.agent-tool-chip.off { opacity: 0.5; color: var(--muted); }
+.agent-tool-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent);
+}
+.agent-tool-chip.off .agent-tool-dot { background: var(--muted); }
+.agent-tool-chip:hover { transform: translateY(-1px); }
+.agent-tool-chip.on:hover { background: color-mix(in oklab, var(--accent-tint), var(--accent) 8%); }
+.agent-tool-pkg {
+  font-size: 9px; opacity: 0.5; margin-left: 2px;
+  font-family: var(--font-sans, sans-serif);
+}
+.agent-tools-fallback-hint { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+
 /* ── 模型/Token 显示 ── */
 .model-token-bar {
   display: flex;
@@ -3022,8 +3116,10 @@
 .agent-emoji-input {
   width: 48px; height: 38px; text-align: center; font-size: 20px;
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--fg);
+  background: var(--bg); color: var(--fg);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+.agent-emoji-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 .agent-emoji-choices { display: flex; gap: 4px; flex-wrap: wrap; }
 .agent-emoji-choice {
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
@@ -3037,9 +3133,10 @@
   padding: 10px 12px; font-size: 13px; line-height: 1.6;
   font-family: var(--mono, monospace); box-sizing: border-box;
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--fg);
+  background: var(--bg); color: var(--fg);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.agent-edit-prompt:focus { outline: none; border-color: var(--accent); }
+.agent-edit-prompt:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 .agent-edit-hint { font-size: 11px; color: var(--muted); }
 .agent-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .settings-close-btn {
@@ -3056,9 +3153,11 @@
 .settings-input {
   width: 100%; padding: 8px 12px; font-size: 13px; box-sizing: border-box;
   border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--fg);
+  background: var(--bg); color: var(--fg);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.settings-input:focus { outline: none; border-color: var(--accent); }
+.settings-input:hover { border-color: color-mix(in oklab, var(--fg), transparent 70%); }
+.settings-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 
 /* ── 子 agent 状态面板（delegate_task）── */
 .subagent-panel {
@@ -3293,6 +3392,12 @@
 .tl-running .tl-label, .tl-running .tl-icon { color: var(--accent); }
 .tl-error .tl-label, .tl-error .tl-icon { color: #e54d42; }
 .tl-error .tl-status { color: #e54d42; }
+
+/* 技能加载块：强调色突出 */
+.tl-skill .tl-label { color: var(--accent); font-weight: 600; }
+.tl-skill .tl-icon { color: var(--accent); }
+.tl-skill .tl-summary { opacity: 0.85; font-weight: 500; }
+.tl-skill .tl-status { color: var(--accent); }
 
 /* 子 agent 卡片可点击跳转 */
 .tl-clickable:hover { background: var(--bg); }

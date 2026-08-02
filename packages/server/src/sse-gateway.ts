@@ -9,7 +9,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
-import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput } from "./agent-registry.js";
+import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput, getSkillPaths } from "./agent-registry.js";
 import { abortSubagents } from "./subagent-runner.js";
 import { pushPendingImages } from "./tools/image-tool.js";
 import { todoStore } from "./tools/index.js";
@@ -112,6 +112,39 @@ export function setupSSEGateway(app: FastifyInstance) {
       try {
         await todoStore.clear(id);
       } catch {}
+
+      // ── /skillname 语法预处理 ──
+      // 用户通过 skill picker 插入 /skillname，但 LLM 不认识这个语法。
+      // 拦截并翻译成明确指令：去掉 /skillname 前缀 + 追加系统提示要求 read SKILL.md
+      const skillPaths = getSkillPaths(id);
+      if (skillPaths && skillPaths.size > 0) {
+        const slashMatch = message.match(/(?:^|\s)\/([a-zA-Z0-9][\w.-]*)/);
+        if (slashMatch) {
+          const requestedName = slashMatch[1];
+          // 精确匹配 → 模糊匹配（前缀/包含）
+          let matched: [string, string] | undefined;
+          if (skillPaths.has(requestedName)) {
+            matched = [requestedName, skillPaths.get(requestedName)!];
+          } else {
+            for (const [name, path] of skillPaths) {
+              if (name.startsWith(requestedName) || name.includes(requestedName)) {
+                matched = [name, path];
+                break;
+              }
+            }
+          }
+          if (matched) {
+            const [skillName, skillPath] = matched;
+            // 移除 /skillname 部分，保留其余文本
+            message = message.replace(slashMatch[0], "").trim();
+            const hint = `\n\n[系统提示：用户指定使用 skill "${skillName}"。请立即用 read 工具读取 ${skillPath}，按照其中的指令完成任务。]`;
+            message = message + hint;
+            // 立即通知前端技能已加载（不等 LLM read SKILL.md）
+            emit({ type: "skill_used", chatSessionId: id, payload: { name: skillName, path: skillPath }, ts: Date.now() });
+            console.log(`[prompt] ${id.slice(0, 8)} skill 注入: ${skillName} → ${skillPath}`);
+          }
+        }
+      }
 
       // 不 await — 事件通过 SSE 流式返回
       // ── 空闲超时保护 ──

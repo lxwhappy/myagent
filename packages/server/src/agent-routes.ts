@@ -33,7 +33,7 @@ export function setupAgentRoutes(app: FastifyInstance) {
 
   app.put("/api/agents/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as Partial<{ name: string; description: string; systemPrompt: string; icon: string; model: string }> | null;
+    const body = req.body as Partial<{ name: string; description: string; systemPrompt: string; icon: string; model: string; disabledTools: string[]; enabledMcpServers: string[] }> | null;
     const agent = await agentConfigStore.update(id, body || {});
     if (!agent) { reply.status(404).send({ error: "not found" }); return; }
     reply.send({ agent });

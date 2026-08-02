@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { getModels, getProviders, getModel } from "@earendil-works/pi-ai/compat";
 import { config } from "./config.js";
 import { mcpManager } from "./mcp-manager.js";
-import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
+import { DefaultResourceLoader, DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { todoStore } from "./tools/index.js";
 
 export function setupSettingsRoutes(app: FastifyInstance) {
@@ -127,6 +127,88 @@ export function setupSettingsRoutes(app: FastifyInstance) {
       console.log(`[skills] deleted: ${safeName}`);
       return { ok: true };
     } catch (e: any) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // ── 扩展管理 ──
+  // SDK 的 DefaultPackageManager 提供安装/卸载/列表能力。
+  // 扩展可以提供 tools / skills / prompts / themes。
+  // 安装来源格式：npm:@scope/name | git:https://... | ./local/path
+
+  // 获取 PackageManager 单例（延迟创建）
+  let _pkgMgr: DefaultPackageManager | null = null;
+  function getPkgMgr(): DefaultPackageManager {
+    if (_pkgMgr) return _pkgMgr;
+    const cwd = config.workDir;
+    const agentDir = process.env.HOME + "/.pi/agent";
+    const sm = SettingsManager.create(cwd, agentDir);
+    _pkgMgr = new DefaultPackageManager({ cwd, agentDir, settingsManager: sm });
+    return _pkgMgr;
+  }
+
+  // 列出已安装扩展 + 自动发现的资源
+  app.get("/api/extensions", async () => {
+    try {
+      const pm = getPkgMgr();
+      const packages = pm.listConfiguredPackages();
+      // resolve 获取每个扩展实际提供的资源
+      const resolved = await pm.resolve();
+      const skills = resolved.skills?.map((r: any) => ({ path: r.path, enabled: r.enabled }));
+      const extensions = resolved.extensions?.map((r: any) => ({ path: r.path, enabled: r.enabled }));
+      const prompts = resolved.prompts?.map((r: any) => ({ path: r.path, enabled: r.enabled }));
+      const themes = resolved.themes?.map((r: any) => ({ path: r.path, enabled: r.enabled }));
+
+      // 为每个 package 附加资源统计
+      const enriched = packages.map((pkg: any) => {
+        const installedPath = pkg.installedPath;
+        let resourceCount = { skills: 0, tools: 0, prompts: 0 };
+        if (installedPath) {
+          // 统计该路径下的资源
+          resourceCount.skills = skills?.filter((s: any) => s.path?.startsWith(installedPath)).length ?? 0;
+          resourceCount.tools = extensions?.filter((e: any) => e.path?.startsWith(installedPath)).length ?? 0;
+          resourceCount.prompts = prompts?.filter((p: any) => p.path?.startsWith(installedPath)).length ?? 0;
+        }
+        return { ...pkg, ...resourceCount };
+      });
+
+      return { packages: enriched, totalSkills: skills?.length ?? 0 };
+    } catch (e: any) {
+      console.error("[extensions] list error:", e.message);
+      return { packages: [], error: e.message };
+    }
+  });
+
+  // 安装扩展
+  app.post("/api/extensions/install", async (req: any, _reply) => {
+    const { source } = req.body || {};
+    if (!source || typeof source !== "string") {
+      return { ok: false, error: "source required (e.g. npm:@scope/name, git:https://..., ./path)" };
+    }
+    try {
+      const pm = getPkgMgr();
+      await pm.installAndPersist(source, {});
+      console.log(`[extensions] installed: ${source}`);
+      return { ok: true };
+    } catch (e: any) {
+      console.error("[extensions] install error:", e.message);
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // 卸载扩展
+  app.post("/api/extensions/uninstall", async (req: any, _reply) => {
+    const { source } = req.body || {};
+    if (!source || typeof source !== "string") {
+      return { ok: false, error: "source required" };
+    }
+    try {
+      const pm = getPkgMgr();
+      await pm.removeAndPersist(source, {});
+      console.log(`[extensions] uninstalled: ${source}`);
+      return { ok: true };
+    } catch (e: any) {
+      console.error("[extensions] uninstall error:", e.message);
       return { ok: false, error: e.message };
     }
   });

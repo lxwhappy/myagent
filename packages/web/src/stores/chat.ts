@@ -139,6 +139,9 @@ interface SessionChatState {
   subagents: SubagentState[];   // 活跃/刚完成的子 agent（delegate_task）
   agentId?: string;            // 该会话使用的 Agent 预设 id
   agent?: AgentInfo;           // 该会话使用的 Agent 显示信息
+  availableTools: string[];    // 该会话实际可用的工具名列表
+  toolsWithSource: { name: string; source: string; pkg?: string }[]; // 带来源分类的工具列表
+  disabledTools: string[];     // 该会话被禁用的工具名列表
   retryStatus?: {              // API 自动重试状态（SDK retry）
     attempt: number;
     maxAttempts: number;
@@ -148,7 +151,7 @@ interface SessionChatState {
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], retryStatus: null });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
@@ -162,7 +165,7 @@ interface ChatStore {
   setActiveSub: (subId: string | null) => void;
   setActiveChatSession: (id: string | null) => void;
   ensureSession: (id: string) => void;
-  setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo, agent?: AgentInfo) => void;
+  setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo, agent?: AgentInfo, tools?: string[], disabledTools?: string[], toolsWithSource?: { name: string; source: string; pkg?: string }[]) => void;
   setSessionAgent: (id: string, agentId: string, agent: AgentInfo) => void;
   removeSession: (id: string) => void;
   loadMessages: (id: string, messages: Message[]) => void;
@@ -210,9 +213,9 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   ensureSession: (id) => set((s) => s.sessions[id] ? {} : { sessions: { ...s.sessions, [id]: empty() } }),
 
-  setAgentCreated: (id, skills, modelInfo, agent) => set((s) => {
+  setAgentCreated: (id, skills, modelInfo, agent, tools, disabledTools, toolsWithSource) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
-    return { sessions: { ...s.sessions, [id]: { ...sess, agentCreated: true, skills: skills || [], modelInfo: modelInfo ?? sess.modelInfo, agent: agent ?? sess.agent } } };
+    return { sessions: { ...s.sessions, [id]: { ...sess, agentCreated: true, skills: skills || [], modelInfo: modelInfo ?? sess.modelInfo, agent: agent ?? sess.agent, availableTools: tools ?? [], disabledTools: disabledTools ?? [], toolsWithSource: toolsWithSource ?? [] } } };
   }),
 
   setSessionAgent: (id, agentId, agent) => set((s) => {

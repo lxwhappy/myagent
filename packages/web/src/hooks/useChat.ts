@@ -162,7 +162,7 @@ export function useChat() {
       switch (msg.type) {
         case "agent_created":
           if (sid) {
-            chat.setAgentCreated(sid, msg.payload?.skills, msg.payload?.model, msg.payload?.agent);
+            chat.setAgentCreated(sid, msg.payload?.skills, msg.payload?.model, msg.payload?.agent, msg.payload?.tools, msg.payload?.disabledTools, msg.payload?.toolsWithSource);
             if (msg.payload?.todos) chat.setTodos(sid, msg.payload.todos);
             // 同步会话的 agentId + 显示信息（来自服务端创建结果）
             if (msg.payload?.agent) chat.setSessionAgent(sid, msg.payload.agent.id, msg.payload.agent);

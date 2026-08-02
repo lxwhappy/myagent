@@ -20,6 +20,8 @@ export interface AgentConfig {
   systemPrompt: string; // 追加到 AGENTS.md 之后
   icon: string;         // emoji
   model?: string;       // 可选：覆盖默认模型
+  disabledTools?: string[]; // 可选：禁用的工具名列表（默认空=全部启用）
+  enabledMcpServers?: string[]; // 可选：启用的 MCP server 名列表（默认空=不启用任何 MCP）
   isBuiltIn?: boolean;  // 内置不可删
   createdAt: number;
   updatedAt: number;
@@ -99,7 +101,7 @@ export const agentConfigStore = {
     return agent;
   },
 
-  async update(id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model">>): Promise<AgentConfig | undefined> {
+  async update(id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model" | "disabledTools" | "enabledMcpServers">>): Promise<AgentConfig | undefined> {
     await ensureLoaded();
     const agent = agents.find(a => a.id === id);
     if (!agent) return undefined;
@@ -108,6 +110,8 @@ export const agentConfigStore = {
     if (patch.systemPrompt !== undefined) agent.systemPrompt = patch.systemPrompt;
     if (patch.icon !== undefined) agent.icon = patch.icon;
     if (patch.model !== undefined) agent.model = patch.model || undefined;
+    if (patch.disabledTools !== undefined) agent.disabledTools = patch.disabledTools.length > 0 ? patch.disabledTools : undefined;
+    if (patch.enabledMcpServers !== undefined) agent.enabledMcpServers = patch.enabledMcpServers.length > 0 ? patch.enabledMcpServers : undefined;
     agent.updatedAt = Date.now();
     await persist();
     return agent;
