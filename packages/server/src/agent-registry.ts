@@ -16,17 +16,65 @@ import { emit } from "./event-bus.js";
 import { createTodoTool, createDelegateTool, customTools, todoStore } from "./tools/index.js";
 import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js";
 import { webSearchTool, webFetchTool } from "./tools/web-tool.js";
+import { createCronTool } from "./tools/cron-tool.js";
+import { setFireFn } from "./tools/cron-store.js";
 import { runSubagent, abortSubagents } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
+import { chatSessionStore } from "./chat-sessions.js";
 
 export interface AgentEntry {
   agent: AgentSession;
   cwd: string;
+  workspaceId?: string;       // 所属工作空间（定时任务创建时用）
   createdAt: number;
   unsubscribe: () => void;
   /** skill name → SKILL.md filePath（用于 /skillname 语法预处理） */
   skillPaths: Map<string, string>;
 }
+
+// ── 定时任务触发回调：创建真实 ChatSession + agent session 执行 ──
+// 触发后在对应项目下产生可见的会话记录，用户刷新会话列表即可看到。
+import { config as _config } from "./config.js";
+import type { CronJob } from "./tools/cron-store.js";
+setFireFn(async (job: CronJob) => {
+  const wsId = job.workspaceId || "default";
+  const title = `[定时] ${job.name} ${new Date().toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+  try {
+    // 1. 创建真实的 ChatSession（持久化，前端会话列表可见）
+    const chatSession = await chatSessionStore.create(wsId, title);
+
+    // 2. 创建 agent session
+    await createAgent(chatSession.id, { cwd: job.cwd, agentId: job.agentId });
+    const entry = registry.get(chatSession.id);
+    if (!entry) return { error: "agent session 创建失败" };
+
+    // 3. 存 user 消息
+    const fullPrompt = `[定时任务「${job.name}」触发]\n${job.prompt}`;
+    await chatSessionStore.addMessage(chatSession.id, "user", fullPrompt);
+
+    // 4. 执行
+    await entry.agent.prompt(fullPrompt);
+
+    // 5. 提取 agent 最后一条回复，存为 assistant 消息
+    const messages = entry.agent.messages || [];
+    let output = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg: any = messages[i];
+      if (msg.role === "assistant" && msg.content) {
+        output = typeof msg.content === "string"
+          ? msg.content
+          : (Array.isArray(msg.content) ? msg.content.map((b: any) => b.text || "").join("") : "");
+        if (output) break;
+      }
+    }
+    const finalOutput = output || "(无输出)";
+    await chatSessionStore.addMessage(chatSession.id, "assistant", finalOutput);
+
+    return { output: finalOutput };
+  } catch (err: any) {
+    return { error: err?.message || String(err) };
+  }
+});
 
 // 全局注册表：chatSessionId → AgentEntry
 const registry = new Map<string, AgentEntry>();
@@ -71,7 +119,8 @@ export async function createAgent(
   const todoTool = createTodoTool(todoStore, chatSessionId);
   const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId, cwd });
   const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
-  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, ...mcpTools];
+  const cronTool = createCronTool(chatSessionId);
+  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, cronTool, ...mcpTools];
 
   // 合并 excludeTools：基础排除 + per-agent 禁用工具
   const excludeTools = ["find", "ls", ...(agentCfg?.disabledTools ?? [])];
@@ -97,9 +146,14 @@ export async function createAgent(
   // 绑定事件 → event-bus
   const unsubscribe = eventBridge.bind(chatSessionId, session);
 
+  // 查询会话所属的工作空间
+  const chatSession = await chatSessionStore.get(chatSessionId);
+  const workspaceId = chatSession?.workspaceId;
+
   registry.set(chatSessionId, {
     agent: session,
     cwd,
+    workspaceId,
     createdAt: Date.now(),
     unsubscribe,
     skillPaths,
@@ -160,6 +214,16 @@ export async function createAgent(
 
 export function getAgent(chatSessionId: string): AgentSession | undefined {
   return registry.get(chatSessionId)?.agent;
+}
+
+/** 获取会话的工作目录（定时任务创建时用，确保任务绑定到当前项目） */
+export function getAgentCwd(chatSessionId: string): string | undefined {
+  return registry.get(chatSessionId)?.cwd;
+}
+
+/** 获取会话所属的工作空间 ID */
+export function getAgentWorkspaceId(chatSessionId: string): string | undefined {
+  return registry.get(chatSessionId)?.workspaceId;
 }
 
 /** 获取会话的 skill name → filePath 映射（用于 /skillname 语法预处理） */

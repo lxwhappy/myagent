@@ -3518,3 +3518,132 @@
   gap: 4px;
   animation: process-slide-in 0.2s ease;
 }
+
+/* ── 定时任务面板 ── */
+.settings-cron { display: flex; flex-direction: column; gap: 12px; }
+
+.cron-add-btn {
+  align-self: flex-start;
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+.cron-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.cron-create-form {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.cron-type-row { display: flex; gap: 4px; }
+.cron-type-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.cron-type-btn:hover { border-color: var(--accent); }
+.cron-type-btn.active { border-color: var(--accent); background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.cron-ws-select {
+  margin-left: auto;
+  padding: 5px 10px; font-size: 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--fg);
+  cursor: pointer;
+}
+.cron-ws-select:focus { outline: none; border-color: var(--accent); }
+
+.cron-job-list { display: flex; flex-direction: column; gap: 6px; }
+.cron-job-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color 0.12s;
+}
+.cron-job-card:hover { border-color: color-mix(in oklab, var(--fg), transparent 70%); }
+.cron-job-card.disabled { opacity: 0.55; }
+.cron-job-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.cron-job-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cron-job-name { font-size: 14px; font-weight: 600; color: var(--fg); }
+.cron-job-schedule { font-size: 11px; color: var(--muted); font-family: var(--font-mono, monospace); }
+.cron-job-stats { display: flex; gap: 12px; font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.cron-job-next { white-space: nowrap; }
+.cron-job-err { color: var(--danger); font-weight: 600; }
+.cron-job-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.cron-job-actions button {
+  width: 28px; height: 28px;
+  border: none; background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 14px;
+  color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+}
+.cron-job-actions button:hover { background: var(--bg); color: var(--fg); }
+.cron-job-actions button:disabled { opacity: 0.4; cursor: default; }
+
+/* 状态圆点 */
+.cron-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.cron-status-dot.on { background: var(--success); }
+.cron-status-dot.off { background: var(--muted); opacity: 0.4; }
+.cron-status-dot.running { background: var(--accent); animation: cron-pulse 1.2s ease-in-out infinite; }
+.cron-status-dot.success { background: var(--success); }
+.cron-status-dot.error { background: var(--danger); }
+@keyframes cron-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* 详情页 */
+.cron-detail-head { display: flex; align-items: center; gap: 8px; }
+.cron-back {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--fg); font-size: 12px; cursor: pointer;
+}
+.cron-back:hover { border-color: var(--accent); color: var(--accent); }
+.cron-detail-name { font-size: 16px; font-weight: 600; }
+.cron-detail-schedule { font-size: 12px; color: var(--muted); font-family: var(--font-mono, monospace); margin-left: auto; }
+.cron-detail-meta { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+.cron-detail-prompt {
+  font-size: 13px; line-height: 1.6; color: var(--fg);
+  padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+}
+.cron-section-title { font-size: 13px; font-weight: 600; color: var(--fg); margin-top: 4px; }
+
+/* 历史记录 */
+.cron-history-list { display: flex; flex-direction: column; gap: 4px; }
+.cron-history-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.cron-history-item.status-success { border-left-color: var(--success); }
+.cron-history-item.status-error { border-left-color: var(--danger); }
+.cron-history-item.status-running { border-left-color: var(--accent); }
+.cron-history-head { display: flex; align-items: center; gap: 8px; }
+.cron-history-time { font-size: 12px; color: var(--muted); }
+.cron-history-dur { font-size: 11px; color: var(--muted); margin-left: auto; }
+.cron-history-output {
+  margin-top: 4px; font-size: 12px; color: var(--fg);
+  line-height: 1.5; max-height: 120px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-word;
+}
+.cron-history-error {
+  margin-top: 4px; font-size: 12px; color: var(--danger);
+  line-height: 1.5;
+}

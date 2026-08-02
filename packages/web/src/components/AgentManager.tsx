@@ -238,6 +238,7 @@ const FALLBACK_TOOLS_SRC: ToolItem[] = [
   { name: "zai_web_search", source: "custom" }, { name: "web_fetch", source: "custom" },
   { name: "analyze_image", source: "custom" }, { name: "todo", source: "custom" },
   { name: "delegate_task", source: "custom" },
+  { name: "cron_task", source: "custom" },
   { name: "source_check", source: "extension", pkg: "pi-web-access" },
   { name: "fetch_content", source: "extension", pkg: "pi-web-access" },
   { name: "get_search_content", source: "extension", pkg: "pi-web-access" },

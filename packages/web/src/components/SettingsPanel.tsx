@@ -6,7 +6,7 @@ import { Icon } from "./Icon";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useDebugStore } from "../stores/debug";
 
-type Tab = "models" | "skills" | "extensions" | "mcp" | "workspace" | "debug";
+type Tab = "models" | "skills" | "extensions" | "mcp" | "cron" | "workspace" | "debug";
 
 interface ModelInfo {
   id: string;
@@ -52,6 +52,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
     { key: "skills", icon: "⚡", label: "Skills" },
     { key: "extensions", icon: "📦", label: "扩展" },
     { key: "mcp", icon: "🔌", label: "MCP" },
+    { key: "cron", icon: "🕐", label: "定时任务" },
     { key: "workspace", icon: "📁", label: "工作空间" },
     { key: "debug", icon: "🔧", label: "Debug" },
   ];
@@ -81,6 +82,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
             {tab === "skills" && <SkillsTab />}
             {tab === "extensions" && <ExtensionsTab />}
             {tab === "mcp" && <McpTab />}
+            {tab === "cron" && <CronTab />}
             {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
             {tab === "debug" && <DebugTab />}
           </div>
@@ -692,6 +694,214 @@ function ExtensionsTab() {
       )}
 
       <div className="ext-hint">安装/卸载后需新建会话生效</div>
+    </div>
+  );
+}
+
+// ── 定时任务 Tab ──
+interface CronJobInfo {
+  id: string; name: string; schedule: string; prompt: string;
+  enabled: boolean; type: "cron" | "once";
+  workspaceId?: string;
+  lastRun?: number; nextRun?: number; runCount: number;
+  lastStatus?: "success" | "error" | "running";
+  description?: string;
+}
+interface CronExecInfo {
+  id: string; jobId: string; jobName: string;
+  startedAt: number; finishedAt?: number; durationMs?: number;
+  status: "running" | "success" | "error";
+  prompt: string; output?: string; error?: string;
+}
+
+function fmtTime(ts?: number) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function CronTab() {
+  const workspaces = useWorkspaceStore(s => s.workspaces);
+  const wsName = (wsId?: string) => workspaces.find(w => w.id === wsId)?.name || wsId || "默认";
+  const [jobs, setJobs] = useState<CronJobInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<CronJobInfo | null>(null);
+  const [history, setHistory] = useState<CronExecInfo[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [running, setRunning] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    fetch("/api/cron/jobs").then(r => r.json()).then(d => {
+      setJobs(d.jobs || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const loadHistory = async (jobId: string) => {
+    const res = await fetch(`/api/cron/jobs/${encodeURIComponent(jobId)}/history`);
+    const d = await res.json();
+    setHistory(d.executions || []);
+  };
+
+  const handleAction = async (id: string, action: "pause" | "resume" | "run" | "delete") => {
+    if (action === "delete") {
+      if (!confirm("确定删除这个定时任务？")) return;
+      await fetch(`/api/cron/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+    } else if (action === "run") {
+      setRunning(id);
+      await fetch(`/api/cron/jobs/${encodeURIComponent(id)}/run`, { method: "POST" });
+      setRunning(null);
+    } else {
+      await fetch(`/api/cron/jobs/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+    }
+    load();
+    if (selectedJob?.id === id) loadHistory(id);
+  };
+
+  const handleSelect = (job: CronJobInfo) => {
+    setSelectedJob(job);
+    loadHistory(job.id);
+  };
+
+  if (selectedJob) {
+    return (
+      <div className="settings-cron">
+        <div className="cron-detail-head">
+          <button className="cron-back" onClick={() => setSelectedJob(null)}>← 返回</button>
+          <span className="cron-detail-name">{selectedJob.name}</span>
+          <span className={`cron-status-dot ${selectedJob.enabled ? "on" : "off"}`} />
+          <span className="cron-detail-schedule">{selectedJob.schedule}</span>
+        </div>
+        <div className="cron-detail-meta">
+          <span>类型: {selectedJob.type === "once" ? "一次性" : "循环"}</span>
+          <span>已执行: {selectedJob.runCount} 次</span>
+          <span>上次: {fmtTime(selectedJob.lastRun)}</span>
+          <span>下次: {fmtTime(selectedJob.nextRun)}</span>
+        </div>
+        <div className="cron-detail-prompt">{selectedJob.prompt}</div>
+
+        <div className="cron-section-title">执行历史</div>
+        {history.length === 0 ? (
+          <div className="settings-empty">暂无执行记录</div>
+        ) : (
+          <div className="cron-history-list">
+            {history.map(e => (
+              <div key={e.id} className={`cron-history-item status-${e.status}`}>
+                <div className="cron-history-head">
+                  <span className={`cron-status-dot ${e.status}`} />
+                  <span className="cron-history-time">{fmtTime(e.startedAt)}</span>
+                  {e.durationMs != null && <span className="cron-history-dur">{(e.durationMs / 1000).toFixed(1)}s</span>}
+                </div>
+                {e.output && <div className="cron-history-output">{e.output.slice(0, 300)}{e.output.length > 300 ? "…" : ""}</div>}
+                {e.error && <div className="cron-history-error">{e.error}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-cron">
+      <div className="settings-section-title">
+        定时任务
+        {jobs.length > 0 && <span className="settings-count">{jobs.length}</span>}
+      </div>
+      <p className="settings-desc">
+        定时任务独立于会话，到时间自动在后台执行。支持 cron 表达式和一次性提醒。
+      </p>
+
+      <button className="cron-add-btn" onClick={() => setShowCreate(!showCreate)}>+ 新建任务</button>
+
+      {showCreate && (
+        <CronCreateForm onCreate={() => { load(); setShowCreate(false); }} />
+      )}
+
+      {loading ? (
+        <div className="settings-loading">加载中…</div>
+      ) : jobs.length === 0 ? (
+        <div className="settings-empty">还没有定时任务。也可以在对话中让 Agent 调用 cron_task 工具创建。</div>
+      ) : (
+        <div className="cron-job-list">
+          {jobs.map(job => (
+            <div key={job.id} className={`cron-job-card ${job.enabled ? "" : "disabled"}`}>
+              <div className="cron-job-main" onClick={() => handleSelect(job)} style={{ cursor: "pointer" }}>
+                <span className={`cron-status-dot ${job.enabled ? "on" : "off"}`} />
+                <div className="cron-job-info">
+                  <span className="cron-job-name">{job.name}</span>
+                  <span className="cron-job-schedule">{job.schedule} · {job.type === "once" ? "一次性" : "循环"} · 📁 {wsName(job.workspaceId)}</span>
+                </div>
+                <div className="cron-job-stats">
+                  <span className="cron-job-next">下次: {fmtTime(job.nextRun)}</span>
+                  <span className="cron-job-count">已执行 {job.runCount} 次</span>
+                  {job.lastStatus === "error" && <span className="cron-job-err">⚠</span>}
+                </div>
+              </div>
+              <div className="cron-job-actions">
+                <button onClick={() => handleAction(job.id, "run")} disabled={running === job.id} title="立即执行">
+                  {running === job.id ? "⏳" : "▶"}
+                </button>
+                {job.enabled ? (
+                  <button onClick={() => handleAction(job.id, "pause")} title="暂停">⏸</button>
+                ) : (
+                  <button onClick={() => handleAction(job.id, "resume")} title="恢复">▶</button>
+                )}
+                <button onClick={() => handleAction(job.id, "delete")} title="删除">🗑</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CronCreateForm({ onCreate }: { onCreate: () => void }) {
+  const workspaces = useWorkspaceStore(s => s.workspaces);
+  const [name, setName] = useState("");
+  const [schedule, setSchedule] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [type, setType] = useState<"cron" | "once">("cron");
+  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id || "default");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !schedule.trim() || !prompt.trim()) {
+      setError("名称、计划、提示词都必填");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/cron/jobs", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), schedule: schedule.trim(), prompt: prompt.trim(), type, workspaceId }),
+      });
+      const d = await res.json();
+      if (!res.ok) setError(d.error || "创建失败");
+      else { setName(""); setSchedule(""); setPrompt(""); onCreate(); }
+    } catch (e: any) { setError(e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="cron-create-form">
+      <input className="settings-input" placeholder="任务名称" value={name} onChange={(e) => setName(e.target.value)} maxLength={50} />
+      <div className="cron-type-row">
+        <button className={`cron-type-btn ${type === "cron" ? "active" : ""}`} onClick={() => setType("cron")}>循环</button>
+        <button className={`cron-type-btn ${type === "once" ? "active" : ""}`} onClick={() => setType("once")}>一次性</button>
+        <select className="cron-ws-select" value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
+          {workspaces.map(w => <option key={w.id} value={w.id}>📁 {w.name}</option>)}
+        </select>
+      </div>
+      <input className="settings-input" placeholder="cron 表达式，如 */30 * * * *（每30分钟）或 0 9 * * 1-5（工作日9点）" value={schedule} onChange={(e) => setSchedule(e.target.value)} />
+      <textarea className="agent-edit-prompt" placeholder="任务触发时执行的提示词" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} />
+      {error && <div className="ext-error">{error}</div>}
+      <button className="settings-save-btn" onClick={handleCreate} disabled={saving}>{saving ? "创建中…" : "创建"}</button>
     </div>
   );
 }

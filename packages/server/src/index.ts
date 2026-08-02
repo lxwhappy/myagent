@@ -14,7 +14,9 @@ import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";
 import { setupSettingsRoutes } from "./settings-routes.js";
 import { setupAgentRoutes } from "./agent-routes.js";
+import { setupCronRoutes } from "./cron-routes.js";
 import { mcpManager } from "./mcp-manager.js";
+import { restoreAllJobs, cronStore } from "./tools/cron-store.js";
 
 /**
  * 查找前端静态文件目录。
@@ -57,6 +59,9 @@ async function main() {
   // Agent 配置管理 API（角色预设 CRUD）
   setupAgentRoutes(app);
 
+  // 定时任务管理 API
+  setupCronRoutes(app);
+
   // 健康检查
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));
 
@@ -91,6 +96,13 @@ async function main() {
       if (connected.length > 0) console.log(`  MCP: connected ${connected.join(", ")}`);
       if (failed.length > 0) console.log(`  MCP: failed ${failed.map(f => f.name).join(", ")}`);
     }).catch((e) => console.error("[mcp] startup connect error:", e.message));
+
+    // 恢复定时任务（宿主级调度，独立于 agent session）
+    restoreAllJobs().catch((e) => console.error("[cron] restore error:", e.message));
+
+    // 优雅关闭：停止所有定时任务
+    process.on("SIGINT", () => { cronStore.stopAll(); process.exit(0); });
+    process.on("SIGTERM", () => { cronStore.stopAll(); process.exit(0); });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
