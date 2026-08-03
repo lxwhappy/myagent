@@ -13,6 +13,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { config } from "./config.js";
+import { PATHS } from "./paths.js";
 
 interface McpServerConfig {
   command: string;
@@ -54,7 +55,7 @@ class McpManager {
   private configPath: string;
 
   constructor() {
-    this.configPath = resolve(process.env.HOME || "~", ".pi/agent/mcp.json");
+    this.configPath = PATHS.mcp;
   }
 
   /** 读取 mcp.json 配置 */

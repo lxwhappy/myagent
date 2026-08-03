@@ -13,6 +13,7 @@ import { config } from "./config.js";
 import { eventBridge } from "./event-bridge.js";
 import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
+import { AGENT_DIR } from "./paths.js";
 import { createTodoTool, createDelegateTool, customTools, todoStore } from "./tools/index.js";
 import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js";
 import { webSearchTool, webFetchTool } from "./tools/web-tool.js";
@@ -87,7 +88,7 @@ export async function createAgent(
   destroyAgent(chatSessionId);
 
   const cwd = opts?.cwd ?? config.workDir;
-  const agentDir = process.env.HOME + "/.pi/agent";
+  const agentDir = AGENT_DIR;
 
   // 读取 Agent 配置（角色预设），把 systemPrompt 追加到 AGENTS.md 之后
   const agentCfg = opts?.agentId ? await agentConfigStore.get(opts.agentId) : undefined;

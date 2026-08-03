@@ -5,9 +5,10 @@
 
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
+import { dirname } from "path";
 import { randomUUID } from "crypto";
 import { emit } from "../event-bus.js";
+import { PATHS, AGENT_DIR } from "../paths.js";
 
 export type TodoStatus = "pending" | "in_progress" | "completed";
 
@@ -24,12 +25,7 @@ interface TodoStoreData {
   [chatSessionId: string]: TodoItem[];
 }
 
-const TODO_FILE = join(
-  process.env.HOME || process.env.USERPROFILE || "/",
-  ".pi",
-  "agent",
-  "myagent-todos.json",
-);
+const TODO_FILE = PATHS.todos;
 
 let data: TodoStoreData = {};
 let loaded = false;
@@ -48,7 +44,7 @@ async function ensureLoaded() {
 }
 
 async function persist() {
-  const dir = join(TODO_FILE, "..");
+  const dir = dirname(TODO_FILE);
   if (!existsSync(dir)) await mkdir(dir, { recursive: true });
   await writeFile(TODO_FILE, JSON.stringify(data, null, 2));
 }

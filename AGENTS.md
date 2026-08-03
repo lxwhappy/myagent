@@ -13,11 +13,13 @@ When using tools, explain what you're doing briefly.
 ```
 packages/
   server/src/     ← 后端代码（注意有 src/）
-    agent-configs.ts  ← Agent 预设配置存储（CRUD，持久化 ~/.pi/agent/myagent-agents.json）
+    paths.ts          ← 集中式路径管理（~/.myagent/ 目录结构定义）
+    migrate.ts        ← 一次性数据迁移（~/.pi/agent/ → ~/.myagent/）
+    agent-configs.ts  ← Agent 预设配置存储（CRUD，持久化 ~/.myagent/agents.json）
     agent-registry.ts ← Agent session 注册表（createAgent 支持 agentId 注入 systemPrompt）
     sse-gateway.ts    ← SSE 事件流 + REST API（/api/agent/:id/create 等透传 agentId）
-    workspace.ts      ← 工作空间管理（持久化 ~/.pi/agent/myagent-workspaces.json）
-    chat-sessions.ts  ← 会话持久化（~/.pi/agent/myagent-sessions/）
+    workspace.ts      ← 工作空间管理（持久化 ~/.myagent/workspaces.json）
+    chat-sessions.ts  ← 会话持久化（~/.myagent/chat-sessions/）
     tools/            ← 工具定义
   web/src/        ← 前端代码（注意有 src/）
     components/   ← React 组件（AgentManager.tsx 为 Agent 管理弹窗）
@@ -26,6 +28,25 @@ packages/
   pi-todo-extension/ ← todo 独立包
 ```
 查看文件时路径必须包含 `src/`，如 `packages/server/src/tools/` 不是 `packages/server/tools/`。
+
+## 数据目录（~/.myagent/）
+所有持久化数据统一存放在 `~/.myagent/`，完全独立于 Pi SDK 默认的 `~/.pi/agent/`：
+```
+~/.myagent/
+├── settings.json       ← 模型/Provider 设置（SDK SettingsManager 读这个）
+├── mcp.json            ← MCP server 配置
+├── agents.json         ← Agent 预设（角色管理）
+├── workspaces.json     ← 工作空间列表
+├── todos.json          ← Todo 列表存储
+├── cron-jobs.json      ← 定时任务
+├── cron-history.json   ← 定时任务执行历史
+├── skills/             ← Skills（SDK DefaultResourceLoader 读这个）
+├── sessions/           ← Pi SDK 原生 jsonl 日志
+└── chat-sessions/      ← MyAgent 聊天会话（每会话独立文件 + index.json）
+```
+- 所有路径定义在 `paths.ts`，改路径只改这一个文件
+- 首次启动自动从 `~/.pi/agent/` 迁移数据（幂等，迁移后写 `.migrated` 标记）
+- SDK 的 `agentDir` 参数也指向 `~/.myagent/`，skills/sessions 完全独立
 
 ## Agent 管理（角色预设）
 用户可在「Agent 管理」弹窗中创建带角色指令（System Prompt）的 Agent 预设。

@@ -10,6 +10,11 @@ import { existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config.js";
+import { migrateIfNeeded } from "./migrate.js";
+
+// ── 一次性数据迁移：~/.pi/agent/ → ~/.myagent/（幂等）──
+migrateIfNeeded();
+
 import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";
 import { setupSettingsRoutes } from "./settings-routes.js";

@@ -17,6 +17,7 @@ import { readFile, writeFile, mkdir, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { PATHS, AGENT_DIR, OLD_PATHS } from "./paths.js";
 
 export interface ChatMessage {
   id: string;
@@ -65,10 +66,10 @@ interface SessionMeta {
 }
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "/";
-// 独立目录，避免和 pi-coding-agent 的 ~/.pi/agent/sessions/ 冲突
-const SESSIONS_DIR = join(HOME, ".pi", "agent", "myagent-sessions");
-const INDEX_FILE = join(SESSIONS_DIR, "index.json");
-const OLD_FILE = join(HOME, ".pi", "agent", "myagent-chat-sessions.json");
+// 独立目录，避免和 pi-coding-agent 的 sessions/ 冲突
+const SESSIONS_DIR = PATHS.chatSessionsDir;
+const INDEX_FILE = PATHS.chatSessionsIndex;
+const OLD_FILE = OLD_PATHS.oldChatSessions;
 
 let loaded = false;
 // 元数据索引（全量常驻内存，极小：每会话 ~100B）

@@ -10,8 +10,9 @@
 
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
+import { dirname } from "path";
 import { randomUUID } from "crypto";
+import { PATHS, AGENT_DIR } from "./paths.js";
 
 export interface AgentConfig {
   id: string;
@@ -28,7 +29,7 @@ export interface AgentConfig {
 }
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "/";
-const FILE = join(HOME, ".pi", "agent", "myagent-agents.json");
+const FILE = PATHS.agents;
 
 // 内置默认 Agent
 const DEFAULT_AGENT: AgentConfig = {
@@ -48,7 +49,7 @@ let agents: AgentConfig[] = [];
 async function ensureLoaded() {
   if (loaded) return;
   loaded = true;
-  await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+  await mkdir(AGENT_DIR, { recursive: true });
   if (existsSync(FILE)) {
     try {
       agents = JSON.parse(await readFile(FILE, "utf-8"));

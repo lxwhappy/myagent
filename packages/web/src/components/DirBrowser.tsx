@@ -19,7 +19,6 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
   const [parent, setParent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   // 初始加载 home 目录
   useEffect(() => {
@@ -30,7 +29,6 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
 
   const browseTo = useCallback(async (path: string) => {
     setLoading(true);
-    setSelectedPath(null);
     try {
       const res = await fetch(`/api/fs/browse?path=${encodeURIComponent(path)}`);
       const data = await res.json();
@@ -46,14 +44,23 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
     }
   }, []);
 
-  // 面包屑路径分段
-  const breadcrumbs = currentPath.split("/").filter(Boolean);
+  // 当前浏览的目录 = 选中目录，无需单独点选
+  const selectedPath = currentPath || null;
+
+  // 双击目录项：进入该目录并直接确认选中
+  const handleQuickSelect = useCallback((path: string) => {
+    const name = path.split("/").pop() ?? path;
+    onSelect(path, name);
+  }, [onSelect]);
 
   const handleConfirm = () => {
     if (!selectedPath) return;
     const name = selectedPath.split("/").pop() ?? selectedPath;
     onSelect(selectedPath, name);
   };
+
+  // 面包屑路径分段
+  const breadcrumbs = currentPath.split("/").filter(Boolean);
 
   return (
     <div className="modal-overlay show" onClick={onCancel}>
@@ -103,7 +110,7 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
                 </div>
               )}
 
-              {/* 普通目录 */}
+              {/* 普通目录：单击进入，双击选中 */}
               {dirs.length === 0 && hiddenDirs.length === 0 && (
                 <div className="dir-empty">此目录下没有子目录</div>
               )}
@@ -111,8 +118,10 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
               {dirs.map((d) => (
                 <div
                   key={d.path}
-                  className={`dir-item ${selectedPath === d.path ? "dir-item-selected" : ""}`}
+                  className="dir-item"
                   onClick={() => browseTo(d.path)}
+                  onDoubleClick={() => handleQuickSelect(d.path)}
+                  title="单击进入，双击选中此目录"
                 >
                   <span className="dir-icon">📁</span>
                   <span className="dir-name">{d.name}</span>
@@ -131,9 +140,10 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
                   {showHidden && hiddenDirs.map((d) => (
                     <div
                       key={d.path}
-                      className={`dir-item dir-item-hidden ${selectedPath === d.path ? "dir-item-selected" : ""}`}
-                      onClick={() => setSelectedPath(d.path)}
-                      onDoubleClick={() => browseTo(d.path)}
+                      className="dir-item dir-item-hidden"
+                      onClick={() => browseTo(d.path)}
+                      onDoubleClick={() => handleQuickSelect(d.path)}
+                      title="单击进入，双击选中此目录"
                     >
                       <span className="dir-icon">📁</span>
                       <span className="dir-name">{d.name}</span>
@@ -145,15 +155,11 @@ export function DirBrowser({ onSelect, onCancel }: DirBrowserProps) {
           )}
         </div>
 
-        {/* 选中路径 + 确认 */}
+        {/* 底部：当前路径 + 确认 */}
         <div className="modal-footer">
           <div className="dir-selected-path">
             {selectedPath ? (
-              <>选中: <code>{selectedPath}</code></>
-            ) : currentPath ? (
-              <button className="dir-select-current" onClick={() => setSelectedPath(currentPath)}>
-                选择当前目录: {currentPath.split("/").pop()}
-              </button>
+              <>将添加: <code>{selectedPath}</code></>
             ) : null}
           </div>
           <div className="modal-actions">

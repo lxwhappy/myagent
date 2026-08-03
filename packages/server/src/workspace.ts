@@ -4,6 +4,7 @@ import { existsSync } from "fs";
 import { join, resolve, relative, extname, basename } from "path";
 import { randomUUID } from "crypto";
 import { chatSessionStore } from "./chat-sessions.js";
+import { PATHS, AGENT_DIR } from "./paths.js";
 
 // ── 工作空间存储（内存 + 磁盘持久化） ──
 interface Workspace {
@@ -15,12 +16,12 @@ interface Workspace {
 const workspaces = new Map<string, Workspace>();
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "/";
-const WS_FILE = join(HOME, ".pi", "agent", "myagent-workspaces.json");
+const WS_FILE = PATHS.workspaces;
 
 // 启动时从磁盘恢复（同步阻塞，确保路由注册前数据就绪）
 async function persistWorkspaces() {
   try {
-    await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+    await mkdir(AGENT_DIR, { recursive: true });
     await writeFile(WS_FILE, JSON.stringify([...workspaces.values()], null, 2), "utf-8");
   } catch (e: any) {
     console.error("[workspace] persist failed:", e.message);
@@ -471,7 +472,7 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
 
     // 编码 cwd → 目录名
     const encoded = ws.path.replace(/\//g, "-").replace(/^-+|-+$/g, "");
-    const dir = join(HOME, ".pi", "agent", "sessions", `--${encoded}--`);
+    const dir = join(PATHS.agentLogsDir, `--${encoded}--`);
     if (!existsSync(dir)) return { logs: [] };
 
     try {
@@ -502,7 +503,7 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     if (!ws) return reply.code(404).send({ error: "Workspace not found" });
 
     const encoded = ws.path.replace(/\//g, "-").replace(/^-+|-+$/g, "");
-    const filepath = join(HOME, ".pi", "agent", "sessions", `--${encoded}--`, filename);
+    const filepath = join(PATHS.agentLogsDir, `--${encoded}--`, filename);
     if (!existsSync(filepath)) return reply.code(404).send({ error: "Log file not found" });
 
     const content = await readFile(filepath, "utf-8");

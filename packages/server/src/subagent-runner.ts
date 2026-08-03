@@ -18,6 +18,7 @@ import {
 import { getModel } from "@earendil-works/pi-ai/compat";
 import { config } from "./config.js";
 import { emit } from "./event-bus.js";
+import { AGENT_DIR } from "./paths.js";
 import type {
   SubagentSpawnFn,
   SubagentResult,
@@ -66,7 +67,7 @@ export const runSubagent: SubagentSpawnFn = async (
   }
 
   const cwd = opts.cwd ?? config.workDir;
-  const agentDir = process.env.HOME + "/.pi/agent";
+  const agentDir = AGENT_DIR;
 
   // 通知前端：子 agent 启动
   emit({

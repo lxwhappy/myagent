@@ -7,8 +7,8 @@
 import { Cron } from "croner";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import { join } from "path";
 import { randomUUID } from "crypto";
+import { PATHS, AGENT_DIR } from "../paths.js";
 
 // ── 类型定义 ──
 
@@ -60,8 +60,8 @@ export type FireFn = (job: CronJob) => Promise<{ output?: string; error?: string
 // ── 持久化路径 ──
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "/";
-const JOBS_FILE = join(HOME, ".pi", "agent", "myagent-cron.json");
-const HISTORY_FILE = join(HOME, ".pi", "agent", "myagent-cron-history.json");
+const JOBS_FILE = PATHS.cronJobs;
+const HISTORY_FILE = PATHS.cronHistory;
 const MAX_HISTORY_PER_JOB = 50;  // 每个任务最多保留 50 条历史
 const MAX_OUTPUT_LEN = 2000;     // 输出摘要截断长度
 
@@ -78,7 +78,7 @@ let fireFn: FireFn | null = null;
 async function ensureLoaded() {
   if (loaded) return;
   loaded = true;
-  await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+  await mkdir(AGENT_DIR, { recursive: true });
   try {
     if (existsSync(JOBS_FILE)) store = JSON.parse(await readFile(JOBS_FILE, "utf-8"));
   } catch { store = { jobs: [], version: 1 }; }
@@ -88,12 +88,12 @@ async function ensureLoaded() {
 }
 
 async function persistJobs() {
-  await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+  await mkdir(AGENT_DIR, { recursive: true });
   await writeFile(JOBS_FILE, JSON.stringify(store, null, 2), "utf-8");
 }
 
 async function persistHistory() {
-  await mkdir(join(HOME, ".pi", "agent"), { recursive: true });
+  await mkdir(AGENT_DIR, { recursive: true });
   await writeFile(HISTORY_FILE, JSON.stringify(historyStore, null, 2), "utf-8");
 }
 

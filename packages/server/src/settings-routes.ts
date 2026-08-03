@@ -9,6 +9,7 @@ import { mcpManager } from "./mcp-manager.js";
 import { DefaultResourceLoader, DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { todoStore } from "./tools/index.js";
 import { getExtensionToolCounts } from "./agent-registry.js";
+import { PATHS, AGENT_DIR } from "./paths.js";
 
 export function setupSettingsRoutes(app: FastifyInstance) {
   // ── 模型列表 ──
@@ -48,7 +49,7 @@ export function setupSettingsRoutes(app: FastifyInstance) {
     try {
       const { resolve } = await import("path");
       const { readFileSync, writeFileSync, existsSync } = await import("fs");
-      const settingsPath = resolve(process.env.HOME || "~", ".pi/agent/settings.json");
+      const settingsPath = PATHS.settings;
       let settings: any = {};
       if (existsSync(settingsPath)) {
         try { settings = JSON.parse(readFileSync(settingsPath, "utf-8")); } catch {}
@@ -66,7 +67,7 @@ export function setupSettingsRoutes(app: FastifyInstance) {
   app.get("/api/skills", async () => {
     try {
       const cwd = config.workDir;
-      const agentDir = process.env.HOME + "/.pi/agent";
+      const agentDir = AGENT_DIR;
       const loader = new DefaultResourceLoader({ cwd, agentDir });
       await loader.reload();
       const result = loader.getSkills();
@@ -101,7 +102,7 @@ export function setupSettingsRoutes(app: FastifyInstance) {
     try {
       const { resolve, join } = await import("path");
       const { mkdirSync, writeFileSync, existsSync } = await import("fs");
-      const skillsDir = resolve(process.env.HOME || "~", ".pi/agent/skills", safeName);
+      const skillsDir = join(PATHS.skillsDir, safeName);
       if (!existsSync(skillsDir)) mkdirSync(skillsDir, { recursive: true });
       const skillPath = join(skillsDir, "SKILL.md");
       writeFileSync(skillPath, content, "utf-8");
@@ -120,9 +121,9 @@ export function setupSettingsRoutes(app: FastifyInstance) {
     if (!safeName) return { ok: false, error: "invalid name" };
 
     try {
-      const { resolve } = await import("path");
+      const { join } = await import("path");
       const { rmSync, existsSync } = await import("fs");
-      const skillDir = resolve(process.env.HOME || "~", ".pi/agent/skills", safeName);
+      const skillDir = join(PATHS.skillsDir, safeName);
       if (!existsSync(skillDir)) return { ok: false, error: "skill not found" };
       rmSync(skillDir, { recursive: true, force: true });
       console.log(`[skills] deleted: ${safeName}`);

@@ -82,16 +82,10 @@ export type { SubagentSpawnFn, SubagentResult, SubagentSpawnOptions } from "@mya
 // 共享 store 单例（带 SSE 广播回调）
 import { TodoStore as _TodoStore } from "@myagent/pi-todo-extension/src/store.ts";
 import { emit } from "../event-bus.js";
-import { join } from "path";
-
-// 保持和旧版相同的持久化路径
-const TODO_FILE = join(
-  process.env.HOME || process.env.USERPROFILE || "/",
-  ".pi", "agent", "myagent-todos.json",
-);
+import { PATHS } from "../paths.js";
 
 export const todoStore = new _TodoStore({
-  filePath: TODO_FILE,
+  filePath: PATHS.todos,
   onChange: (chatSessionId, todos) => {
     emit({ type: "todo_update", chatSessionId, payload: { todos }, ts: Date.now() });
   },
