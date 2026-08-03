@@ -409,9 +409,11 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
   // 更新会话标题
   app.patch("/api/sessions/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { title?: string };
+    const body = req.body as { title?: string; pinned?: boolean };
     if (body?.title) {
       await chatSessionStore.updateTitle(id, body.title);
+    } else if (body?.pinned !== undefined) {
+      await chatSessionStore.togglePin(id);
     } else {
       await chatSessionStore.touch(id);
     }

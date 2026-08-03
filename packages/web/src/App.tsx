@@ -113,10 +113,67 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadAsMarkdown = async () => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid) return;
+    const res = await fetch(`/api/sessions/${sid}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const title = data.title || "对话记录";
+    const date = new Date(data.createdAt).toLocaleString("zh-CN");
+    let md = `# ${title}\n\n> 导出时间：${new Date().toLocaleString("zh-CN")}\n> 创建时间：${date}\n\n---\n\n`;
+    for (const msg of (data.messages || [])) {
+      if (msg.role === "user") {
+        md += `## 🧑 用户\n\n${msg.content}\n\n`;
+      } else if (msg.role === "assistant") {
+        md += `## 🤖 ${"MyAgent"}\n\n`;
+        if (msg.thinking) md += `<details><summary>💭 思考过程</summary>\n\n${msg.thinking}\n\n</details>\n\n`;
+        if (msg.tools && msg.tools.length > 0) {
+          md += `<details><summary>🔧 工具调用 (${msg.tools.length})</summary>\n\n`;
+          for (const t of msg.tools) {
+            md += `- **${t.name || t.toolName || "tool"}**`;
+            if (t.duration) md += ` (${(t.duration / 1000).toFixed(1)}s)`;
+            md += `\n`;
+          }
+          md += `\n</details>\n\n`;
+        }
+        md += `${msg.content}\n\n`;
+      }
+      md += `---\n\n`;
+    }
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDeleteSession = async (e: React.MouseEvent, wsId: string, sid: string) => {
     e.stopPropagation();
     await sessions.deleteSession(wsId, sid);
     sseClient.destroyAgent(sid);
+  };
+
+  const handleTogglePin = async (wsId: string, sid: string) => {
+    // 先乐观更新本地状态
+    const wsStore = useWorkspaceStore.getState();
+    const sessions = wsStore.sessionsByWs[wsId] || [];
+    const updated = sessions.map(s => s.id === sid ? { ...s, pinned: !s.pinned } : s);
+    // 重新排序：pinned 在前
+    updated.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.updatedAt - a.updatedAt;
+    });
+    wsStore.setSessions(wsId, updated);
+    // 后端持久化
+    await fetch(`/api/sessions/${sid}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned: true }),
+    });
   };
 
   const handleSelectDir = async (path: string, name: string) => {
@@ -266,6 +323,7 @@ export default function App() {
                   activeSessionId={wsStore.activeSessionId}
                   onSelect={handleSelectSession}
                   onDelete={(e, sid) => handleDeleteSession(e, activeWs.id, sid)}
+                  onTogglePin={(sid) => handleTogglePin(activeWs.id, sid)}
                 />
               ) : (
                 <div className="ws-no-sessions">暂无会话<br /><button className="sb-tab" style={{ marginTop: 8 }} onClick={handleNewSession}>+ 新建会话</button></div>
@@ -346,6 +404,7 @@ export default function App() {
                 <DownloadMenu
                   sessionId={useChatStore.getState().activeChatSessionId}
                   onDownloadJson={downloadCurrentSession}
+                  onDownloadMarkdown={downloadAsMarkdown}
                   onClose={() => setDownloadMenuOpen(false)}
                 />
               )}
@@ -405,11 +464,12 @@ export default function App() {
 }
 
 // ── Session List (grouped by date) ──
-function SessionList({ sessions, activeSessionId, onSelect, onDelete }: {
+function SessionList({ sessions, activeSessionId, onSelect, onDelete, onTogglePin }: {
   sessions: ChatSession[];
   activeSessionId: string | null;
   onSelect: (s: ChatSession) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
+  onTogglePin: (id: string) => void;
 }) {
   const groups = groupSessionsByDate(sessions);
   return (
@@ -424,6 +484,7 @@ function SessionList({ sessions, activeSessionId, onSelect, onDelete }: {
               isActive={activeSessionId === s.id}
               onSelect={onSelect}
               onDelete={onDelete}
+              onTogglePin={onTogglePin}
             />
           ))}
         </div>
@@ -432,25 +493,34 @@ function SessionList({ sessions, activeSessionId, onSelect, onDelete }: {
   );
 }
 
-function SessionRow({ session, isActive, onSelect, onDelete }: {
+function SessionRow({ session, isActive, onSelect, onDelete, onTogglePin }: {
   session: ChatSession;
   isActive: boolean;
   onSelect: (s: ChatSession) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
+  onTogglePin: (id: string) => void;
 }) {
   const isGenerating = useChatStore(s => s.sessions[session.id]?.isGenerating ?? false);
   return (
     <div
-      className={`session-item ${isActive ? "active" : ""} ${isGenerating ? "generating" : ""}`}
+      className={`session-item ${isActive ? "active" : ""} ${isGenerating ? "generating" : ""} ${session.pinned ? "pinned" : ""}`}
       onClick={() => onSelect(session)}
     >
       <span className={`session-status ${isGenerating ? "generating" : isActive ? "active" : ""}`} />
+      {session.pinned && <span className="session-pin-icon">📌</span>}
       <span className="session-title">{session.title}</span>
       <span className="session-meta">
         <span className="session-time">
           {new Date(session.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}
         </span>
       </span>
+      <button
+        className="session-pin-btn"
+        onClick={(e) => { e.stopPropagation(); onTogglePin(session.id); }}
+        title={session.pinned ? "取消置顶" : "置顶"}
+      >
+        {session.pinned ? "📌" : "📍"}
+      </button>
       <button
         className="session-delete-btn"
         onClick={(e) => { e.stopPropagation(); onDelete(e, session.id); }}
@@ -542,9 +612,10 @@ function groupSessionsByDate(sessions: ChatSession[]) {
 
 // ── 下载菜单：会话 JSON + Agent 原始 jsonl 日志列表 ──
 
-function DownloadMenu({ sessionId, onDownloadJson, onClose }: {
+function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }: {
   sessionId: string | null;
   onDownloadJson: () => void;
+  onDownloadMarkdown: () => void;
   onClose: () => void;
 }) {
   const [logs, setLogs] = useState<{ name: string; size: number; mtime: string }[] | null>(null);
@@ -583,6 +654,13 @@ function DownloadMenu({ sessionId, onDownloadJson, onClose }: {
           <div className="dm-text">
             <div className="dm-title">会话记录 (JSON)</div>
             <div className="dm-desc">含思考/工具/子Agent，可直接导入</div>
+          </div>
+        </button>
+        <button className="download-menu-item" onClick={() => { onDownloadMarkdown(); onClose(); }}>
+          <span className="dm-icon">📝</span>
+          <div className="dm-text">
+            <div className="dm-title">导出为 Markdown</div>
+            <div className="dm-desc">干净的可读文档，适合分享和归档</div>
           </div>
         </button>
         <div className="download-menu-divider" />

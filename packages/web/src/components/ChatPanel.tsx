@@ -15,7 +15,7 @@ const SUGGESTIONS: Array<{ text: string; icon: string }> = [
 ];
 
 export function ChatPanel() {
-  const { messages, connected, skills, skillsNotified: storeNotified, activeSkill, sendMessage } = useChat();
+  const { messages, connected, skills, skillsNotified: storeNotified, activeSkill, sendMessage, regenerate } = useChat();
   // 子 agent 钻入视图
   const activeSubId = useChatStore(s => s.activeSubId);
   const setActiveSub = useChatStore(s => s.setActiveSub);
@@ -143,6 +143,8 @@ export function ChatPanel() {
             subagents={subagents}
             onOpenSub={setActiveSub}
             retryStatus={msg.isStreaming && i === messages.length - 1 ? retryStatus : undefined}
+            isLastAssistant={i === messages.length - 1 && msg.role === "assistant" && !msg.isStreaming}
+            onRegenerate={regenerate}
           />
         ))}
 

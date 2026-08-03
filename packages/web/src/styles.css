@@ -3691,3 +3691,140 @@
   margin-top: 4px; font-size: 12px; color: var(--danger);
   line-height: 1.5;
 }
+
+/* ── 代码块顶栏 + 复制按钮 ── */
+.code-block-wrapper {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border, #383838);
+}
+.code-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #383838;
+  font-size: 12px;
+}
+.code-lang {
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--mono-font, monospace);
+}
+.code-copy-btn {
+  background: none;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 2px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.code-copy-btn:hover {
+  background: #3d3d3d;
+  color: #fff;
+  border-color: #777;
+}
+
+/* ── 会话置顶 ── */
+.session-pin-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: opacity 0.15s;
+}
+.session-item:hover .session-pin-btn {
+  opacity: 0.6;
+}
+.session-pin-btn:hover {
+  opacity: 1 !important;
+}
+.session-item.pinned .session-pin-btn {
+  opacity: 1;
+}
+.session-pin-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ── 消息重新生成按钮 ── */
+.msg-regenerate-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid var(--border, #383838);
+  color: var(--text-secondary, #999);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.msg:hover .msg-regenerate-btn,
+.msg-regenerate-btn:hover {
+  opacity: 1;
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+
+/* ── 快捷指令面板 ── */
+.quick-prompts-panel {
+  border-top: 1px solid var(--border, #333);
+  padding: 10px 12px;
+  background: var(--bg-secondary, rgba(0,0,0,0.02));
+}
+.quick-prompts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  margin-bottom: 8px;
+}
+.quick-prompts-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary, #888);
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.quick-prompts-close:hover {
+  background: var(--hover-bg, rgba(255,255,255,0.05));
+}
+.quick-prompts-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.quick-prompt-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-card, #2a2a2a);
+  border: 1px solid var(--border, #383838);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #eee);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.quick-prompt-item:hover {
+  border-color: var(--accent, #4a9eff);
+  background: var(--hover-bg, rgba(74,158,255,0.1));
+}
+.quick-prompt-icon {
+  font-size: 14px;
+}
+.quick-prompt-label {
+  font-weight: 500;
+}

@@ -2,7 +2,7 @@
 // 把 react-syntax-highlighter (~440KB) 从首屏静态导入改为按需动态导入，
 // 首屏不渲染代码块时不会加载高亮库，大幅加快首屏速度。
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useState, useCallback } from "react";
 import type { CSSProperties } from "react";
 
 // 动态导入 SyntaxHighlighter + 主题，两者并行加载
@@ -42,17 +42,41 @@ function FallbackPre({ content, customStyle }: { content: string; customStyle?: 
   );
 }
 
-export function CodeBlock({ language, content, showLineNumbers, customStyle }: CodeBlockProps) {
+/** 代码块顶栏：语言标签 + 复制按钮 */
+function CodeToolbar({ language, onCopy, copied }: { language: string; onCopy: () => void; copied: boolean }) {
   return (
-    <Suspense fallback={<FallbackPre content={content} customStyle={customStyle} />}>
-      <LazyHighlighter
-        language={language}
-        PreTag="div"
-        showLineNumbers={showLineNumbers}
-        customStyle={customStyle}
-      >
-        {content}
-      </LazyHighlighter>
-    </Suspense>
+    <div className="code-toolbar">
+      <span className="code-lang">{language || "text"}</span>
+      <button className="code-copy-btn" onClick={onCopy}>
+        {copied ? "✓ 已复制" : "复制"}
+      </button>
+    </div>
+  );
+}
+
+export function CodeBlock({ language, content, showLineNumbers, customStyle }: CodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [content]);
+
+  return (
+    <div className="code-block-wrapper">
+      <CodeToolbar language={language} onCopy={handleCopy} copied={copied} />
+      <Suspense fallback={<FallbackPre content={content} customStyle={customStyle} />}>
+        <LazyHighlighter
+          language={language}
+          PreTag="div"
+          showLineNumbers={showLineNumbers}
+          customStyle={{ margin: 0, borderRadius: 0, ...customStyle }}
+        >
+          {content}
+        </LazyHighlighter>
+      </Suspense>
+    </div>
   );
 }

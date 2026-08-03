@@ -191,6 +191,8 @@ interface ChatStore {
   addSkillUsed: (id: string, skill: SkillUsage) => void;
   setRetryStatus: (id: string, status: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null) => void;
   addDebugLLM: (id: string, evt: DebugLLMEvent) => void;
+  /** 删除最后一条 assistant 消息（用于重新生成） */
+  removeLastAssistant: (id: string) => string | null;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -453,4 +455,28 @@ export const useChatStore = create<ChatStore>((set) => ({
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, subagents: subs } } };
   }),
+
+  removeLastAssistant: (id) => {
+    let lastUserText: string | null = null;
+    set((s) => {
+      const sess = s.sessions[id]; if (!sess) return {};
+      const msgs = [...sess.messages];
+      // 从末尾找最后一条 assistant 消息并删除
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "assistant") {
+          msgs.splice(i, 1);
+          break;
+        }
+      }
+      // 找最后一条 user 消息的文本（用于重新发送）
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].role === "user") {
+          lastUserText = msgs[i].content;
+          break;
+        }
+      }
+      return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+    });
+    return lastUserText;
+  },
 }));

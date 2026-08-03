@@ -13,6 +13,18 @@ const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
 const MAX_HISTORY = 50;
 
+// ── 快捷指令模板 ──
+const QUICK_PROMPTS: Array<{ icon: string; label: string; text: string }> = [
+  { icon: "📁", label: "分析项目", text: "帮我分析一下当前项目的结构和技术栈，总结主要模块和它们的职责" },
+  { icon: "🐛", label: "调试代码", text: "帮我看看这个报错是什么原因，给出修复方案：" },
+  { icon: "🔍", label: "联网搜索", text: "帮我搜索一下" },
+  { icon: "📝", label: "代码审查", text: "帮我审查这段代码，指出潜在问题和优化建议：" },
+  { icon: "🧪", label: "写测试", text: "帮我为这个函数写单元测试：" },
+  { icon: "📖", label: "解释概念", text: "帮我解释一下" },
+  { icon: "🔄", label: "重构", text: "帮我重构这段代码，提高可读性和可维护性：" },
+  { icon: "🚀", label: "性能优化", text: "帮我分析这段代码的性能瓶颈，并给出优化方案：" },
+];
+
 export interface AttachedImage {
   data: string;    // base64 (no prefix)
   mimeType: string;
@@ -106,6 +118,9 @@ export function InputBar() {
     activeIndex: number;
   }>({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
 
+  // ── 快捷指令面板 ──
+  const [showQuickPrompts, setShowQuickPrompts] = useState(false);
+
   // ── 图片处理 ──
   const processImageFiles = useCallback(async (files: File[]) => {
     const imageFiles = files.filter(f => f.type.startsWith("image/"));
@@ -180,7 +195,21 @@ export function InputBar() {
     attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); });
     setAttachedImages([]);
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
+    setShowQuickPrompts(false);
     if (taRef.current) taRef.current.style.height = "auto";
+  };
+
+  const insertQuickPrompt = (prompt: string) => {
+    setText(prompt);
+    setShowQuickPrompts(false);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      el.focus();
+      // 光标放到末尾，方便用户继续补充
+      el.setSelectionRange(prompt.length, prompt.length);
+      autoGrow();
+    });
   };
 
   const autoGrow = () => {
@@ -365,6 +394,29 @@ export function InputBar() {
           </div>
         )}
 
+        {/* 快捷指令面板 */}
+        {showQuickPrompts && (
+          <div className="quick-prompts-panel">
+            <div className="quick-prompts-header">
+              <span>快捷指令</span>
+              <button className="quick-prompts-close" onClick={() => setShowQuickPrompts(false)}>✕</button>
+            </div>
+            <div className="quick-prompts-grid">
+              {QUICK_PROMPTS.map((p, i) => (
+                <button
+                  key={i}
+                  className="quick-prompt-item"
+                  onClick={() => insertQuickPrompt(p.text)}
+                  title={p.text}
+                >
+                  <span className="quick-prompt-icon">{p.icon}</span>
+                  <span className="quick-prompt-label">{p.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="input-row">
           {/* Agent 选择器 */}
           <div className="agent-selector" ref={agentDropdownRef}>
@@ -417,6 +469,18 @@ export function InputBar() {
             title="添加图片"
           >
             <Icon name="i-paperclip" size={18} />
+          </button>
+
+          {/* 快捷指令按钮 */}
+          <button
+            className={`input-attach ${showQuickPrompts ? "active" : ""}`}
+            onClick={() => setShowQuickPrompts(v => !v)}
+            type="button"
+            aria-label="快捷指令"
+            title="快捷指令"
+            style={showQuickPrompts ? { color: "var(--accent)" } : undefined}
+          >
+            ⚡
           </button>
 
           <textarea

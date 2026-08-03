@@ -16,7 +16,7 @@ import { Icon } from "./Icon";
 import { Spinner } from "./Spinner";
 import { useDebugStore } from "../stores/debug";
 
-function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void; retryStatus?: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null }) {
+function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssistant, onRegenerate }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void; retryStatus?: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null; isLastAssistant?: boolean; onRegenerate?: () => void }) {
   const debugEnabled = useDebugStore(s => s.enabled);
   // 系统通知（压缩等）— 非对话内容，渲染为特殊卡片
   if (msg.role === "system" && msg.systemNotice) {
@@ -129,6 +129,13 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus }: { msg: Mes
         {/* Debug 时间线：每步耗时 + token 明细 */}
         {debugEnabled && !msg.isStreaming && (
           <DebugTimeline msg={msg} />
+        )}
+
+        {/* 重新生成按钮（仅最后一条 AI 回复显示） */}
+        {isLastAssistant && onRegenerate && (
+          <button className="msg-regenerate-btn" onClick={onRegenerate} title="重新生成">
+            🔄 重新生成
+          </button>
         )}
       </div>
     </div>

@@ -13,6 +13,7 @@ export interface ChatSession {
   title: string;
   createdAt: number;
   updatedAt: number;
+  pinned?: boolean;
 }
 
 interface WorkspaceState {

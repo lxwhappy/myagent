@@ -54,6 +54,7 @@ export interface ChatSession {
   updatedAt: number;
   // 最近一次 agent_end 的 usage 快照，刷新后可恢复
   lastUsage?: unknown;
+  pinned?: boolean;
 }
 
 // index 条目：不含 messages 的轻量元数据，用于列表查询
@@ -63,6 +64,7 @@ interface SessionMeta {
   title: string;
   createdAt: number;
   updatedAt: number;
+  pinned?: boolean;
 }
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "/";
@@ -162,7 +164,12 @@ export const chatSessionStore = {
     await ensureLoaded();
     return Object.values(index)
       .filter((m) => m.workspaceId === workspaceId)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .sort((a, b) => {
+        // 置顶优先
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return b.updatedAt - a.updatedAt;
+      })
       .map((m) => ({
         id: m.id,
         workspaceId: m.workspaceId,
@@ -170,6 +177,7 @@ export const chatSessionStore = {
         messages: [], // 列表不返回消息，按需 get(id) 加载
         createdAt: m.createdAt,
         updatedAt: m.updatedAt,
+        pinned: m.pinned,
       }));
   },
 
@@ -305,5 +313,17 @@ export const chatSessionStore = {
     try {
       await rm(sessionFile(id), { force: true });
     } catch {}
+  },
+
+  async togglePin(id: string): Promise<boolean> {
+    await ensureLoaded();
+    const m = index[id];
+    if (!m) return false;
+    m.pinned = !m.pinned;
+    await persistIndex();
+    // 同步到完整会话文件
+    const s = await loadSession(id);
+    if (s) { s.pinned = m.pinned; await writeSession(s); }
+    return m.pinned;
   },
 };
