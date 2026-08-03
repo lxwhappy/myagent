@@ -3692,43 +3692,6 @@
   line-height: 1.5;
 }
 
-/* ── 代码块顶栏 + 复制按钮 ── */
-.code-block-wrapper {
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--border, #383838);
-}
-.code-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 12px;
-  background: #2d2d2d;
-  border-bottom: 1px solid #383838;
-  font-size: 12px;
-}
-.code-lang {
-  color: #999;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-family: var(--mono-font, monospace);
-}
-.code-copy-btn {
-  background: none;
-  border: 1px solid #555;
-  color: #ccc;
-  padding: 2px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s;
-}
-.code-copy-btn:hover {
-  background: #3d3d3d;
-  color: #fff;
-  border-color: #777;
-}
-
 /* ── 会话置顶 ── */
 .session-pin-btn {
   opacity: 0;
