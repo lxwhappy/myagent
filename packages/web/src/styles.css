@@ -2869,8 +2869,15 @@
 }
 /* 去掉 oneDark 主题的 textShadow（0 1px 阴影在深色背景上像横线）*/
 .code-block code[class*="language-"],
-.code-block pre[class*="language-"] {
+.code-block pre[class*="language-"],
+.code-block span[class*="token"],
+.code-block span[class*="language-"],
+.code-block .prismjs,
+.code-block .prismjs * {
   text-shadow: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
 }
 .cmd-pre {
   margin: 0;
