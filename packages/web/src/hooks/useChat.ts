@@ -426,6 +426,37 @@ export function useChat() {
     setTimeout(() => useChatStore.getState().forceResetGenerating(sid), 200);
   }, []);
 
+  // 重新生成最后一条 AI 回复：删除旧回复 → 重新发送最后一条用户消息
+  const regenerate = useCallback(() => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid) return;
+    const sess = useChatStore.getState().sessions[sid];
+    if (!sess || sess.isGenerating) return;
+    // 检查最后一条是否是 assistant 回复
+    const last = sess.messages[sess.messages.length - 1];
+    if (!last || last.role !== "assistant") return;
+
+    // 删除最后一条 assistant 消息，拿到对应的最后一条 user 消息文本
+    const lastUserText = useChatStore.getState().removeLastAssistant(sid);
+    if (!lastUserText) return;
+
+    // 先 abort 当前 agent（清除内部对话状态中的旧回复）
+    sseClient.abort(sid);
+
+    // 同步删除后端存储的最后一条 assistant 消息
+    const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
+    const appSessionId = (window as any).__chatToAppSession?.[sid] ?? ws?.activeSessionId;
+    if (appSessionId) {
+      fetch(`/api/sessions/${appSessionId}`, { method: "DELETE" }).catch(() => {});
+    }
+
+    // 短暂延迟后重新发送（给 abort 时间生效）
+    setTimeout(() => {
+      useChatStore.getState().startAssistantMessage(sid);
+      sseClient.prompt(sid, lastUserText, undefined, useChatStore.getState().thinkingEnabled);
+    }, 300);
+  }, []);
+
   // 切换当前会话使用的 Agent：记录选中项 + 销毁旧 agent session + 用新配置重建
   const switchAgent = useCallback(async (agentId: string) => {
     const cfg = useAgentsStore.getState().getById(agentId);
@@ -566,6 +597,7 @@ export function useChat() {
     switchToSession,
     sendMessage,
     abort,
+    regenerate,
     loadSession,
     switchAgent,
   };
