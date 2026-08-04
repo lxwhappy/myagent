@@ -65,26 +65,23 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssist
         {/* 统一生成状态指示器（重试/等待/初始三合一，同时只显示一个） */}
         <GeneratingStatus msg={msg} retryStatus={retryStatus} />
 
-        {/* 4. 正文（Markdown 渲染） */}
+        {/* 4. 正文（Markdown 渲染） */ }
         {msg.content && (
           <div className="msg-content">
-            {msg.isStreaming ? (
-              <>
-                <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
-                <span className="stream-cursor" />
-              </>
-            ) : (
-              <ErrorBoundary fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    pre({ children }: any) {
-                      // block code（围栏代码块）：从子 <code> 提取原始文本 + 语言，按行数选择渲染方式
-                      const codeEl: any = Array.isArray(children) ? children[0] : children;
-                      if (!codeEl?.props) return <>{children}</>;
-                      const className = codeEl.props.className || "";
-                      const match = /language-(\w+)/.exec(className);
-                      const lang = match?.[1];
+            <ErrorBoundary
+              key={msg.isStreaming ? msg.content.length : "final"}
+              fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  pre({ children }: any) {
+                    // block code（围栏代码块）：从子 <code> 提取原始文本 + 语言，按行数选择渲染方式
+                    const codeEl: any = Array.isArray(children) ? children[0] : children;
+                    if (!codeEl?.props) return <>{children}</>;
+                    const className = codeEl.props.className || "";
+                    const match = /language-(\w+)/.exec(className);
+                    const lang = match?.[1];
                       const raw = String(codeEl.props.children ?? "").replace(/\n$/, "");
                       if (lang === "mermaid") {
                         return (
@@ -117,7 +114,7 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssist
                   {msg.content}
                 </ReactMarkdown>
               </ErrorBoundary>
-            )}
+              {msg.isStreaming && <span className="stream-cursor" />}
           </div>
         )}
 

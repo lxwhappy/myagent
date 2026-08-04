@@ -2798,6 +2798,75 @@
   position: relative;
   margin: var(--space-2) 0;
 }
+
+/* ── 多行代码块（带语言标签 + Copy 按钮）── */
+.code-block {
+  margin: var(--space-2) 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--code-bg-2, #181825), var(--fg, #000) 15%);
+}
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: var(--code-bg-2, #181825);
+  font-size: 11px;
+}
+.code-lang {
+  color: var(--muted, #888);
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.code-copy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--muted, #888);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.code-copy:hover {
+  color: var(--fg, #cdd6f4);
+  background: color-mix(in oklab, var(--fg, #000), transparent 90%);
+}
+/* 纯文本代码（text/plain 语言） */
+.msg-content .code-plain {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--code-bg, #1e1e2e);
+  color: var(--code-fg, #cdd6f4);
+  font-size: 12.5px;
+  font-family: var(--font-moto, ui-monospace, monospace);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.msg-content .code-plain code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+/* SyntaxHighlighter 内部覆写：去掉默认 pre 的 margin/padding，继承容器圆角 */
+.code-block .prismjs,
+.code-block pre.prismjs,
+.code-block div[style] {
+  margin: 0 !important;
+  padding: var(--space-2) var(--space-3) !important;
+  background: var(--code-bg, #1e1e2e) !important;
+  font-size: 12.5px !important;
+  line-height: 1.6 !important;
+}
 .cmd-pre {
   margin: 0;
   padding: var(--space-2) var(--space-3);
