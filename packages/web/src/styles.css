@@ -3019,6 +3019,11 @@
   max-height: 160px;
   overflow-y: auto;
 }
+.dbg-io-code.dbg-io-url {
+  color: var(--accent, #4a9eff);
+  max-height: none;
+  font-size: 11px;
+}
 
 /* 纯文本代码块 code 不应用行内 code 的样式（微边框/背景/缩放），
    它有自己的等宽 CJK 字体和 white-space: pre。用 :not 排除。 */

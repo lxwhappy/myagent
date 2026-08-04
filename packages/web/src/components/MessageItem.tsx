@@ -631,10 +631,31 @@ function DebugTimeline({ msg }: { msg: Message }) {
 // ── 时间线节点：LLM 调用 ──
 function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: number; isFinal: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
   const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
   const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
   const fmtTime = (ts?: number) => ts ? new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, minute: "2-digit", second: "2-digit" }) : "";
   const hasThinking = !!evt.thinking?.trim();
+  const hasRaw = !!evt.rawRequest?.url;
+
+  // 美化 JSON body（如果是合法 JSON）
+  const fmtJson = (s?: string | null) => {
+    if (!s) return "";
+    try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
+  };
+
+  // 从 SSE 流式响应中提取关键信息（模型名、finish_reason 等）
+  const parseSseSummary = (body?: string | null) => {
+    if (!body) return null;
+    const lines = body.split("\n").filter(l => l.startsWith("data:"));
+    const last = lines[lines.length - 1];
+    if (!last) return null;
+    try {
+      const data = JSON.parse(last.slice(5).trim());
+      return data;
+    } catch { return null; }
+  };
+  const sseSummary = hasRaw ? parseSseSummary(evt.rawResponse?.body) : null;
 
   return (
     <div className="dbg-step dbg-step-llm">
@@ -647,6 +668,7 @@ function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: n
           {evt.model && <span className="dbg-step-tag">{evt.model}</span>}
           {evt.startTs && <span className="dbg-step-time" title={`开始 ${fmtTime(evt.startTs)}${evt.endTs ? ` → 结束 ${fmtTime(evt.endTs)}` : ""}`}>🕐 {fmtTime(evt.startTs)}</span>}
           {hasThinking && <button className="dbg-expand-btn" onClick={() => setExpanded(!expanded)}>{expanded ? "收起" : "思考"}</button>}
+          {hasRaw && <button className="dbg-expand-btn" onClick={() => setShowRaw(!showRaw)}>{showRaw ? "收起" : "原始请求"}</button>}
         </div>
         <div className="dbg-step-detail">
           {!isFinal && <span className="dbg-step-desc">模型分析任务，决定下一步操作</span>}
@@ -658,6 +680,26 @@ function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: n
               <div className="dbg-io-label">思考过程</div>
               <pre className="dbg-io-code">{evt.thinking}</pre>
             </div>
+          </div>
+        )}
+        {showRaw && hasRaw && (
+          <div className="dbg-step-io">
+            <div className="dbg-io-section">
+              <div className="dbg-io-label">请求 URL</div>
+              <pre className="dbg-io-code dbg-io-url">{evt.rawRequest!.method} {evt.rawRequest!.url}</pre>
+            </div>
+            {evt.rawRequest!.body && (
+              <div className="dbg-io-section">
+                <div className="dbg-io-label">请求 Body</div>
+                <pre className="dbg-io-code">{fmtJson(evt.rawRequest!.body)}</pre>
+              </div>
+            )}
+            {evt.rawResponse?.body && (
+              <div className="dbg-io-section">
+                <div className="dbg-io-label">响应 Body（SSE 流汇总{evt.rawResponse.body.includes("截断") ? " · 已截断" : ""}）</div>
+                <pre className="dbg-io-code">{fmtJson(evt.rawResponse.body)}</pre>
+              </div>
+            )}
           </div>
         )}
         <div className="dbg-step-metrics">

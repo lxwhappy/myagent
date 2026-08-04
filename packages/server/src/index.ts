@@ -11,9 +11,13 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { config } from "./config.js";
 import { migrateIfNeeded } from "./migrate.js";
+import { setLlmInterceptorEnabled } from "./llm-interceptor.js";
 
 // ── 一次性数据迁移：~/.pi/agent/ → ~/.myagent/（幂等）──
 migrateIfNeeded();
+
+// LLM 拦截器：始终 patch fetch，debug 模式由前端通过 API 动态控制
+setLlmInterceptorEnabled(true);
 
 import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";

@@ -9,6 +9,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
+import { setLlmInterceptorSession } from "./llm-interceptor.js";
 import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput, getSkillPaths } from "./agent-registry.js";
 import { abortSubagents } from "./subagent-runner.js";
 import { pushPendingImages } from "./tools/image-tool.js";
@@ -170,6 +171,8 @@ export function setupSSEGateway(app: FastifyInstance) {
       idleChecker.unref?.();
 
       const cleanup = () => { clearInterval(idleChecker); idleUnsub?.(); };
+      // 设置 LLM 拦截器的当前会话（让 fetch patch 知道把原始请求/响应发给哪个会话）
+      setLlmInterceptorSession(id);
       agent.prompt(message, { images: promptImages as any })
         .then(() => { cleanup(); })
         .catch((err: any) => {

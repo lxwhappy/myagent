@@ -224,6 +224,20 @@ export function useChat() {
           if (sid) { chat.updateToolEnd(sid, msg.payload.toolCallId, msg.payload.result, msg.payload.isError, msg.payload?.debug); scheduleStreamingPersist(sid); }
           break;
 
+        case "llm_raw":
+          // Debug: 原始 LLM API 请求/响应（由 fetch 拦截器异步捕获）
+          if (sid && msg.payload) {
+            chat.attachRawLLM(sid, {
+              url: msg.payload.url,
+              method: msg.payload.method,
+              headers: msg.payload.reqHeaders,
+              body: msg.payload.reqBody,
+              respBody: msg.payload.respBody,
+              durationMs: msg.payload.durationMs,
+            });
+          }
+          break;
+
         case "usage_update":
           if (sid && msg.payload) chat.setUsage(sid, msg.payload);
           break;

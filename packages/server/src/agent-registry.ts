@@ -14,6 +14,7 @@ import { eventBridge } from "./event-bridge.js";
 import { mcpManager } from "./mcp-manager.js";
 import { emit } from "./event-bus.js";
 import { AGENT_DIR } from "./paths.js";
+import { setLlmInterceptorSession } from "./llm-interceptor.js";
 import { createTodoTool, createDelegateTool, customTools, todoStore } from "./tools/index.js";
 import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js";
 import { webSearchTool, webFetchTool } from "./tools/web-tool.js";

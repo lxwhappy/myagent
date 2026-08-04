@@ -20,6 +20,17 @@ export interface DebugLLMEvent {
   firstTokenMs?: number;
   startTs?: number;    // 调用开始时间戳
   endTs?: number;      // 调用结束时间戳
+  // 原始 LLM API 请求/响应（debug 模式下由 fetch 拦截器捕获）
+  rawRequest?: {
+    url: string;
+    method: string;
+    headers?: Record<string, string>;
+    body?: string | null;
+  };
+  rawResponse?: {
+    body?: string | null;
+    durationMs?: number;
+  };
 }
 
 export interface Message {
@@ -193,6 +204,8 @@ interface ChatStore {
   addDebugLLM: (id: string, evt: DebugLLMEvent) => void;
   /** 删除最后一条 assistant 消息（用于重新生成） */
   removeLastAssistant: (id: string) => string | null;
+  /** 将原始 LLM API 请求/响应附加到最近的 debugEvent */
+  attachRawLLM: (id: string, raw: { url: string; method: string; headers?: Record<string, string>; body?: string | null; respBody?: string | null; durationMs?: number }) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -479,4 +492,30 @@ export const useChatStore = create<ChatStore>((set) => ({
     });
     return lastUserText;
   },
+
+  attachRawLLM: (id, raw) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    const msgs = [...sess.messages];
+    // 找最后一条 assistant 消息
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant") {
+        const msg = msgs[i];
+        const events = [...(msg.debugEvents || [])];
+        // 找最后一个还没有 rawRequest 的 debugEvent（当前正在进行的 LLM 调用）
+        for (let j = events.length - 1; j >= 0; j--) {
+          if (!events[j].rawRequest) {
+            events[j] = {
+              ...events[j],
+              rawRequest: { url: raw.url, method: raw.method, headers: raw.headers, body: raw.body },
+              rawResponse: { body: raw.respBody, durationMs: raw.durationMs },
+            };
+            break;
+          }
+        }
+        msgs[i] = { ...msg, debugEvents: events };
+        break;
+      }
+    }
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+  }),
 }));
