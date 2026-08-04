@@ -2774,6 +2774,15 @@
   border-radius: 4px;
   font-weight: 450;
 }
+/* SyntaxHighlighter 的 code 元素不受 inline code 样式影响（去掉 border/background/padding） */
+.msg-content code[class*="language-"] {
+  border: none;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
 
 /* 单行代码（来自代码围栏的独占一行命令）：去框，与 inline code 风格一致 */
 .msg-content code.code-line {
