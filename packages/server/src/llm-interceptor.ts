@@ -10,7 +10,7 @@
 
 import { emit } from "./event-bus.js";
 
-const MAX_BODY_LEN = 8000; // 请求/响应 body 最大截取长度
+const MAX_BODY_LEN = 50000; // 请求/响应 body 最大截取长度（足够看完整 messages 数组）
 
 // 匹配 LLM API 的 URL 模式
 const LLM_URL_PATTERNS = [
