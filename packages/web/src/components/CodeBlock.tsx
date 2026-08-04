@@ -11,9 +11,15 @@ const LazyHighlighter = lazy(async () => {
     import("react-syntax-highlighter"),
     import("react-syntax-highlighter/dist/esm/styles/prism"),
   ]);
+  // 从 oneDark 主题中移除 textShadow（0 1px 阴影在深色背景上像横线）
+  const cleaned: Record<string, CSSProperties> = {};
+  for (const [key, val] of Object.entries(oneDark)) {
+    const v = val as CSSProperties;
+    cleaned[key] = { ...v, textShadow: "none" };
+  }
   return {
     default: (props: HighlighterProps) => (
-      <SyntaxHighlighter style={oneDark} {...props} />
+      <SyntaxHighlighter style={cleaned} {...props} />
     ),
   };
 });
