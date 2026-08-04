@@ -69,7 +69,7 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssist
         {msg.content && (
           <div className="msg-content">
             <ErrorBoundary
-              key={msg.isStreaming ? msg.content.length : "final"}
+              key={msg.isStreaming ? Math.floor(msg.content.length / 50) : "final"}
               fallback={<div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>}
             >
               <ReactMarkdown
@@ -111,7 +111,13 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssist
                     },
                   }}
                 >
-                  {msg.content}
+                  {msg.isStreaming
+                    // 流式时：如果有未闭合的代码围栏（奇数个```），补一个临时闭合标记让 Markdown 正确渲染
+                    ? (() => {
+                        const fenceCount = (msg.content.match(/```/g) || []).length;
+                        return fenceCount % 2 === 1 ? msg.content + "\n```" : msg.content;
+                      })()
+                    : msg.content}
                 </ReactMarkdown>
               </ErrorBoundary>
               {msg.isStreaming && <span className="stream-cursor" />}

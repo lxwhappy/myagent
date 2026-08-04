@@ -2867,17 +2867,15 @@
   font-size: 12.5px !important;
   line-height: 1.6 !important;
 }
-/* 去掉 oneDark 主题的 textShadow（0 1px 阴影在深色背景上像横线）*/
+/* 去掉 oneDark 主题的 textShadow + 每行背景 */
 .code-block code[class*="language-"],
-.code-block pre[class*="language-"],
-.code-block span[class*="token"],
-.code-block span[class*="language-"],
-.code-block .prismjs,
-.code-block .prismjs * {
+.code-block pre[class*="language-"] {
   text-shadow: none !important;
-  border-top: none !important;
-  border-bottom: none !important;
-  box-shadow: none !important;
+  background: var(--code-bg, #1e1e2e) !important;
+}
+/* token span 不应该有自己的背景（oneDark 给某些 token 加了背景） */
+.code-block span.token {
+  background: transparent !important;
 }
 .cmd-pre {
   margin: 0;
