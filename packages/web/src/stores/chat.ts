@@ -205,7 +205,7 @@ interface ChatStore {
   /** 删除最后一条 assistant 消息（用于重新生成） */
   removeLastAssistant: (id: string) => string | null;
   /** 将原始 LLM API 请求/响应附加到最近的 debugEvent */
-  attachRawLLM: (id: string, raw: { url: string; method: string; headers?: Record<string, string>; body?: string | null; respBody?: string | null; durationMs?: number }) => void;
+  attachRawLLM: (id: string, raw: { url: string; method: string; headers?: Record<string, string>; body?: string | null; respBody?: string | null; durationMs?: number; timestamp?: number }) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -500,17 +500,28 @@ export const useChatStore = create<ChatStore>((set) => ({
     for (let i = msgs.length - 1; i >= 0; i--) {
       if (msgs[i].role === "assistant") {
         const msg = msgs[i];
-        const events = [...(msg.debugEvents || [])];
-        // 找最后一个还没有 rawRequest 的 debugEvent（当前正在进行的 LLM 调用）
-        for (let j = events.length - 1; j >= 0; j--) {
-          if (!events[j].rawRequest) {
-            events[j] = {
-              ...events[j],
-              rawRequest: { url: raw.url, method: raw.method, headers: raw.headers, body: raw.body },
-              rawResponse: { body: raw.respBody, durationMs: raw.durationMs },
-            };
-            break;
-          }
+        let events = [...(msg.debugEvents || [])];
+        // llm_raw 是异步收集完整个 SSE 流后才发出的，可能延迟到下一个
+        // debugEvent 创建之后才到达。原来用 LIFO（从后往前找第一个没 raw 的）
+        // 会导致 raw 数据关联到错误的 event。
+        // 改用时间戳匹配：raw.timestamp（fetch 发起时间）与 debugEvent.startTs
+        //（message_start 时间）只差几十 ms，找最接近且还没 rawRequest 的。
+        const rawTs = raw.timestamp ?? Date.now();
+        let bestIdx = -1;
+        let bestDiff = Infinity;
+        for (let j = 0; j < events.length; j++) {
+          if (events[j].rawRequest) continue; // 已有 raw，跳过
+          const evtTs = events[j].startTs;
+          if (evtTs == null) { if (bestIdx < 0) bestIdx = j; continue; }
+          const diff = Math.abs(evtTs - rawTs);
+          if (diff < bestDiff) { bestDiff = diff; bestIdx = j; }
+        }
+        if (bestIdx >= 0) {
+          events = events.map((e, j) => j === bestIdx ? {
+            ...e,
+            rawRequest: { url: raw.url, method: raw.method, headers: raw.headers, body: raw.body },
+            rawResponse: { body: raw.respBody, durationMs: raw.durationMs },
+          } : e);
         }
         msgs[i] = { ...msg, debugEvents: events };
         break;

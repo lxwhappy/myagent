@@ -2975,34 +2975,53 @@
 /* 时间线容器 + 左侧竖线 */
 .debug-timeline {
   position: relative;
-  padding-left: 18px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .debug-timeline::before {
   content: "";
   position: absolute;
-  left: 5px;
+  left: 6px;
   top: 4px;
   bottom: 4px;
-  width: 1.5px;
-  background: var(--border, rgba(0,0,0,0.1));
+  width: 2px;
+  background: color-mix(in oklab, var(--fg, #000), transparent 88%);
+  border-radius: 1px;
 }
 
-/* 每个时间线节点 */
+/* 每个时间线节点 → 卡片 */
 .dbg-step {
   position: relative;
-  padding-bottom: 10px;
+  background: color-mix(in oklab, var(--fg, #000), transparent 96.5%);
+  border: 1px solid color-mix(in oklab, var(--fg, #000), transparent 90%);
+  border-radius: 6px;
+  padding: 6px 10px 6px 10px;
+  transition: border-color .15s;
 }
-.dbg-step:last-child { padding-bottom: 0; }
+.dbg-step:hover {
+  border-color: color-mix(in oklab, var(--fg, #000), transparent 80%);
+}
+.dbg-step-llm {
+  border-left: 3px solid color-mix(in oklab, var(--accent, #3b82f6), transparent 40%);
+}
+.dbg-step-tool {
+  border-left: 3px solid color-mix(in oklab, var(--success, #22c55e), transparent 40%);
+}
+.dbg-step-tool.errored {
+  border-left-color: color-mix(in oklab, var(--danger, #ef4444), transparent 40%);
+}
 
 /* 节点圆点 */
 .dbg-dot {
   position: absolute;
-  left: -18px;
-  top: 2px;
-  width: 12px;
-  height: 12px;
+  left: -20px;
+  top: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  border: 2px solid var(--bg, #fff);
+  border: 2.5px solid var(--bg, #fff);
   z-index: 1;
 }
 .dbg-dot-llm { background: var(--accent, #3b82f6); }
@@ -3013,53 +3032,61 @@
 .dbg-step-content {
   min-width: 0;
 }
+/* 标题行：单行不换行，按钮靠右 */
 .dbg-step-head {
   display: flex;
   align-items: center;
   gap: 5px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 .dbg-step-num {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 9.5px;
   color: var(--muted);
-  background: color-mix(in oklab, var(--fg, #000), transparent 92%);
+  background: color-mix(in oklab, var(--fg, #000), transparent 90%);
   padding: 0 4px;
   border-radius: 3px;
+  flex-shrink: 0;
 }
 .dbg-step-icon { font-size: 12px; flex-shrink: 0; }
-.dbg-step-title { font-size: 12px; font-weight: 600; color: var(--fg); }
+.dbg-step-title { font-size: 12px; font-weight: 600; color: var(--fg); flex-shrink: 0; }
 .dbg-step-tag {
   font-size: 9.5px;
   color: var(--muted);
   font-family: var(--font-mono, ui-monospace, monospace);
-  background: color-mix(in oklab, var(--fg, #000), transparent 94%);
+  background: color-mix(in oklab, var(--fg, #000), transparent 92%);
   padding: 0 4px;
   border-radius: 3px;
+  flex-shrink: 0;
 }
 .dbg-step-time {
   font-size: 9.5px;
   color: var(--muted);
   font-family: var(--font-mono, ui-monospace, monospace);
+  flex-shrink: 0;
 }
 .dbg-step-summary {
   font-size: 11px;
   color: var(--muted);
   font-family: var(--font-mono, ui-monospace, monospace);
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
-.dbg-step-detail { margin: 1px 0 2px; }
+.dbg-step-detail { margin: 2px 0 0; }
 .dbg-step-desc { font-size: 10.5px; color: var(--muted); }
 
-/* 指标行 */
+/* 指标行：独立成行，与标题用细线分隔 */
 .dbg-step-metrics {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-top: 2px;
+  margin-top: 4px;
+  padding-top: 3px;
+  border-top: 1px dashed color-mix(in oklab, var(--fg, #000), transparent 90%);
 }
 .dbg-metric {
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -3068,7 +3095,7 @@
 }
 .dbg-metric-tok { color: var(--accent); font-weight: 600; }
 
-/* 工具展开按钮 + 输入输出 */
+/* 工具展开按钮 */
 .dbg-expand-btn {
   margin-left: auto;
   font-size: 10px;
@@ -3080,11 +3107,16 @@
   flex-shrink: 0;
 }
 .dbg-expand-btn:hover { text-decoration: underline; }
+
+/* 展开内容：缩进 + 左边框，明确归属当前卡片 */
 .dbg-step-io {
-  margin-top: 4px;
+  margin-top: 6px;
+  margin-left: 2px;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in oklab, var(--fg, #000), transparent 88%);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 .dbg-io-section { min-width: 0; }
 .dbg-io-label {
@@ -3112,6 +3144,77 @@
   color: var(--accent, #4a9eff);
   max-height: none;
   font-size: 11px;
+}
+
+/* ── Debug 增量提示词视图 ── */
+.dbg-raw-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--fg, #000), transparent 88%);
+  margin-bottom: 6px;
+}
+.dbg-raw-tab {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color .15s, border-color .15s;
+  font-family: inherit;
+}
+.dbg-raw-tab:hover { color: var(--fg); }
+.dbg-raw-tab.active {
+  color: var(--accent, #4a9eff);
+  border-bottom-color: var(--accent, #4a9eff);
+}
+
+.dbg-delta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.dbg-delta-msg {
+  border-left: 3px solid var(--muted);
+  border-radius: 0 5px 5px 0;
+  overflow: hidden;
+}
+.dbg-delta-msg.role-sys { border-left-color: var(--accent, #6366f1); }
+.dbg-delta-msg.role-user { border-left-color: var(--success, #22c55e); }
+.dbg-delta-msg.role-asst { border-left-color: #f59e0b; }
+.dbg-delta-msg.role-tool { border-left-color: #06b6d4; }
+.dbg-delta-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 2px;
+  background: color-mix(in oklab, var(--fg, #000), transparent 94%);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dbg-delta-icon { font-size: 11px; line-height: 1; }
+.dbg-delta-role { letter-spacing: 0.3px; }
+.dbg-delta-body {
+  margin: 0;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  line-height: 1.5;
+  color: var(--fg);
+}
+.dbg-delta-empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px 8px;
+  font-style: italic;
 }
 
 /* 纯文本代码块 code 不应用行内 code 的样式（微边框/背景/缩放），

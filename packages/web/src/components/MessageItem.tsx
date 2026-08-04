@@ -573,14 +573,17 @@ function DebugTimeline({ msg }: { msg: Message }) {
 
   // 重建统一时间线：LLM 和工具交替（LLM₁ → tool₁ → LLM₂ → tool₂ → … → LLMₙ最终回复）
   const timeline: Array<
-    { kind: "llm"; idx: number; evt: DebugLLMEvent; isFinal: boolean } |
+    { kind: "llm"; idx: number; evt: DebugLLMEvent; isFinal: boolean; prevBody: string | null } |
     { kind: "tool"; idx: number; tool: ToolExecution }
   > = [];
   {
     let li = 0, ti = 0;
+    let prevLlmBody: string | null = null;
     while (li < llmEvents.length || ti < tools.length) {
       if (li < llmEvents.length) {
-        timeline.push({ kind: "llm", idx: li, evt: llmEvents[li], isFinal: li === llmEvents.length - 1 && ti >= tools.length });
+        const curBody = llmEvents[li].rawRequest?.body ?? null;
+        timeline.push({ kind: "llm", idx: li, evt: llmEvents[li], isFinal: li === llmEvents.length - 1 && ti >= tools.length, prevBody: prevLlmBody });
+        prevLlmBody = curBody;
         li++;
       }
       if (ti < tools.length) {
@@ -620,7 +623,7 @@ function DebugTimeline({ msg }: { msg: Message }) {
           {/* 统一时间线 */}
           <div className="debug-timeline">
             {timeline.map((item, i) => item.kind === "llm" ? (
-              <DebugLLMRow key={`tl-${i}`} evt={item.evt} stepNum={i + 1} isFinal={item.isFinal} />
+              <DebugLLMRow key={`tl-${i}`} evt={item.evt} stepNum={i + 1} isFinal={item.isFinal} prevBody={item.prevBody} />
             ) : (
               <DebugToolRow key={`tl-${i}`} tool={item.tool} stepNum={i + 1} />
             ))}
@@ -632,9 +635,28 @@ function DebugTimeline({ msg }: { msg: Message }) {
 }
 
 // ── 时间线节点：LLM 调用 ──
-function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: number; isFinal: boolean }) {
+const ROLE_META: Record<string, { label: string; icon: string; cls: string }> = {
+  system: { label: "系统提示词", icon: "⚙️", cls: "sys" },
+  user: { label: "用户消息", icon: "👤", cls: "user" },
+  assistant: { label: "助手回复", icon: "🤖", cls: "asst" },
+  tool: { label: "工具结果", icon: "🔧", cls: "tool" },
+};
+
+function extractMsgContent(msg: any): string {
+  if (msg.content != null && typeof msg.content === "string") return msg.content;
+  if (msg.tool_calls) {
+    return msg.tool_calls.map((tc: any) => {
+      const fn = tc.function || {};
+      return `${fn.name || "?"}(${fn.arguments || ""})`;
+    }).join("\n");
+  }
+  if (Array.isArray(msg.content)) return JSON.stringify(msg.content, null, 2);
+  return JSON.stringify(msg, null, 2);
+}
+
+function DebugLLMRow({ evt, stepNum, isFinal, prevBody }: { evt: DebugLLMEvent; stepNum: number; isFinal: boolean; prevBody?: string | null }) {
   const [expanded, setExpanded] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
+  const [rawView, setRawView] = useState<null | "delta" | "full" | "response">(null);
   const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
   const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
   const fmtTime = (ts?: number) => ts ? new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, minute: "2-digit", second: "2-digit" }) : "";
@@ -647,18 +669,23 @@ function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: n
     try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s; }
   };
 
-  // 从 SSE 流式响应中提取关键信息（模型名、finish_reason 等）
-  const parseSseSummary = (body?: string | null) => {
-    if (!body) return null;
-    const lines = body.split("\n").filter(l => l.startsWith("data:"));
-    const last = lines[lines.length - 1];
-    if (!last) return null;
-    try {
-      const data = JSON.parse(last.slice(5).trim());
-      return data;
-    } catch { return null; }
+  // 从请求 body 中提取 messages 数组
+  const parseMessages = (body?: string | null): any[] => {
+    if (!body) return [];
+    try { return JSON.parse(body)?.messages || []; } catch { return []; }
   };
-  const sseSummary = hasRaw ? parseSseSummary(evt.rawResponse?.body) : null;
+
+  const currMsgs = hasRaw ? parseMessages(evt.rawRequest!.body) : [];
+  const prevMsgs = parseMessages(prevBody);
+
+  // 计算 delta：找到与上次请求的公共前缀，公共前缀之后的就是新增内容
+  let commonLen = 0;
+  for (let i = 0; i < Math.min(prevMsgs.length, currMsgs.length); i++) {
+    if (JSON.stringify(prevMsgs[i]) === JSON.stringify(currMsgs[i])) commonLen = i + 1;
+    else break;
+  }
+  const deltaMsgs = currMsgs.slice(commonLen);
+  const isFirst = prevMsgs.length === 0;
 
   return (
     <div className="dbg-step dbg-step-llm">
@@ -671,7 +698,7 @@ function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: n
           {evt.model && <span className="dbg-step-tag">{evt.model}</span>}
           {evt.startTs && <span className="dbg-step-time" title={`开始 ${fmtTime(evt.startTs)}${evt.endTs ? ` → 结束 ${fmtTime(evt.endTs)}` : ""}`}>🕐 {fmtTime(evt.startTs)}</span>}
           {hasThinking && <button className="dbg-expand-btn" onClick={() => setExpanded(!expanded)}>{expanded ? "收起" : "思考"}</button>}
-          {hasRaw && <button className="dbg-expand-btn" onClick={() => setShowRaw(!showRaw)}>{showRaw ? "收起" : "原始请求"}</button>}
+          {hasRaw && <button className="dbg-expand-btn" onClick={() => setRawView(rawView === null ? "delta" : null)}>{rawView === null ? "提示词增量" : "收起"}</button>}
         </div>
         <div className="dbg-step-detail">
           {!isFinal && <span className="dbg-step-desc">模型分析任务，决定下一步操作</span>}
@@ -685,21 +712,56 @@ function DebugLLMRow({ evt, stepNum, isFinal }: { evt: DebugLLMEvent; stepNum: n
             </div>
           </div>
         )}
-        {showRaw && hasRaw && (
+        {rawView && hasRaw && (
           <div className="dbg-step-io">
-            <div className="dbg-io-section">
-              <div className="dbg-io-label">请求 URL</div>
-              <pre className="dbg-io-code dbg-io-url">{evt.rawRequest!.method} {evt.rawRequest!.url}</pre>
+            <div className="dbg-raw-tabs">
+              <button className={`dbg-raw-tab${rawView === "delta" ? " active" : ""}`} onClick={() => setRawView("delta")}>
+                {isFirst ? `初始上下文 (${currMsgs.length})` : `本次新增 (${deltaMsgs.length})`}
+              </button>
+              <button className={`dbg-raw-tab${rawView === "full" ? " active" : ""}`} onClick={() => setRawView("full")}>完整请求</button>
+              {evt.rawResponse?.body && (
+                <button className={`dbg-raw-tab${rawView === "response" ? " active" : ""}`} onClick={() => setRawView("response")}>
+                  响应{evt.rawResponse.body.includes("截断") ? " · 截断" : ""}
+                </button>
+              )}
             </div>
-            {evt.rawRequest!.body && (
-              <div className="dbg-io-section">
-                <div className="dbg-io-label">请求 Body</div>
-                <pre className="dbg-io-code">{fmtJson(evt.rawRequest!.body)}</pre>
-              </div>
+            {rawView === "delta" && (
+              deltaMsgs.length === 0 ? (
+                <div className="dbg-delta-empty">无新增（与上次请求相同）</div>
+              ) : (
+                <div className="dbg-delta-list">
+                  {deltaMsgs.map((m, i) => {
+                    const meta = ROLE_META[m.role] || { label: m.role, icon: "📝", cls: "other" };
+                    return (
+                      <div key={i} className={`dbg-delta-msg role-${meta.cls}`}>
+                        <div className="dbg-delta-head">
+                          <span className="dbg-delta-icon">{meta.icon}</span>
+                          <span className="dbg-delta-role">{meta.label}</span>
+                        </div>
+                        <pre className="dbg-delta-body">{extractMsgContent(m)}</pre>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             )}
-            {evt.rawResponse?.body && (
+            {rawView === "full" && (
+              <>
+                <div className="dbg-io-section">
+                  <div className="dbg-io-label">请求 URL</div>
+                  <pre className="dbg-io-code dbg-io-url">{evt.rawRequest!.method} {evt.rawRequest!.url}</pre>
+                </div>
+                {evt.rawRequest!.body && (
+                  <div className="dbg-io-section">
+                    <div className="dbg-io-label">请求 Body</div>
+                    <pre className="dbg-io-code">{fmtJson(evt.rawRequest!.body)}</pre>
+                  </div>
+                )}
+              </>
+            )}
+            {rawView === "response" && evt.rawResponse?.body && (
               <div className="dbg-io-section">
-                <div className="dbg-io-label">响应 Body（SSE 流汇总{evt.rawResponse.body.includes("截断") ? " · 已截断" : ""}）</div>
+                <div className="dbg-io-label">响应 Body（SSE 流汇总）</div>
                 <pre className="dbg-io-code">{fmtJson(evt.rawResponse.body)}</pre>
               </div>
             )}

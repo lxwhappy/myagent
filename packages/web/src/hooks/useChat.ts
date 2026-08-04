@@ -234,6 +234,7 @@ export function useChat() {
               body: msg.payload.reqBody,
               respBody: msg.payload.respBody,
               durationMs: msg.payload.durationMs,
+              timestamp: msg.payload.timestamp,
             });
           }
           break;
