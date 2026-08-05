@@ -6,6 +6,7 @@ import { useChat } from "../hooks/useChat";
 import { useChatStore, type SkillInfo } from "../stores/chat";
 import { useAgentsStore } from "../stores/agents";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
+import { useCodeRefStore, formatCodeRefs, type CodeRef } from "../stores/code-refs";
 import { Icon } from "./Icon";
 import { AgentManager } from "./AgentManager";
 
@@ -86,6 +87,11 @@ export function InputBar() {
   const draftKey = activeChatSessionId ?? "__default";
   const [text, setText] = useState(() => getDraft(draftKey));
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+
+  // 代码引用片段（来自右侧文件预览面板的选中）—— 多片段累积，发送时拼接到消息末尾
+  const codeRefs = useCodeRefStore(s => s.refs);
+  const removeCodeRef = useCodeRefStore(s => s.remove);
+  const clearCodeRefs = useCodeRefStore(s => s.clear);
 
   // 会话切换时加载对应 draft
   useEffect(() => {
@@ -180,7 +186,7 @@ export function InputBar() {
   }, [processImageFiles]);
 
   const handleSend = () => {
-    if ((!text.trim() && attachedImages.length === 0) || isGenerating) return;
+    if ((!text.trim() && attachedImages.length === 0 && codeRefs.length === 0) || isGenerating) return;
     addToHistory(text.trim());
     historyRef.current = loadHistory();
     histIndexRef.current = -1;
@@ -188,12 +194,13 @@ export function InputBar() {
     const images = attachedImages.length > 0
       ? attachedImages.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }))
       : undefined;
-    sendMessage(text, images);
+    sendMessage(text, images, codeRefs.length > 0 ? codeRefs : undefined);
     // 清理
     setText("");
     clearDraft(draftKey);
     attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); });
     setAttachedImages([]);
+    clearCodeRefs();
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
     setShowQuickPrompts(false);
     if (taRef.current) taRef.current.style.height = "auto";
@@ -361,7 +368,7 @@ export function InputBar() {
     return () => { attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); }); };
   }, []);
 
-  const canSend = (text.trim().length > 0 || attachedImages.length > 0) && connected && !isGenerating;
+  const canSend = (text.trim().length > 0 || attachedImages.length > 0 || codeRefs.length > 0) && connected && !isGenerating;
 
   return (
     <div className="input-bar">
@@ -385,6 +392,30 @@ export function InputBar() {
                   onClick={() => removeImage(i)}
                   type="button"
                   aria-label="移除图片"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
+                >
+                  <Icon name="i-x" size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 代码引用片段栏（来自右侧文件预览面板的选中，支持多片段累积） */}
+        {codeRefs.length > 0 && (
+          <div className="attachments coderef-bar">
+            {codeRefs.map(r => (
+              <div key={r.id} className="coderef-chip" title={r.filePath}>
+                <Icon name="i-code" size={12} />
+                <span className="coderef-name">{r.fileName}</span>
+                <span className="coderef-lines">
+                  {r.startLine === r.endLine ? `L${r.startLine}` : `L${r.startLine}-L${r.endLine}`}
+                </span>
+                <button
+                  type="button"
+                  className="attach-remove"
+                  onClick={() => removeCodeRef(r.id)}
+                  aria-label="移除引用"
                   style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
                 >
                   <Icon name="i-x" size={12} />

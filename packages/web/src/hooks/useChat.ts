@@ -8,6 +8,7 @@ import { useChatStore } from "../stores/chat";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useAgentsStore } from "../stores/agents";
 import { playCompletionSound } from "../hooks/useAudio";
+import { formatCodeRefs, type CodeRef } from "../stores/code-refs";
 
 let eventsBound = false;
 
@@ -368,15 +369,19 @@ export function useChat() {
     useChatStore.getState().setActiveChatSession(chatSessionId);
   }, []);
 
-  const sendMessage = useCallback(async (text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>) => {
-    if (!text.trim() && !images?.length) return;
+  const sendMessage = useCallback(async (text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>, codeRefs?: CodeRef[]) => {
+    // 引用片段拼接（带文件路径+行号，让 agent 精确定位）；前端用户气泡只显示纯 text，
+    // fullText 用于后端持久化 + 发送给 agent，保证历史上下文一致。
+    const refSuffix = codeRefs && codeRefs.length ? formatCodeRefs(codeRefs) : "";
+    const fullText = refSuffix ? text + refSuffix : text;
+    if (!text.trim() && !images?.length && !codeRefs?.length) return;
     // 防重复：相同内容在 800ms 内只处理一次（应对输入法/双击等时序竞态）
     const now = Date.now();
-    if (text === lastSentText && !images && now - lastSentTime < 800) {
-      console.warn("[chat] duplicate send suppressed:", text.slice(0, 30));
+    if (fullText === lastSentText && !images && now - lastSentTime < 800) {
+      console.warn("[chat] duplicate send suppressed:", fullText.slice(0, 30));
       return;
     }
-    lastSentText = text;
+    lastSentText = fullText;
     lastSentTime = now;
 
     let sid = useChatStore.getState().activeChatSessionId;
@@ -418,13 +423,14 @@ export function useChat() {
     const isFirst = sess.messages.length === 0;
     // 存图片到用户消息（前端展示缩略图用）
     const userImages = images?.map(img => ({ data: img.data, mimeType: img.mimeType }));
+    // 前端用户气泡只显示用户输入的文字；引用内容随 fullText 持久化 + 发给 agent
     useChatStore.getState().addUserMessage(sid!, text, userImages);
 
     const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
     if (ws?.activeSessionId) {
       fetch(`/api/sessions/${ws.activeSessionId}/messages`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "user", content: text }),
+        body: JSON.stringify({ role: "user", content: fullText }),
       });
       if (isFirst) {
         const title = text.slice(0, 30) + (text.length > 30 ? "..." : "");
@@ -432,7 +438,7 @@ export function useChat() {
         ws.updateSession(ws.activeSessionId, { title });
       }
     }
-    sseClient.prompt(sid!, text, images, useChatStore.getState().thinkingEnabled);
+    sseClient.prompt(sid!, fullText, images, useChatStore.getState().thinkingEnabled);
   }, []);
 
   const abort = useCallback(() => {

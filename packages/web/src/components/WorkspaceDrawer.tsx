@@ -9,6 +9,7 @@ import { useChatStore } from "../stores/chat";
 import { getSessionStats } from "../utils/sessionStats";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useUIStore } from "../stores/ui";
+import { useCodeRefStore } from "../stores/code-refs";
 
 // ════════════════════════════════════════════════════════
 // 侧边栏"文件"Tab：文件树 + 搜索 + 文件/变更切换
@@ -273,11 +274,34 @@ export function FilePreviewPane() {
   const [viewMode, setViewMode] = useState<"source" | "diff">("source");
   const [diffData, setDiffData] = useState<string | null | undefined>(undefined); // undefined=未加载, null=无diff, string=diff内容
   const [diffLoading, setDiffLoading] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [selInfo, setSelInfo] = useState<{ start: number; end: number; text: string } | null>(null);
 
   const close = () => {
     ws.closeFile();
     wsStore.setDrawerOpen(false);
   };
+
+  // mouseup 后读取选区，基于 react-syntax-highlighter 的 [data-line] 行标记精确还原起止行号
+  const handleSelectionUp = useCallback(() => {
+    requestAnimationFrame(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { setSelInfo(null); return; }
+      const range = sel.getRangeAt(0);
+      const bodyEl = bodyRef.current;
+      if (!bodyEl || !bodyEl.contains(range.commonAncestorContainer)) { setSelInfo(null); return; }
+      const startEl = (range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer) as HTMLElement | null;
+      const endEl = (range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer) as HTMLElement | null;
+      const startLineEl = startEl?.closest("[data-line]");
+      const endLineEl = endEl?.closest("[data-line]");
+      if (!startLineEl || !endLineEl) { setSelInfo(null); return; }
+      const start = parseInt(startLineEl.getAttribute("data-line") || "0", 10);
+      const end = parseInt(endLineEl.getAttribute("data-line") || "0", 10);
+      const text = sel.toString();
+      if (!start || !end || !text.trim()) { setSelInfo(null); return; }
+      setSelInfo({ start: Math.min(start, end), end: Math.max(start, end), text });
+    });
+  }, []);
 
   // 切换到 diff 模式时加载 diff 数据
   useEffect(() => {
@@ -330,7 +354,36 @@ export function FilePreviewPane() {
           <Icon name="i-x" size={14} />
         </button>
       </div>
-      <div className="preview-body">
+      {/* 选中代码后的操作条：显示行号范围 + 引用到对话 */}
+      {selInfo && (
+        <div className="preview-sel-bar">
+          <Icon name="i-code" size={13} />
+          <span className="preview-sel-range">
+            已选 L{selInfo.start}{selInfo.start !== selInfo.end ? `-L${selInfo.end}` : ""}
+            （{selInfo.end - selInfo.start + 1} 行）
+          </span>
+          <button
+            type="button"
+            className="preview-sel-add"
+            onClick={() => {
+              if (!ws.currentFile) return;
+              const name = ws.currentFile.path.split("/").pop() || ws.currentFile.path;
+              useCodeRefStore.getState().add({
+                filePath: ws.currentFile.path,
+                fileName: name,
+                language: ws.currentFile.language,
+                startLine: selInfo.start,
+                endLine: selInfo.end,
+                content: selInfo.text,
+              });
+              setSelInfo(null);
+              window.getSelection()?.removeAllRanges();
+            }}
+          >引用到对话 ↑</button>
+          <button type="button" className="preview-sel-close" onClick={() => setSelInfo(null)}>✕</button>
+        </div>
+      )}
+      <div className="preview-body" ref={bodyRef} onMouseUp={handleSelectionUp}>
         {viewMode === "diff" ? (
           <DiffView
             diff={diffData}
@@ -354,6 +407,7 @@ export function FilePreviewPane() {
             language={ws.currentFile.language}
             content={ws.currentFile.content}
             showLineNumbers
+            tagLines
             customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)" }}
           />
         )}

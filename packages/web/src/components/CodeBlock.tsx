@@ -3,7 +3,7 @@
 // 首屏不渲染代码块时不会加载高亮库，大幅加快首屏速度。
 
 import { Suspense, lazy } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ElementType, HTMLAttributes } from "react";
 
 // 动态导入 SyntaxHighlighter + 主题，两者并行加载
 const LazyHighlighter = lazy(async () => {
@@ -26,9 +26,13 @@ const LazyHighlighter = lazy(async () => {
 
 interface HighlighterProps {
   language: string;
-  PreTag?: string;
+  PreTag?: ElementType;
   showLineNumbers?: boolean;
   customStyle?: CSSProperties;
+  /** 是否给每一行代码包裹一个带 data-line 标记的容器（用于选区行号推算） */
+  wrapLines?: boolean;
+  /** 每行的附加 props（配合 wrapLines，接收行号） */
+  lineProps?: (lineNumber: number) => HTMLAttributes<HTMLElement>;
   children: string;
 }
 
@@ -37,6 +41,12 @@ export interface CodeBlockProps {
   content: string;
   showLineNumbers?: boolean;
   customStyle?: CSSProperties;
+  /**
+   * 为每行代码打上 data-line="N" 标记，使外部可基于选区（Selection API）
+   * 精确还原起止行号。仅在文件预览面板等需要行级交互的场景开启，
+   * 消息流里的代码块保持默认（不开销、不动 DOM 结构）。
+   */
+  tagLines?: boolean;
 }
 
 /** 加载高亮库期间的轻量占位：纯 <pre>，不带高亮 */
@@ -48,7 +58,7 @@ function FallbackPre({ content, customStyle }: { content: string; customStyle?: 
   );
 }
 
-export function CodeBlock({ language, content, showLineNumbers, customStyle }: CodeBlockProps) {
+export function CodeBlock({ language, content, showLineNumbers, customStyle, tagLines }: CodeBlockProps) {
   return (
     <Suspense fallback={<FallbackPre content={content} customStyle={customStyle} />}>
       <LazyHighlighter
@@ -56,6 +66,8 @@ export function CodeBlock({ language, content, showLineNumbers, customStyle }: C
         PreTag="div"
         showLineNumbers={showLineNumbers}
         customStyle={customStyle}
+        wrapLines={tagLines}
+        lineProps={tagLines ? (ln) => ({ "data-line": ln } as unknown as HTMLAttributes<HTMLElement>) : undefined}
       >
         {content}
       </LazyHighlighter>
