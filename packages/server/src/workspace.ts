@@ -40,7 +40,7 @@ async function loadWorkspaces() {
 }
 await loadWorkspaces();
 
-const IGNORE = ["node_modules",".git","dist",".DS_Store",".next",".cache","__pycache__",".pnpm",".turbo","coverage"];
+const IGNORE = ["node_modules",".git","dist",".DS_Store",".next",".cache","__pycache__",".pnpm",".turbo","coverage","target","build",".gradle",".idea",".vscode","out","bin"];
 const MAX_SIZE = 512 * 1024;
 
 const EXT_LANG: Record<string,string> = {
@@ -316,7 +316,7 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     const seen = new Set<string>();
 
     async function walk(dir: string, depth: number) {
-      if (depth > 5 || results.length > 100) return;
+      if (depth > 12 || results.length > 100) return;
       try {
         const entries = await readdir(dir, { withFileTypes: true });
         for (const e of entries) {
