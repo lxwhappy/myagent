@@ -5,56 +5,12 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { emit } from "./event-bus.js";
 import { chatSessionStore } from "./chat-sessions.js";
-import { todoStore } from "./tools/index.js";
-
-// 漂移检测阈值：连续 N 个非 todo 工具调用且未更新清单时，触发提醒
-const DRIFT_THRESHOLD = 4;
 
 export class EventBridge {
   bind(chatSessionId: string, session: AgentSession): () => void {
     const send = (type: string, payload?: unknown) => {
       emit({ type, chatSessionId, payload, ts: Date.now() });
     };
-
-    // 漂移检测：连续非 todo 工具调用计数
-    let nonTodoToolCount = 0;
-    let driftReminded = false;
-
-    // auto-advance：模型不可靠时兜底推进
-    // - autoAdvance(): agent_start 时标记首个 pending 为 in_progress
-    // - autoAdvance(true): 每个非 todo 工具完成后推进一格
-    //   只推进 in_progress→completed，不会跳过未完成的任务
-    async function autoAdvance(advance = false) {
-      try {
-        const todos = await todoStore.list(chatSessionId);
-        if (todos.length === 0) return;
-        const inProgress = todos.find((t: any) => t.status === "in_progress");
-        const nextPending = todos.find((t: any) => t.status === "pending");
-
-        if (advance && inProgress) {
-          // 推进：当前 → completed，下一个 pending → in_progress
-          await todoStore.update(chatSessionId, inProgress.id, { status: "completed" });
-          if (nextPending) {
-            await todoStore.update(chatSessionId, nextPending.id, { status: "in_progress" });
-          }
-        } else if (!inProgress && nextPending) {
-          // 回合开始：标记首个 pending
-          await todoStore.update(chatSessionId, nextPending.id, { status: "in_progress" });
-        }
-      } catch {}
-    }
-
-    // agent 结束时：剩余未完成的全部标记完成
-    async function autoFinish() {
-      try {
-        const todos = await todoStore.list(chatSessionId);
-        for (const t of todos) {
-          if (t.status !== "completed") {
-            await todoStore.update(chatSessionId, t.id, { status: "completed" });
-          }
-        }
-      } catch {}
-    }
 
     const sendUsage = () => {
       try {
@@ -87,8 +43,8 @@ export class EventBridge {
 
     const handler = async (event: AgentSessionEvent) => {
       switch (event.type) {
-        case "agent_start": send("agent_start"); autoAdvance(); break;
-        case "agent_end": send("agent_end"); autoFinish(); sendUsage(); break;
+        case "agent_start": send("agent_start"); break;
+        case "agent_end": send("agent_end"); sendUsage(); break;
         case "message_start": {
           // 记录 LLM 调用开始时间（用服务器本地时间，和 message_end 的 Date.now() 一致）
           llmTimings.set("current", { startTs: Date.now() });
@@ -221,43 +177,7 @@ export class EventBridge {
           break;
         case "tool_execution_end": {
           const toolName = (event as any).toolName;
-          // 漂移检测：非 todo 工具计数
-          if (toolName === "todo") {
-            nonTodoToolCount = 0;
-            driftReminded = false;
-          } else {
-            nonTodoToolCount++;
-            // 非 todo 工具完成 → 自动推进任务状态
-            autoAdvance(true);
-          }
           let result = (event as any).result;
-          // 漂移提醒：连续 N 个非 todo 工具且有未完成任务时，注入提醒到 result
-          if (toolName !== "todo" && nonTodoToolCount >= DRIFT_THRESHOLD && !driftReminded) {
-            try {
-              const todos = await todoStore.list(chatSessionId);
-              const unfinished = todos.filter((t: any) => t.status !== "completed");
-              if (unfinished.length > 0) {
-                const lines = unfinished.map((t: any) =>
-                  `${t.status === "in_progress" ? "🔄" : "⬜"} ${t.content}`
-                ).join("\n");
-                const reminder = `\n\n⚠️ [任务提醒] 你已连续执行 ${nonTodoToolCount} 个操作但未更新任务清单。请检查进度并更新状态：\n${lines}`;
-                // 安全拼接：只修改 result.content 的文本内容（SDK AgentToolResult 结构）
-                if (result && typeof result === "object" && Array.isArray(result.content)) {
-                  const firstText = result.content.find((c: any) => c.type === "text");
-                  if (firstText && typeof firstText.text === "string") {
-                    firstText.text += reminder;
-                  } else {
-                    result.content.push({ type: "text", text: reminder });
-                  }
-                } else if (typeof result === "string") {
-                  result += reminder;
-                } else {
-                  result = { content: [{ type: "text", text: reminder }] };
-                }
-                driftReminded = true;
-              }
-            } catch {}
-          }
           // 修正：bash 命令 exit 1 且无 stdout 输出 → 多为 grep/find 未匹配、test 条件不满足等，
           // 不是真正的执行错误，不应标记为 isError（否则前端显示 ✕ 误导用户）
           let isError = (event as any).isError;

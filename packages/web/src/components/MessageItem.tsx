@@ -209,34 +209,33 @@ function GeneratingStatus({ msg, retryStatus }: { msg: Message; retryStatus?: { 
 function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
   const [open, setOpen] = useState(false);
   const tools = msg.tools || [];
+  const llmEvents = msg.debugEvents || [];
   const hasInterleaved = tools.some(t => t.precedingThinking?.trim());
   const hasThinking = !!(msg.thinking && msg.thinking.trim()) || hasInterleaved;
   const hasTools = tools.length > 0;
   const hasContent = hasThinking || hasTools;
 
-  // 步骤数 = 思考段数 + 工具数
-  const thinkCount = (hasInterleaved ? tools.filter(t => t.precedingThinking?.trim()).length : 0)
-    + (msg.thinking && msg.thinking.trim() ? 1 : 0)
-    + (!hasInterleaved && msg.thinking && msg.thinking.trim() ? 0 : 0); // avoid double count
-  const stepCount = tools.length + (hasInterleaved ? tools.filter(t => t.precedingThinking?.trim()).length : (msg.thinking && msg.thinking.trim() ? 1 : 0));
+  // 步骤数：与 DebugTimeline 统一口径 = LLM 调用数 + 工具数
+  // （有 debugEvents 时用它；旧消息没有则回退到工具数+思考段）
+  const stepCount = llmEvents.length > 0
+    ? llmEvents.length + tools.length
+    : tools.length + (hasInterleaved ? tools.filter(t => t.precedingThinking?.trim()).length : (msg.thinking && msg.thinking.trim() ? 1 : 0));
 
-  // 总用时：从最早 startTs 到最晚 endTs
-  const allStarts: number[] = [];
-  const allEnds: number[] = [];
-  for (const e of msg.debugEvents || []) {
-    if (e.startTs) allStarts.push(e.startTs);
-    if (e.endTs) allEnds.push(e.endTs);
-  }
-  for (const t of tools) {
-    if (t.startTs) allStarts.push(t.startTs);
-    if (t.startTs && t.durationMs) allEnds.push(t.startTs + t.durationMs);
-  }
-  const earliest = allStarts.length ? Math.min(...allStarts) : 0;
-  const latest = allEnds.length ? Math.max(...allEnds) : 0;
-  const totalMs = msg.isStreaming ? (earliest ? Date.now() - earliest : 0) : (earliest && latest ? latest - earliest : 0);
+  // 总用时：与 DebugTimeline 统一口径 = LLM 耗时 + 工具耗时累加
+  // （有 debugEvents/durationMs 时用它；旧消息没有则回退到墙钟跨度）
+  const hasAccurateMs = llmEvents.some(e => e.durationMs != null) || tools.some(t => t.durationMs != null);
+  const totalMs = hasAccurateMs
+    ? llmEvents.reduce((s, e) => s + (e.durationMs ?? 0), 0) + tools.reduce((s, t) => s + (t.durationMs ?? 0), 0)
+    : (() => {
+        const allStarts: number[] = [], allEnds: number[] = [];
+        for (const e of llmEvents) { if (e.startTs) allStarts.push(e.startTs); if (e.endTs) allEnds.push(e.endTs); }
+        for (const t of tools) { if (t.startTs) { allStarts.push(t.startTs); if (t.durationMs) allEnds.push(t.startTs + t.durationMs); } }
+        const earliest = allStarts.length ? Math.min(...allStarts) : 0;
+        const latest = allEnds.length ? Math.max(...allEnds) : 0;
+        return msg.isStreaming ? (earliest ? Date.now() - earliest : 0) : (earliest && latest ? latest - earliest : 0);
+    })();
 
   const fmtMs = (ms: number) => ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`;
-
   if (!hasContent) return null;
 
   return (

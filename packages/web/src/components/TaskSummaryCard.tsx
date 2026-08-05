@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { SessionStats } from "../utils/sessionStats";
+import { useUIStore } from "../stores/ui";
 
 interface Props {
   stats: SessionStats;
@@ -14,6 +15,8 @@ export function TaskSummaryCard({ stats, isStreaming, onOpenChanges }: Props) {
   const hasErrors = errors > 0;
   const fileCount = filesChanged.length;
   const [showErrors, setShowErrors] = useState(false);
+  const gotoChangesPanel = useUIStore(s => s.gotoChangesPanel);
+  const highlightFilePath = useUIStore(s => s.highlightFilePath);
 
   return (
     <div className={`task-card ${hasErrors ? "task-card-error" : ""} ${isStreaming ? "task-card-streaming" : ""}`}>
@@ -62,22 +65,31 @@ export function TaskSummaryCard({ stats, isStreaming, onOpenChanges }: Props) {
         <div className="task-card-files">
           <div className="task-card-files-label">
             {fileCount} 个文件变更
-            {onOpenChanges && (
-              <button className="task-card-files-link" onClick={onOpenChanges}>
-                查看变更 →
-              </button>
-            )}
+            <button
+              className="task-card-files-link"
+              onClick={() => gotoChangesPanel()}
+              title="在侧栏变更面板查看全部"
+            >
+              查看全部 →
+            </button>
           </div>
           <div className="task-card-files-list">
             {filesChanged.slice(0, 5).map(f => (
-              <div key={f.path} className="task-card-file">
+              <div
+                key={f.path}
+                className={`task-card-file ${highlightFilePath === f.path ? "task-card-file-hl" : ""}`}
+                onClick={() => gotoChangesPanel(f.path, true)}
+                title={f.path}
+              >
                 <span className={`task-card-file-dot ${f.lastStatus === "error" ? "dot-error" : "dot-done"}`} />
                 <span className="task-card-file-name">{f.name}</span>
                 {f.edits > 1 && <span className="task-card-file-count">×{f.edits}</span>}
               </div>
             ))}
             {fileCount > 5 && (
-              <div className="task-card-file-more">+{fileCount - 5} 更多</div>
+              <button className="task-card-file-more" onClick={() => gotoChangesPanel()}>
+                +{fileCount - 5} 更多
+              </button>
             )}
           </div>
         </div>

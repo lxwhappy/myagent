@@ -204,15 +204,18 @@ export function useChat() {
 
         case "message_end":
           // Debug: 记录每次 LLM 调用的 token 明细 + 耗时 + 时间戳
-          if (sid && msg.payload?.debug) {
+          // 只记录真正经过 LLM API 的调用（带 usage）。
+          // SDK 对部分 provider 会多发空 message_end（durationMs=0、无 usage），
+          // 跳过它们避免时间线出现噪声空行，也避免空行抢走 llm_raw 的匹配。
+          if (sid && msg.payload?.usage) {
             chat.addDebugLLM(sid, {
               type: "llm",
               model: msg.payload.model,
               usage: msg.payload.usage,
-              durationMs: msg.payload.debug.llmDurationMs,
-              firstTokenMs: msg.payload.debug.firstTokenMs,
-              startTs: msg.payload.debug.startTs,
-              endTs: msg.payload.debug.endTs,
+              durationMs: msg.payload.debug?.llmDurationMs,
+              firstTokenMs: msg.payload.debug?.firstTokenMs,
+              startTs: msg.payload.debug?.startTs,
+              endTs: msg.payload.debug?.endTs,
             });
           }
           break; // 不做 finish，等 agent_end
@@ -526,6 +529,7 @@ export function useChat() {
           thinking: m.thinking,
           tools: m.tools,
           skillsUsed: m.skillsUsed,
+          debugEvents: m.debugEvents,
           isStreaming: m.isStreaming === true,
         };
       });
@@ -632,6 +636,8 @@ function saveReply(chatSessionId: string) {
     if (last.thinking) body.thinking = last.thinking;
     if (last.tools && last.tools.length) body.tools = last.tools;
     if (last.skillsUsed && last.skillsUsed.length) body.skillsUsed = last.skillsUsed;
+    // Debug: 持久化 LLM 调用明细（token/耗时/原始请求响应），刷新后可恢复
+    if (last.debugEvents && last.debugEvents.length) body.debugEvents = last.debugEvents;
     // 把会话级的 subagents 快照存在这条 assistant 消息上（刷新后恢复钻入视图）
     if (sess.subagents && sess.subagents.length) {
       body.subagents = sess.subagents.map(sa => ({

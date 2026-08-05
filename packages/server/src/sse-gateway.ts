@@ -109,9 +109,16 @@ export function setupSSEGateway(app: FastifyInstance) {
         }
       }
 
-      // 新一轮对话：清空上一轮的 todo（每轮交互独立，不累加）
+      // 新一轮对话：如果有未完成的 todo，注入给 LLM 作为持续提醒
       try {
-        await todoStore.clear(id);
+        const todos = await todoStore.list(id);
+        const unfinished = todos.filter(t => t.status !== "completed");
+        if (unfinished.length > 0) {
+          const lines = todos.map((t, i) =>
+            `${t.status === "completed" ? "✅" : t.status === "in_progress" ? "🔄" : "⬜"} #${i + 1} ${t.content}`
+          ).join("\n");
+          message = `${message}\n\n[系统提醒] 当前任务清单（请继续推进）：\n${lines}`;
+        }
       } catch {}
 
       // ── /skillname 语法预处理 ──

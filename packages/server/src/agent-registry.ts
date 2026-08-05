@@ -22,6 +22,7 @@ import { createCronTool } from "./tools/cron-tool.js";
 import { setFireFn } from "./tools/cron-store.js";
 import { runSubagent, abortSubagents } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
+import { getSystemInfo } from "./system-info.js";
 import { chatSessionStore } from "./chat-sessions.js";
 
 export interface AgentEntry {
@@ -94,10 +95,16 @@ export async function createAgent(
   // 读取 Agent 配置（角色预设），把 systemPrompt 追加到 AGENTS.md 之后
   const agentCfg = opts?.agentId ? await agentConfigStore.get(opts.agentId) : undefined;
   const extraPrompt = agentCfg?.systemPrompt?.trim();
+  const sysInfo = getSystemInfo();
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir,
-    appendSystemPromptOverride: extraPrompt ? (base: string[]) => [...base, extraPrompt] : undefined,
+    // 始终注入：系统信息 + 角色指令
+    appendSystemPromptOverride: (base: string[]) => [
+      ...base,
+      sysInfo,
+      ...(extraPrompt ? [extraPrompt] : []),
+    ],
   });
   await loader.reload();
 

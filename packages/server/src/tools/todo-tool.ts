@@ -18,11 +18,15 @@ function formatSnapshot(chatSessionId: string, todos: any[]): string {
     return `${icon} #${i + 1} [${t.id}] ${t.content}${t.status === "completed" ? " (已完成)" : t.status === "in_progress" ? " (进行中)" : ""}`;
   });
   const current = inProgress[0]?.content;
+  const warning = inProgress.length > 1
+    ? `\n⚠️ 同时有 ${inProgress.length} 个任务"进行中"！同一时间只能有一个 in_progress，请先完成当前任务再推进下一个。`
+    : "";
   return [
     `任务清单 (${completed}/${todos.length} 完成):`,
     ...lines,
     current ? `\n当前任务: ${current}` : "",
     completed < todos.length ? `\n⚠️ 还有 ${todos.length - completed} 个任务未完成，请继续推进。` : "\n✅ 全部任务已完成！",
+    warning,
   ].join("\n");
 }
 
@@ -30,6 +34,7 @@ export function createTodoTool(chatSessionId: string): ToolDefinition {
   return {
     name: "todo",
     label: "TODO",
+    executionMode: "sequential", // 串行执行：防止并发 update 导致互斥竞态（多个 in_progress）
     description:
       "管理当前会话的任务清单。遇到多步骤任务（3步以上）时，先用 action=add 添加每个步骤，" +
       "然后开始执行。每完成一步，用 action=update 将该任务状态改为 completed，" +
@@ -129,23 +134,33 @@ export function createTodoTool(chatSessionId: string): ToolDefinition {
             if (status !== undefined) patch.status = status;
             if (priority !== undefined) patch.priority = priority;
             // 先按真实 id 查；查不到且 id 是纯数字时，按序号（1-based）回退
-            let updated = await todoStore.update(chatSessionId, id, patch);
+            let result = await todoStore.update(chatSessionId, id, patch);
             let resolvedId = id;
-            if (!updated && /^\d+$/.test(id)) {
+            if (!result && /^\d+$/.test(id)) {
               const all = await todoStore.list(chatSessionId);
               const byIndex = all[parseInt(id, 10) - 1];
               if (byIndex) {
                 resolvedId = byIndex.id;
-                updated = await todoStore.update(chatSessionId, resolvedId, patch);
+                result = await todoStore.update(chatSessionId, resolvedId, patch);
               }
             }
-            if (!updated) {
+            // 未找到
+            if (!result) {
               return {
                 toolName: "todo",
                 summary: `未找到任务 ${id}`,
                 output: `错误：未找到 ID/序号为 ${id} 的任务`,
               } as any;
             }
+            // 顺序强制被拒绝 → 反馈给 LLM
+            if (!("item" in result)) {
+              return {
+                toolName: "todo",
+                summary: `⛔ 被拒绝`,
+                output: `⛔ ${result.error}`,
+              } as any;
+            }
+            const updated = result.item;
             const todos = await todoStore.list(chatSessionId);
             return {
               toolName: "todo",

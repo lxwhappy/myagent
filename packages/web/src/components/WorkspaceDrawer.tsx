@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { useChatStore } from "../stores/chat";
 import { getSessionStats } from "../utils/sessionStats";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useUIStore } from "../stores/ui";
 
 // ════════════════════════════════════════════════════════
 // 侧边栏"文件"Tab：文件树 + 搜索 + 文件/变更切换
@@ -19,6 +20,12 @@ export function SidebarFileTree({ onOpenFile }: { onOpenFile: () => void }) {
   const [searchResults, setSearchResults] = useState<FileItem[] | null>(null);
   const [activeTab, setActiveTab] = useState<"files" | "changes">("files");
   const prevWsId = useRef<string | null>(ws.activeId);
+
+  // 订阅 UI store：TaskSummaryCard 点击文件 → 自动切到"变更"子tab
+  const gotoFilesTab = useUIStore(s => s.gotoFilesTab);
+  useEffect(() => {
+    if (gotoFilesTab > 0) setActiveTab("changes");
+  }, [gotoFilesTab]);
 
   // 统一的文件打开逻辑：加载文件内容 + 通知 App 打开右侧面板
   const handleOpenFile = useCallback((path: string) => {
@@ -143,6 +150,7 @@ function ChangesPanel({ wsId, openFile }: { wsId?: string; openFile: (path: stri
   const activeChatId = useChatStore(s => s.activeChatSessionId);
   const messages = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.messages : undefined);
   const subagents = useChatStore(s => activeChatId ? s.sessions[activeChatId]?.subagents : undefined);
+  const highlightFilePath = useUIStore(s => s.highlightFilePath);
 
   if (!messages || messages.length === 0) return <div className="sb-file-empty">本次会话暂无活动</div>;
 
@@ -165,7 +173,11 @@ function ChangesPanel({ wsId, openFile }: { wsId?: string; openFile: (path: stri
       </div>
       <div className="sb-changes-list">
         {stats.filesChanged.map(f => (
-          <div key={f.path} className="sb-change-item" onClick={() => wsId && openFile(f.path)}>
+          <div
+            key={f.path}
+            className={`sb-change-item ${highlightFilePath === f.path ? "sb-change-item-hl" : ""}`}
+            onClick={() => wsId && openFile(f.path)}
+          >
             <span className={`sb-change-dot ${f.lastStatus === "error" ? "error" : "done"}`} />
             <div className="sb-change-info">
               <span className="sb-change-name">

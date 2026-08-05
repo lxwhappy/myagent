@@ -1855,7 +1855,18 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 3px 0;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.task-card-file:hover {
+  background: var(--bg);
+}
+.task-card-file-hl {
+  background: var(--selection, rgba(59,130,246,.12));
+  outline: 2px solid var(--selection-border, rgba(59,130,246,.4));
 }
 .task-card-file-dot {
   width: 6px;
@@ -1885,9 +1896,16 @@
 }
 .task-card-file-more {
   font-size: 11px;
-  color: var(--muted);
-  padding: 2px 0 0 13px;
+  color: var(--accent);
+  padding: 4px 0 0 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
 }
+.task-card-file-more:hover { text-decoration: underline; }
 /* ============================================================
    工作空间抽屉 Tab 系统 + 变更面板
    ============================================================ */
@@ -2343,6 +2361,15 @@
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm); cursor: pointer;
   transition: background var(--motion-fast);
+}
+.sb-change-item-hl {
+  background: var(--selection, rgba(59,130,246,.15));
+  outline: 2px solid var(--selection-border, rgba(59,130,246,.4));
+  animation: hl-fade 2.5s ease forwards;
+}
+@keyframes hl-fade {
+  0% { background: var(--selection, rgba(59,130,246,.25)); }
+  100% { background: transparent; outline-color: transparent; }
 }
 .sb-change-item:hover { background: var(--bg); }
 .sb-change-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }

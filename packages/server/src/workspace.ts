@@ -88,6 +88,25 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     return { workspaces: [...workspaces.values()].map(w => ({ id: w.id, name: w.name, path: w.path })) };
   });
 
+  // ── 在系统文件管理器中打开工作空间目录 ──
+  app.post("/api/workspace/:id/open", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+    if (!existsSync(ws.path)) return reply.code(404).send({ error: "Path not found" });
+    try {
+      const { execFile } = await import("child_process");
+      // macOS: open, Linux: xdg-open, Windows: explorer
+      const cmd = process.platform === "win32" ? "explorer" : process.platform === "darwin" ? "open" : "xdg-open";
+      execFile(cmd, [ws.path], (err) => {
+        if (err) console.error(`[workspace] open failed: ${err.message}`);
+      });
+      return { success: true };
+    } catch (e: any) {
+      return reply.code(500).send({ error: e?.message ?? "Unknown" });
+    }
+  });
+
   // ── 添加工作空间（通过路径） ──
   app.post("/api/workspaces", async (req, reply) => {
     const body = req.body as { path?: string; name?: string };

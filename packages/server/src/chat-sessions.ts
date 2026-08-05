@@ -29,6 +29,7 @@ export interface ChatMessage {
   tools?: any[];               // 工具调用记录（结构同前端 ToolExecution）
   skillsUsed?: any[];          // 该消息加载的 skills
   subagents?: SubagentSnapshot[];  // 该消息期间产生的子 agent 快照
+  debugEvents?: any[];         // Debug: LLM 调用明细（token/耗时/原始请求响应，刷新后可恢复）
   isStreaming?: boolean;       // 流式进行中标记（刷新后可恢复"生成中"状态）
 }
 
@@ -244,6 +245,7 @@ export const chatSessionStore = {
       tools: msg.tools,
       skillsUsed: msg.skillsUsed,
       subagents: msg.subagents,
+      debugEvents: msg.debugEvents,
     };
     if (s) {
       const idx = s.messages.findIndex(m => m.id === full.id);
@@ -273,6 +275,7 @@ export const chatSessionStore = {
       tools: msg.tools,
       skillsUsed: msg.skillsUsed,
       subagents: msg.subagents,
+      debugEvents: msg.debugEvents,
       isStreaming: msg.isStreaming,
     };
     if (s) {

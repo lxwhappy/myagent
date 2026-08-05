@@ -12,6 +12,7 @@ import { useSessions } from "./hooks/useSessions";
 import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useThemeStore } from "./stores/theme";
+import { useUIStore } from "./stores/ui";
 
 export default function App() {
   const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo, subToken, subDurationMs, subStatus } = useChat();
@@ -25,6 +26,28 @@ export default function App() {
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const wsDropdownRef = useRef<HTMLDivElement>(null);
   const { mode: themeMode, resolved: themeResolved, toggle: toggleTheme } = useThemeStore();
+
+  // 订阅 UI store：TaskSummaryCard 点击文件 → 切换到侧栏文件 tab
+  const gotoFilesTab = useUIStore(s => s.gotoFilesTab);
+  const openFileRequest = useUIStore(s => s.openFileRequest);
+  useEffect(() => {
+    if (gotoFilesTab > 0) setSidebarTab("files");
+  }, [gotoFilesTab]);
+  useEffect(() => {
+    if (openFileRequest) {
+      const wsId = useWorkspaceStore.getState().activeId;
+      if (wsId) {
+        // 内联 openFile：fetch 文件内容 → 设置 currentFile + 打开 drawer
+        fetch(`/api/workspace/${wsId}/file?path=${encodeURIComponent(openFileRequest.path)}`)
+          .then(r => r.json())
+          .then(data => {
+            useWorkspaceStore.getState().setCurrentFile(data);
+            useWorkspaceStore.getState().setDrawerOpen(true);
+          })
+          .catch(() => {});
+      }
+    }
+  }, [openFileRequest]);
 
   useEffect(() => {
     (window as any).__wsStore = useWorkspaceStore;
@@ -267,6 +290,18 @@ export default function App() {
                 </div>
               ))}
               <div className="ws-dropdown-divider" />
+              {activeWs && (
+                <div
+                  className="ws-dropdown-action"
+                  onClick={() => {
+                    setWsDropdownOpen(false);
+                    fetch(`/api/workspace/${encodeURIComponent(activeWs.id)}/open`, { method: "POST" });
+                  }}
+                >
+                  <Icon name="i-folder" size={16} />
+                  <span>在 Finder 中打开</span>
+                </div>
+              )}
               <div
                 className="ws-dropdown-action"
                 onClick={() => { setWsDropdownOpen(false); setShowDirBrowser(true); }}
@@ -391,6 +426,15 @@ export default function App() {
             <h1 className="chat-title">{activeWs?.name ?? "MyAgent"}</h1>
           </div>
           <div className="chat-head-actions">
+            {activeWs && (
+              <button
+                className="icon-btn chat-open-finder-btn"
+                onClick={() => fetch(`/api/workspace/${encodeURIComponent(activeWs.id)}/open`, { method: "POST" })}
+                title={`在 Finder 中打开「${activeWs.name}」`}
+              >
+                <Icon name="i-folder" size={16} />
+              </button>
+            )}
             <div className="download-menu-wrapper" ref={(el) => { downloadMenuRef.current = el; }}>
               <button
                 className="icon-btn chat-download-btn"

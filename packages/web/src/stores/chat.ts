@@ -2,6 +2,15 @@
 
 import { create } from "zustand";
 
+/** pending raw LLM 请求：llm_raw 事件可能先于 message_end 到达，
+ *  此时 debugEvent 尚未创建，暂存于此，待 addDebugLLM 时补匹配。 */
+interface PendingRaw {
+  url: string; method: string; headers?: Record<string, string>;
+  body?: string | null; respBody?: string | null;
+  durationMs?: number; timestamp?: number;
+}
+const pendingRaws = new Map<string, PendingRaw[]>();
+
 /** Debug: 单次 LLM 调用的明细记录 */
 export interface DebugLLMEvent {
   type: "llm";
@@ -398,7 +407,27 @@ export const useChatStore = create<ChatStore>((set) => ({
         const lastTool = last.tools[last.tools.length - 1];
         thinking = (lastTool.precedingThinking || "").trim();
       }
-      msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), { ...evt, thinking: thinking || undefined }] };
+      // 补匹配 pending raw：llm_raw 可能先于此事件到达
+      let rawRequest: any | undefined;
+      let rawResponse: any | undefined;
+      const pending = pendingRaws.get(id);
+      if (pending && pending.length) {
+        const evtTs = evt.startTs;
+        let bestIdx = -1, bestDiff = Infinity;
+        for (let j = 0; j < pending.length; j++) {
+          if (evtTs == null) { bestIdx = j; break; }
+          const diff = Math.abs(evtTs - (pending[j].timestamp ?? 0));
+          if (diff < bestDiff) { bestDiff = diff; bestIdx = j; }
+        }
+        // 5s 内视为同一次调用
+        if (bestIdx >= 0 && (evtTs == null || bestDiff < 5000)) {
+          const r = pending.splice(bestIdx, 1)[0];
+          rawRequest = { url: r.url, method: r.method, headers: r.headers, body: r.body };
+          rawResponse = { body: r.respBody, durationMs: r.durationMs };
+          if (!pending.length) pendingRaws.delete(id);
+        }
+      }
+      msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), { ...evt, thinking: thinking || undefined, rawRequest, rawResponse }] };
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),
@@ -509,10 +538,9 @@ export const useChatStore = create<ChatStore>((set) => ({
         const msg = msgs[i];
         let events = [...(msg.debugEvents || [])];
         // llm_raw 是异步收集完整个 SSE 流后才发出的，可能延迟到下一个
-        // debugEvent 创建之后才到达。原来用 LIFO（从后往前找第一个没 raw 的）
-        // 会导致 raw 数据关联到错误的 event。
-        // 改用时间戳匹配：raw.timestamp（fetch 发起时间）与 debugEvent.startTs
-        //（message_start 时间）只差几十 ms，找最接近且还没 rawRequest 的。
+        // debugEvent 创建之后才到达。用时间戳匹配：raw.timestamp（fetch 发起
+        // 时间）与 debugEvent.startTs（message_start 时间）只差几十 ms，找最
+        // 接近且还没 rawRequest 的。
         const rawTs = raw.timestamp ?? Date.now();
         let bestIdx = -1;
         let bestDiff = Infinity;
@@ -529,8 +557,13 @@ export const useChatStore = create<ChatStore>((set) => ({
             rawRequest: { url: raw.url, method: raw.method, headers: raw.headers, body: raw.body },
             rawResponse: { body: raw.respBody, durationMs: raw.durationMs },
           } : e);
+          msgs[i] = { ...msg, debugEvents: events };
+        } else {
+          // 没有可匹配的 event（message_end 可能还没到）→ 暂存，等 addDebugLLM 补匹配
+          const arr = pendingRaws.get(id) || [];
+          arr.push({ url: raw.url, method: raw.method, headers: raw.headers, body: raw.body, respBody: raw.respBody, durationMs: raw.durationMs, timestamp: raw.timestamp });
+          pendingRaws.set(id, arr);
         }
-        msgs[i] = { ...msg, debugEvents: events };
         break;
       }
     }

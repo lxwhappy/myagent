@@ -88,23 +88,61 @@ export const todoStore = {
     return item;
   },
 
-  /** 更新 todo */
+  /** 更新 todo。状态约束：
+   *  1. 同一会话只能有一个 in_progress
+   *  2. 顺序强制：只允许操作当前 in_progress 或紧邻的下一个 pending，
+   *     跳步操作会被拒绝（返回 { error } 供 tool 层反馈给 LLM）。
+   *  返回 { item } 成功，{ error } 被拒绝，null 未找到。 */
   async update(
     chatSessionId: string,
     id: string,
     patch: Partial<Pick<TodoItem, "content" | "status" | "priority">>,
-  ): Promise<TodoItem | null> {
+  ): Promise<{ item: TodoItem } | { error: string } | null> {
     await ensureLoaded();
     const list = data[chatSessionId] || [];
     const item = list.find((t) => t.id === id);
     if (!item) return null;
+
+    // 只改 content/priority（不走顺序检查）
+    if (patch.status === undefined) {
+      if (patch.content !== undefined) item.content = patch.content;
+      if (patch.priority !== undefined) item.priority = patch.priority;
+      item.updatedAt = Date.now();
+      await persist();
+      broadcast(chatSessionId);
+      return { item };
+    }
+
+    // ── status 变更：顺序强制 ──
+    const currentInProgress = list.find((t) => t.status === "in_progress");
+
+    if (patch.status === "in_progress") {
+      // 已有其他 in_progress → 拒绝
+      if (currentInProgress && currentInProgress.id !== item.id) {
+        return { error: `必须先完成当前任务「${currentInProgress.content}」再开始下一个！` };
+      }
+      // 只允许第一个 pending（即紧邻的下一个）设为 in_progress
+      const firstPending = list.find((t) => t.status === "pending");
+      if (firstPending && firstPending.id !== item.id) {
+        return { error: `必须按顺序执行！下一个应该是「${firstPending.content}」，不能跳到「${item.content}」` };
+      }
+    }
+
+    if (patch.status === "completed") {
+      // 只允许标记当前 in_progress 为 completed（不能跳着 completed）
+      if (currentInProgress && currentInProgress.id !== item.id) {
+        return { error: `必须按顺序执行！当前任务是「${currentInProgress.content}」，请先完成它` };
+      }
+    }
+
+    // 通过检查 → 应用变更
     if (patch.content !== undefined) item.content = patch.content;
-    if (patch.status !== undefined) item.status = patch.status;
     if (patch.priority !== undefined) item.priority = patch.priority;
+    item.status = patch.status;
     item.updatedAt = Date.now();
     await persist();
     broadcast(chatSessionId);
-    return item;
+    return { item };
   },
 
   /** 删除 todo */
@@ -119,6 +157,24 @@ export const todoStore = {
       return true;
     }
     return false;
+  },
+
+  /** 批量标记全部完成（agent_end 兜底用，绕过顺序强制） */
+  async forceCompleteAll(chatSessionId: string): Promise<void> {
+    await ensureLoaded();
+    const list = data[chatSessionId] || [];
+    let changed = false;
+    for (const t of list) {
+      if (t.status !== "completed") {
+        t.status = "completed";
+        t.updatedAt = Date.now();
+        changed = true;
+      }
+    }
+    if (changed) {
+      await persist();
+      broadcast(chatSessionId);
+    }
   },
 
   /** 清空 todo */
