@@ -91,7 +91,6 @@ export function InputBar() {
   // 代码引用片段（来自右侧文件预览面板的选中）—— 多片段累积，发送时拼接到消息末尾
   const codeRefs = useCodeRefStore(s => s.refs);
   const removeCodeRef = useCodeRefStore(s => s.remove);
-  const clearCodeRefs = useCodeRefStore(s => s.clear);
 
   // 会话切换时加载对应 draft
   useEffect(() => {
@@ -200,7 +199,7 @@ export function InputBar() {
     clearDraft(draftKey);
     attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); });
     setAttachedImages([]);
-    clearCodeRefs();
+    // 引用片段不清空——保留到用户手动删除（点 chip 上的 ✕）
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
     setShowQuickPrompts(false);
     if (taRef.current) taRef.current.style.height = "auto";
