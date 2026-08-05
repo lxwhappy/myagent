@@ -390,7 +390,14 @@ export const useChatStore = create<ChatStore>((set) => ({
     const last = msgs[msgs.length - 1];
     if (last?.role === "assistant") {
       // 快照当前累积的 thinking 到本次 LLM 调用记录
-      const thinking = (last.thinking || "").trim();
+      // 正常时序：thinking_delta → message_end(addDebugLLM) → tool_execution_start(清空 thinking)
+      // 异常时序（SDK 事件乱序 / 会话重放）：tool_execution_start 先于 message_end 到达，
+      //   thinking 已被切到 tool.precedingThinking 并清空 msg.thinking → 回退取最后一个工具的 precedingThinking
+      let thinking = (last.thinking || "").trim();
+      if (!thinking && last.tools?.length) {
+        const lastTool = last.tools[last.tools.length - 1];
+        thinking = (lastTool.precedingThinking || "").trim();
+      }
       msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), { ...evt, thinking: thinking || undefined }] };
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
