@@ -44,7 +44,10 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssist
             </div>
           )}
           {msg.content && (
-            <div className="msg-content" style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+            <div className="msg-user-bubble">
+              <div className="msg-content" style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+              <CopyButton text={msg.content} />
+            </div>
           )}
         </div>
       </div>
@@ -190,21 +193,23 @@ function GeneratingStatus({ msg, retryStatus }: { msg: Message; retryStatus?: { 
     );
   }
 
-  // 2. 已有内容但静默 >5s → 显示等待计时
-  if (hasContent && elapsed >= 5) {
+  // 2. 初始等待（还没有任何内容）— 三个点 + 计时
+  if (!hasContent) {
     return (
-      <div className="gen-waiting">
-        <Spinner size={12} />
-        <span>等待响应中… {elapsed}s</span>
+      <div className="gen-thinking">
+        <span className="typing-indicator"><span /><span /><span /></span>
+        {elapsed >= 2 && <span className="gen-thinking-time">{elapsed}s</span>}
       </div>
     );
   }
 
-  // 3. 初始等待（还没有任何内容）
-  if (!hasContent) {
+  // 3. 已有内容但等待下一步（LLM 在思考下一个工具调用或文本）— 1s 后显示
+  if (elapsed >= 1) {
     return (
-      <div className="typing-indicator">
-        <span /><span /><span />
+      <div className="gen-thinking">
+        <Spinner size={12} />
+        <span>正在思考…</span>
+        <span className="gen-thinking-time">{elapsed}s</span>
       </div>
     );
   }
@@ -218,11 +223,17 @@ function GeneratingStatus({ msg, retryStatus }: { msg: Message; retryStatus?: { 
 function AskUserCard({ tool }: { tool: ToolExecution }) {
   const chatSessionId = useChatStore(s => s.activeChatSessionId);
   const running = tool.status === "running";
-  const input = tool.input as { question?: string; multiple?: boolean; options?: Array<{ label: string; value: string; description?: string }> } | undefined;
+  const input = tool.input as { question?: string; multiple?: boolean; options?: Array<{ label: string; value: string; description?: string; recommended?: boolean }> } | undefined;
   const question = input?.question ?? "";
   const multiple = input?.multiple === true;
   const options = input?.options ?? [];
-  const outputText = typeof tool.output === "string" ? tool.output : "";
+  const outputText = (() => {
+    if (!tool.output) return "";
+    if (typeof tool.output === "string") return tool.output;
+    // 持久化后 output 可能是 { content, output, summary } 对象
+    const obj = tool.output as any;
+    return obj.output ?? obj.summary ?? (typeof obj.text === "string" ? obj.text : "");
+  })();
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   // 单选：点击即提交
@@ -251,12 +262,24 @@ function AskUserCard({ tool }: { tool: ToolExecution }) {
 
   if (!running) {
     // 已回答：紧凑摘要
+    const answerLabel = (() => {
+      if (!outputText) return "已超时";
+      // 后端格式: "用户选择了「极简风格」（值: minimal）" / "用户选择了 2 项：A（a）、B（b）"
+      const labels = [...outputText.matchAll(/「([^」]+)」|、(\S+?)（/g)]
+        .map(m => m[1] ?? m[2])
+        .filter(Boolean);
+      if (labels.length > 0) return labels.join("、");
+      // 超时: "（用户未回答，已超时）"
+      if (outputText.includes("超时")) return "已超时";
+      return outputText.slice(0, 30);
+    })();
+
     return (
       <div className="ask-card answered">
         <span className="ask-q-icon">💬</span>
         <span className="ask-q-text">{question}</span>
         <span className="ask-arrow">→</span>
-        <span className="ask-answer">{outputText || "已跳过"}</span>
+        <span className="ask-answer">{answerLabel}</span>
       </div>
     );
   }
@@ -271,16 +294,20 @@ function AskUserCard({ tool }: { tool: ToolExecution }) {
       <div className="ask-options">
         {options.map((opt, i) => {
           const checked = selected.has(i);
+          const isRecommended = opt.recommended === true;
           return (
             <button
               key={i}
-              className={`ask-option${multiple ? " checkable" : ""}${checked ? " checked" : ""}`}
+              className={`ask-option${checked ? " checked" : ""}${isRecommended ? " recommended" : ""}`}
               onClick={() => multiple ? toggle(i) : handleSingle(opt.value, opt.label)}
               type="button"
             >
-              {multiple && <span className="ask-check">{checked ? "☑" : "☐"}</span>}
+              <span className="ask-check">{multiple ? (checked ? "☑" : "☐") : "○"}</span>
               <span className="ask-opt-content">
-                <span className="ask-opt-label">{opt.label}</span>
+                <span className="ask-opt-label">
+                  {opt.label}
+                  {isRecommended && <span className="ask-rec">推荐</span>}
+                </span>
                 {opt.description && <span className="ask-opt-desc">{opt.description}</span>}
               </span>
             </button>
@@ -499,6 +526,24 @@ function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: Subage
         <div className="tl-sub-error">{sub.error}</div>
       )}
     </div>
+  );
+}
+
+// ── 复制按钮（hover 出现，用于用户消息气泡） ──
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+  return (
+    <button type="button" className="msg-copy-btn" onClick={copy} title="复制">
+      <Icon name={copied ? "i-check" : "i-copy"} size={13} />
+    </button>
   );
 }
 

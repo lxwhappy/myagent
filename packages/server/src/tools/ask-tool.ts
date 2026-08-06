@@ -61,8 +61,10 @@ export function createAskUserTool(chatSessionId: string): ToolDefinition {
       "向用户提问并等待回答。当你需要澄清需求、确认选项、或让用户做决定时调用。" +
       "用户会在界面上看到问题和选项按钮，点击后你会收到答案。" +
       "question 要简洁；options 每项有 label（显示文字）和 value（实际值）。" +
-      "通常 2-5 个选项，不要太多。multiple=true 时允许多选，用户勾选后点确认提交。",
-    promptSnippet: "- ask_user: 向用户提问（澄清需求/确认选项时使用，支持单选/多选）",
+      "通常 2-5 个选项，不要太多。multiple=true 时允许多选，用户勾选后点确认提交。" +
+      "每个选项可设 recommended=true 标记你推荐的选项——单选标 1 个推荐项，" +
+      "多选标记你推荐的全选组合。推荐项会在界面上高亮显示，帮助用户快速决策。",
+    promptSnippet: "- ask_user: 向用户提问（澄清需求/确认选项时使用，支持单选/多选，选项可标记 recommended 推荐项）",
     parameters: {
       type: "object",
       properties: {
@@ -77,6 +79,7 @@ export function createAskUserTool(chatSessionId: string): ToolDefinition {
               label: { type: "string", description: "选项显示文字" },
               value: { type: "string", description: "选项实际值" },
               description: { type: "string", description: "选项的补充说明（可选）" },
+              recommended: { type: "boolean", description: "是否为推荐选项（默认 false）。单选标 1 个，多选标记推荐组合" },
             },
             required: ["label", "value"],
           },

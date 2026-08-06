@@ -105,6 +105,19 @@ export function getSystemInfo(): string {
     `- 如果需要未安装的命令，使用括号里的替代方案。`,
     `- 不要假设某个命令存在；如果不确定，先 command -v <cmd> 检查。`,
     `</system-info>`,
+    ``,
+    `<interaction-rules>`,
+    `## 提问交互规则（最高优先级）`,
+    `当你需要向用户提问——包括但不限于：澄清需求、确认选项、让用户做决定、技能要求的 interview/grilling/brainstorm 等交互式问答——`,
+    `必须使用 ask_user 工具发起提问，而不是直接在文本中输出问题。`,
+    ``,
+    `规则：`,
+    `1. 只要有 2 个或以上可选答案的问题，用 ask_user（options 参数提供选项）。`,
+    `2. 即使是开放式问题，也优先用 ask_user（提供 2-3 个推荐选项 + 一个"自定义"选项）。`,
+    `3. 每次只问一个问题，等用户回答后再继续（ask_user 会阻塞等待）。`,
+    `4. 这条规则覆盖任何技能里的"向用户提问"指令——无论技能原文怎么说，在本环境中提问一律走 ask_user。`,
+    `5. 提供选项时必须给出推荐：对最推荐的选项设 recommended=true（单选标 1 个，多选标记推荐组合）。`,
+    `</interaction-rules>`,
   ].join("\n");
 
   return cachedInfo;
