@@ -532,4 +532,185 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     reply.header("Content-Disposition", `attachment; filename="${filename}"`);
     return content;
   });
+
+  // ── Git: 列出分支 ──
+  app.get("/api/workspace/:id/git/branches", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+    if (!existsSync(ws.path)) return reply.code(404).send({ error: "Path not found" });
+
+    try {
+      const { execFileSync } = await import("child_process");
+      const run = (args: string[]) => execFileSync("git", args, {
+        cwd: ws.path, encoding: "utf-8", timeout: 5000,
+      }).trim();
+
+      // 当前分支
+      let current: string | null = null;
+      try {
+        current = run(["rev-parse", "--abbrev-ref", "HEAD"]);
+      } catch { /* detached HEAD or not a repo */ }
+
+      if (!current) return { isRepo: false, current: null, branches: [] };
+
+      // 本地分支（* 标记当前分支）
+      const raw = run(["branch", "--list", "--format=%(refname:short)"]);
+      const branches = raw.split("\n").map(b => b.trim()).filter(Boolean);
+
+      return { isRepo: true, current, branches };
+    } catch (e: any) {
+      const msg = e?.message ?? "Unknown error";
+      // 非 git 仓库 / git 未安装
+      if (msg.includes("not a git repository") || msg.includes("ENOENT")) {
+        return { isRepo: false, current: null, branches: [] };
+      }
+      return reply.code(500).send({ error: msg });
+    }
+  });
+
+  // ── Git: 切换分支 ──
+  app.post("/api/workspace/:id/git/checkout", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    const body = req.body as { branch?: string };
+    if (!body?.branch) return reply.code(400).send({ error: "branch required" });
+
+    try {
+      const { execFileSync } = await import("child_process");
+      const output = execFileSync("git", ["checkout", body.branch], {
+        cwd: ws.path, encoding: "utf-8", timeout: 10000,
+      }).trim();
+      console.log(`[git] ${ws.name}: checkout ${body.branch} — ${output.slice(0, 80)}`);
+      return { success: true, branch: body.branch, message: output };
+    } catch (e: any) {
+      const stderr = e?.stderr?.trim() ?? e?.message ?? "Unknown error";
+      console.error(`[git] ${ws.name}: checkout ${body.branch} failed — ${stderr.slice(0, 120)}`);
+      return reply.code(400).send({ error: stderr });
+    }
+  });
+
+  // ── Git: 列出 worktree ──
+  app.get("/api/workspace/:id/git/worktrees", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    try {
+      const { execFileSync } = await import("child_process");
+      const output = execFileSync("git", ["worktree", "list", "--porcelain"], {
+        cwd: ws.path, encoding: "utf-8", timeout: 5000,
+      }).trim();
+
+      // 解析 porcelain 格式：worktree <path>\nHEAD <sha>\nbranch <ref>\n\n...
+      const worktrees: Array<{ path: string; branch: string | null; head: string }> = [];
+      let current: { path: string; branch: string | null; head: string } | null = null;
+      for (const line of output.split("\n")) {
+        if (line.startsWith("worktree ")) {
+          if (current) worktrees.push(current);
+          current = { path: line.slice(9), branch: null, head: "" };
+        } else if (line.startsWith("HEAD ") && current) {
+          current.head = line.slice(5);
+        } else if (line.startsWith("branch ") && current) {
+          current.branch = line.slice(7).replace("refs/heads/", "");
+        } else if (line === "" && current) {
+          worktrees.push(current);
+          current = null;
+        }
+      }
+      if (current) worktrees.push(current);
+
+      return { worktrees };
+    } catch (e: any) {
+      const msg = e?.message ?? "Unknown error";
+      if (msg.includes("not a git repository") || msg.includes("ENOENT")) {
+        return { worktrees: [] };
+      }
+      return reply.code(500).send({ error: msg });
+    }
+  });
+
+  // ── Git: 创建 worktree（新分支检出为独立目录）──
+  app.post("/api/workspace/:id/git/worktree", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    const body = req.body as { branch?: string; newBranch?: string; path?: string };
+    if (!body?.branch && !body?.newBranch) {
+      return reply.code(400).send({ error: "branch or newBranch required" });
+    }
+    if (!body?.path) {
+      return reply.code(400).send({ error: "path required" });
+    }
+
+    const targetPath = resolve(body.path);
+    // 安全校验：路径不能在原仓库目录内（避免嵌套）
+    const rel = relative(ws.path, targetPath);
+    if (rel && !rel.startsWith("..")) {
+      return reply.code(400).send({ error: "Worktree 路径不能在主仓库目录内" });
+    }
+
+    try {
+      const { execFileSync } = await import("child_process");
+      const args = ["worktree", "add"];
+      if (body.newBranch) {
+        args.push("-b", body.newBranch, targetPath);
+        if (body.branch) args.push(body.branch); // 基于 branch 创建新分支
+      } else {
+        args.push(targetPath, body.branch!); // 检出现有分支
+      }
+      const output = execFileSync("git", args, {
+        cwd: ws.path, encoding: "utf-8", timeout: 30000,
+      }).trim();
+      console.log(`[git] ${ws.name}: worktree add → ${targetPath} (${body.newBranch || body.branch})`);
+
+      // 自动注册为新工作空间
+      const name = `${ws.name}:${body.newBranch || body.branch}`;
+      const newWs: Workspace = { id: randomUUID(), name, path: targetPath };
+      workspaces.set(newWs.id, newWs);
+      await persistWorkspaces();
+
+      return { success: true, workspace: newWs, message: output };
+    } catch (e: any) {
+      const stderr = e?.stderr?.trim() ?? e?.message ?? "Unknown error";
+      console.error(`[git] ${ws.name}: worktree add failed — ${stderr.slice(0, 200)}`);
+      return reply.code(400).send({ error: stderr });
+    }
+  });
+
+  // ── Git: 删除 worktree ──
+  app.delete("/api/workspace/:id/git/worktree", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = getWs(id);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    const body = req.body as { path?: string };
+    if (!body?.path) return reply.code(400).send({ error: "path required" });
+
+    try {
+      const { execFileSync } = await import("child_process");
+      const output = execFileSync("git", ["worktree", "remove", body.path, "--force"], {
+        cwd: ws.path, encoding: "utf-8", timeout: 10000,
+      }).trim();
+      console.log(`[git] ${ws.name}: worktree remove ${body.path}`);
+
+      // 如果被删除的 worktree 注册为了工作空间，一并移除
+      for (const [wsId, w] of workspaces) {
+        if (w.path === body.path) {
+          workspaces.delete(wsId);
+          await persistWorkspaces();
+          break;
+        }
+      }
+
+      return { success: true, message: output };
+    } catch (e: any) {
+      const stderr = e?.stderr?.trim() ?? e?.message ?? "Unknown error";
+      console.error(`[git] ${ws.name}: worktree remove failed — ${stderr.slice(0, 200)}`);
+      return reply.code(400).send({ error: stderr });
+    }
+  });
 }

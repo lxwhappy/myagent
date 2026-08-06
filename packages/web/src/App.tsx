@@ -25,6 +25,14 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const wsDropdownRef = useRef<HTMLDivElement>(null);
+  // Git 分支选择器
+  const [gitBranches, setGitBranches] = useState<{ isRepo: boolean; current: string | null; branches: string[] } | null>(null);
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+  const [branchSwitching, setBranchSwitching] = useState(false);
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
+  // Worktree 创建对话框
+  const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
+  const [worktreeCreating, setWorktreeCreating] = useState(false);
   const { mode: themeMode, resolved: themeResolved, toggle: toggleTheme } = useThemeStore();
 
   // 订阅 UI store：TaskSummaryCard 点击文件 → 切换到侧栏文件 tab
@@ -256,6 +264,125 @@ export default function App() {
 
   const activeWs = wsStore.workspaces.find(w => w.id === wsStore.activeId);
 
+  // ── Git 分支：工作空间切换时加载分支列表 ──
+  const loadGitBranches = async (wsId: string) => {
+    try {
+      const res = await fetch(`/api/workspace/${wsId}/git/branches`);
+      const data = await res.json();
+      if (res.ok) setGitBranches(data);
+    } catch { /* ignore */ }
+  };
+  useEffect(() => {
+    setGitBranches(null);
+    setBranchDropdownOpen(false);
+    if (wsStore.activeId) loadGitBranches(wsStore.activeId);
+  }, [wsStore.activeId]);
+
+  // 分支切换
+  const handleCheckout = async (branch: string) => {
+    if (!activeWs || branchSwitching) return;
+    setBranchSwitching(true);
+    try {
+      const res = await fetch(`/api/workspace/${activeWs.id}/git/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branch }),
+      });
+      if (res.ok) {
+        setGitBranches(prev => prev ? { ...prev, current: branch } : prev);
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        const errMsg = data.error || "未知错误";
+        // 分支已在 worktree 中检出 → 切换到对应的 worktree 工作空间
+        if (errMsg.includes("already checked out at")) {
+          const match = errMsg.match(/at '([^']+)'/);
+          const wtPath = match?.[1];
+          if (wtPath) {
+            // 找到该路径对应的工作空间
+            const wtWs = wsStore.workspaces.find(w => w.path === wtPath);
+            if (wtWs) {
+              await selectWorkspace(wtWs.id);
+              setBranchDropdownOpen(false);
+              return;
+            }
+            // 路径存在但未注册为工作空间 → 自动注册
+            const addRes = await fetch("/api/workspaces", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: wtPath }),
+            });
+            if (addRes.ok) {
+              const newWs = await addRes.json();
+              const wsRes = await fetch("/api/workspaces");
+              const wsData = await wsRes.json();
+              wsStore.setWorkspaces(wsData.workspaces || []);
+              await selectWorkspace(newWs.id);
+              setBranchDropdownOpen(false);
+              return;
+            }
+          }
+        }
+        alert(`切换失败：${errMsg}`);
+      }
+    } catch (e: any) {
+      alert(`切换失败：${e.message}`);
+    } finally {
+      setBranchSwitching(false);
+    }
+  };
+
+  // 创建 worktree 并自动切换
+  const handleCreateWorktree = async (opts: { branch?: string; newBranch?: string }) => {
+    if (!activeWs || worktreeCreating) return;
+    setWorktreeCreating(true);
+    try {
+      // 路径：主仓库同级目录，命名 项目名-分支名
+      const branchName = opts.newBranch || opts.branch || "worktree";
+      const dirName = `${activeWs.name.split(":")[0]}-${branchName.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+      const parentDir = activeWs.path.split("/").slice(0, -1).join("/");
+      const targetPath = `${parentDir}/${dirName}`;
+
+      const res = await fetch(`/api/workspace/${activeWs.id}/git/worktree`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...opts, path: targetPath }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // 刷新工作空间列表
+        const wsRes = await fetch("/api/workspaces");
+        const wsData = await wsRes.json();
+        wsStore.setWorkspaces(wsData.workspaces || []);
+        // 切换到新 worktree 工作空间
+        if (data.workspace?.id) {
+          await selectWorkspace(data.workspace.id);
+        }
+        setShowWorktreeDialog(false);
+        setBranchDropdownOpen(false);
+      } else {
+        const data = await res.json();
+        alert(`创建 Worktree 失败：${data.error || "未知错误"}`);
+      }
+    } catch (e: any) {
+      alert(`创建 Worktree 失败：${e.message}`);
+    } finally {
+      setWorktreeCreating(false);
+    }
+  };
+
+  // 分支下拉点击外部关闭
+  useEffect(() => {
+    if (!branchDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(e.target as Node)) {
+        setBranchDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [branchDropdownOpen]);
+
   return (
     <div
       className={`app ${wsStore.sidebarCollapsed ? "sidebar-hidden" : ""}`}
@@ -423,7 +550,53 @@ export default function App() {
             <Icon name="i-menu" size={18} />
           </button>
           <div className="chat-title-group">
-            <h1 className="chat-title">{activeWs?.name ?? "MyAgent"}</h1>
+            <h1 className="chat-title" title={activeWs?.path ?? undefined}>{activeWs?.name ?? "MyAgent"}</h1>
+            {/* Git 分支选择器 */}
+            {gitBranches?.isRepo && gitBranches.current && (
+              <div className="branch-selector" ref={branchDropdownRef}>
+                <button
+                  className="branch-selector-btn"
+                  onClick={() => setBranchDropdownOpen(v => !v)}
+                  type="button"
+                  title={`当前分支：${gitBranches.current}`}
+                >
+                  <Icon name="i-git-branch" size={13} />
+                  <span className="branch-selector-name">{gitBranches.current}</span>
+                  <Icon name="i-chevron" size={11} className={`branch-selector-chevron ${branchDropdownOpen ? "open" : ""}`} />
+                </button>
+                {branchDropdownOpen && (
+                  <div className="branch-dropdown show">
+                    <div className="branch-dropdown-header">
+                      <span>分支</span>
+                      <span className="branch-dropdown-count">{gitBranches.branches.length}</span>
+                    </div>
+                    <div className="branch-dropdown-list">
+                      {gitBranches.branches.map(b => (
+                        <button
+                          key={b}
+                          className={`branch-dropdown-item ${b === gitBranches.current ? "active" : ""}`}
+                          onClick={() => b !== gitBranches.current && handleCheckout(b)}
+                          type="button"
+                          disabled={branchSwitching || b === gitBranches.current}
+                        >
+                          <span className="branch-dropdown-item-name">{b}</span>
+                          {b === gitBranches.current && <Icon name="i-check" size={13} className="branch-dropdown-item-check" />}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="branch-dropdown-divider" />
+                    <button
+                      className="branch-dropdown-action"
+                      onClick={() => { setBranchDropdownOpen(false); setShowWorktreeDialog(true); }}
+                      type="button"
+                    >
+                      <Icon name="i-git-branch" size={13} />
+                      <span>在新 Worktree 中打开…</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="chat-head-actions">
             {activeWs && (
@@ -503,6 +676,131 @@ export default function App() {
           onAddWorkspace={() => setShowDirBrowser(true)}
         />
       )}
+      {showWorktreeDialog && activeWs && gitBranches && (
+        <WorktreeDialog
+          branches={gitBranches.branches}
+          currentBranch={gitBranches.current}
+          wsName={activeWs.name}
+          wsPath={activeWs.path}
+          creating={worktreeCreating}
+          onCreate={handleCreateWorktree}
+          onClose={() => setShowWorktreeDialog(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Worktree 创建对话框 ──
+function WorktreeDialog({ branches, currentBranch, wsName, wsPath, creating, onCreate, onClose }: {
+  branches: string[];
+  currentBranch: string | null;
+  wsName: string;
+  wsPath: string;
+  creating: boolean;
+  onCreate: (opts: { branch?: string; newBranch?: string }) => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<"existing" | "new">("new");
+  const [selectedBranch, setSelectedBranch] = useState(currentBranch || branches[0] || "");
+  const [newBranchName, setNewBranchName] = useState("");
+  const [baseBranch, setBaseBranch] = useState(currentBranch || branches[0] || "");
+
+  // 预览路径
+  const branchName = mode === "new" ? (newBranchName || "new-branch") : selectedBranch;
+  const dirName = `${wsName.split(":")[0]}-${branchName.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+  const parentDir = wsPath.split("/").slice(0, -1).join("/");
+  const previewPath = `${parentDir}/${dirName}`;
+
+  const canSubmit = mode === "existing" ? !!selectedBranch : !!newBranchName.trim();
+
+  const handleSubmit = () => {
+    if (!canSubmit || creating) return;
+    if (mode === "new") {
+      onCreate({ newBranch: newBranchName.trim(), branch: baseBranch });
+    } else {
+      onCreate({ branch: selectedBranch });
+    }
+  };
+
+  return (
+    <div className="wt-dialog-overlay" onClick={onClose}>
+      <div className="wt-dialog" onClick={e => e.stopPropagation()}>
+        <div className="wt-dialog-header">
+          <span className="wt-dialog-title">
+            <Icon name="i-git-branch" size={16} />
+            新建 Worktree
+          </span>
+          <button className="wt-dialog-close" onClick={onClose} type="button">
+            <Icon name="i-x" size={16} />
+          </button>
+        </div>
+        <div className="wt-dialog-body">
+          {/* 模式切换 */}
+          <div className="wt-mode-tabs">
+            <button
+              className={`wt-mode-tab ${mode === "new" ? "active" : ""}`}
+              onClick={() => setMode("new")}
+              type="button"
+            >新分支</button>
+            <button
+              className={`wt-mode-tab ${mode === "existing" ? "active" : ""}`}
+              onClick={() => setMode("existing")}
+              type="button"
+            >现有分支</button>
+          </div>
+
+          {mode === "new" ? (
+            <>
+              <div className="wt-field">
+                <label className="wt-field-label">新分支名</label>
+                <input
+                  className="wt-field-input"
+                  type="text"
+                  value={newBranchName}
+                  onChange={e => setNewBranchName(e.target.value)}
+                  placeholder="例如：feature/login"
+                  autoFocus
+                  onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                />
+              </div>
+              <div className="wt-field">
+                <label className="wt-field-label">基于分支</label>
+                <select
+                  className="wt-field-select"
+                  value={baseBranch}
+                  onChange={e => setBaseBranch(e.target.value)}
+                >
+                  {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+            </>
+          ) : (
+            <div className="wt-field">
+              <label className="wt-field-label">选择分支</label>
+              <select
+                className="wt-field-select"
+                value={selectedBranch}
+                onChange={e => setSelectedBranch(e.target.value)}
+              >
+                {branches.map(b => <option key={b} value={b}>{b}{b === currentBranch ? " (当前)" : ""}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* 路径预览 */}
+          <div className="wt-path-preview">
+            <Icon name="i-folder" size={13} />
+            <span className="wt-path-text" title={previewPath}>{previewPath}</span>
+          </div>
+        </div>
+        <div className="wt-dialog-footer">
+          <button className="wt-btn-cancel" onClick={onClose} type="button" disabled={creating}>取消</button>
+          <button className="wt-btn-create" onClick={handleSubmit} type="button" disabled={!canSubmit || creating}>
+            {creating ? "创建中…" : "创建并切换"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

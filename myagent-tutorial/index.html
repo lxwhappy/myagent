@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            margin: 0;
+            width: 1920px;
+            height: 1080px;
+            overflow: hidden;
+            background: #0d1117;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #c9d1d9;
+        }
+        code, pre, .monospace {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        .scene-content {
+            width: 100%;
+            height: 100%;
+            padding: 80px 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .title-main {
+            font-size: 96px;
+            font-weight: 700;
+            color: #c9d1d9;
+            margin-bottom: 20px;
+            text-align: center;
+            letter-spacing: -2px;
+        }
+
+        .title-sub {
+            font-size: 42px;
+            font-weight: 400;
+            color: #8b949e;
+            text-align: center;
+        }
+
+        .title-accent {
+            color: #58a6ff;
+        }
+
+        .scene-title {
+            font-size: 64px;
+            font-weight: 600;
+            color: #c9d1d9;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .scene-text {
+            font-size: 28px;
+            font-weight: 400;
+            color: #8b949e;
+            line-height: 1.6;
+            max-width: 1400px;
+            text-align: center;
+        }
+
+        .code-block {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 30px 40px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 22px;
+            color: #79c0ff;
+            line-height: 1.8;
+            margin: 30px 0;
+            max-width: 1400px;
+            text-align: left;
+            overflow: hidden;
+        }
+
+        .code-comment {
+            color: #8b949e;
+        }
+
+        .code-keyword {
+            color: #ff7b72;
+        }
+
+        .code-string {
+            color: #a5d6ff;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-top: 40px;
+            max-width: 1400px;
+        }
+
+        .feature-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 30px 40px;
+        }
+
+        .feature-title {
+            font-size: 32px;
+            font-weight: 600;
+            color: #58a6ff;
+            margin-bottom: 15px;
+        }
+
+        .feature-desc {
+            font-size: 22px;
+            color: #8b949e;
+            line-height: 1.5;
+        }
+
+        .architecture {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            margin: 40px 0;
+        }
+
+        .arch-box {
+            background: #161b22;
+            border: 2px solid #58a6ff;
+            border-radius: 16px;
+            padding: 40px 60px;
+            font-size: 28px;
+            font-weight: 600;
+            color: #c9d1d9;
+            text-align: center;
+        }
+
+        .arch-arrow {
+            font-size: 48px;
+            color: #58a6ff;
+        }
+
+        .arch-label {
+            font-size: 20px;
+            color: #8b949e;
+            margin-top: 10px;
+        }
+
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            margin-top: 30px;
+            max-width: 1200px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .step-number {
+            background: #58a6ff;
+            color: #0d1117;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .step-text {
+            font-size: 26px;
+            color: #8b949e;
+        }
+
+        .highlight-box {
+            background: rgba(88, 166, 255, 0.1);
+            border: 2px solid #58a6ff;
+            border-radius: 12px;
+            padding: 25px 35px;
+            margin: 25px 0;
+            max-width: 1200px;
+        }
+
+        .highlight-text {
+            font-size: 24px;
+            color: #79c0ff;
+            text-align: center;
+        }
+
+        .closing-logo {
+            font-size: 72px;
+            font-weight: 700;
+            color: #58a6ff;
+            margin-bottom: 30px;
+        }
+
+        .closing-text {
+            font-size: 32px;
+            color: #8b949e;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        .closing-text a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div
+        id="root"
+        data-composition-id="main"
+        data-start="0"
+        data-duration="130"
+        data-width="1920"
+        data-height="1080"
+    >
+
+        <!-- Scene 1: Title (0-5s) -->
+        <div class="scene-content" id="scene-title">
+            <h1 class="title-main">
+                <span class="title-accent">MyAgent</span>
+            </h1>
+            <p class="title-sub">基于 Pi Agent 的智能 AI 助手 + Web 端</p>
+        </div>
+
+        <!-- Scene 2: Introduction (5-25s) -->
+        <div class="scene-content" id="scene-intro">
+            <h2 class="scene-title">什么是 MyAgent？</h2>
+            <p class="scene-text">
+                MyAgent 是一个基于 Pi Agent 框架构建的智能 AI 助手系统<br>
+                拥有现代化的 Web 界面，支持多模型切换、Agent 管理和技能扩展
+            </p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-title">🚀 快速启动</div>
+                    <div class="feature-desc">一条命令启动，无需复杂配置</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🧠 多模型支持</div>
+                    <div class="feature-desc">OpenAI、Anthropic、Ollama、Google</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🎭 Agent 管理</div>
+                    <div class="feature-desc">创建自定义角色，切换不同 Agent</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🔧 可扩展</div>
+                    <div class="feature-desc">自定义工具、Skills 扩展</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scene 3: Quick Start (25-50s) -->
+        <div class="scene-content" id="scene-quickstart">
+            <h2 class="scene-title">快速开始</h2>
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-text">克隆项目并安装依赖</div>
+                </div>
+            </div>
+            <div class="code-block">
+<span class="code-comment"># 安装依赖</span>
+<span class="code-keyword">pnpm</span> install
+            </div>
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-text">配置 API Key</div>
+                </div>
+            </div>
+            <div class="code-block">
+<span class="code-comment"># 配置 Anthropic API Key</span>
+<span class="code-keyword">export</span> <span class="code-string">ANTHROPIC_API_KEY</span>=sk-ant-your-key-here
+            </div>
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-text">启动项目</div>
+                </div>
+            </div>
+            <div class="code-block">
+<span class="code-comment"># 同时启动前端和后端</span>
+<span class="code-keyword">pnpm</span> dev
+
+<span class="code-comment"># 或分开启动</span>
+<span class="code-keyword">pnpm</span> dev:server  <span class="code-comment"># → localhost:3000</span>
+<span class="code-keyword">pnpm</span> dev:web     <span class="code-comment"># → localhost:5180</span>
+            </div>
+            <div class="highlight-box">
+                <div class="highlight-text">打开 http://localhost:5180 开始对话</div>
+            </div>
+        </div>
+
+        <!-- Scene 4: Core Features (50-80s) -->
+        <div class="scene-content" id="scene-features">
+            <h2 class="scene-title">核心功能</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-title">💬 智能对话</div>
+                    <div class="feature-desc">支持流式输出、实时响应、多轮对话</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🎯 任务管理</div>
+                    <div class="feature-desc">自动创建任务清单，追踪进度</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🛠️ 工具调用</div>
+                    <div class="feature-desc">文件操作、代码执行、网络请求等</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">📝 会话持久化</div>
+                    <div class="feature-desc">自动保存聊天记录，随时回顾</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">🔄 模型切换</div>
+                    <div class="feature-desc">一键切换不同的 LLM Provider</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">📊 状态监控</div>
+                    <div class="feature-desc">实时显示生成状态和工具执行</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scene 5: Architecture (80-105s) -->
+        <div class="scene-content" id="scene-architecture">
+            <h2 class="scene-title">系统架构</h2>
+            <div class="architecture">
+                <div class="arch-box">
+                    浏览器<br>
+                    <span style="font-size: 20px; color: #8b949e;">React</span>
+                </div>
+                <div class="arch-arrow">⇄</div>
+                <div class="arch-box">
+                    Node.js 后端<br>
+                    <span style="font-size: 20px; color: #8b949e;">Fastify + WebSocket</span>
+                </div>
+                <div class="arch-arrow">⇄</div>
+                <div class="arch-box">
+                    Pi Agent SDK<br>
+                    <span style="font-size: 20px; color: #8b949e;">AI 引擎</span>
+                </div>
+            </div>
+            <p class="scene-text">
+                前端通过 WebSocket 与后端通信<br>
+                后端使用 Pi Agent SDK 创建和管理 Agent Session<br>
+                所有数据持久化存储在 ~/.myagent/
+            </p>
+            <div class="highlight-box">
+                <div class="highlight-text">前后端分离，易于扩展和维护</div>
+            </div>
+        </div>
+
+        <!-- Scene 6: Extension (105-125s) -->
+        <div class="scene-content" id="scene-extension">
+            <h2 class="scene-title">扩展开发</h2>
+            <p class="scene-text">轻松添加自定义工具和 Skills</p>
+            <div class="code-block">
+<span class="code-comment">// 添加自定义工具</span>
+<span class="code-keyword">const</span> myTool = defineTool({
+  <span class="code-string">name</span>: <span class="code-string">"my_tool"</span>,
+  <span class="code-string">description</span>: <span class="code-string">"工具描述..."</span>,
+  <span class="code-string">parameters</span>: { type: <span class="code-string">"object"</span>, properties: { ... } },
+  <span class="code-string">execute</span>: <span class="code-keyword">async</span> (args) => { ... },
+});
+
+createAgentSession({ customTools: [myTool] });
+            </div>
+            <div class="step-list">
+                <div class="step-item">
+                    <div class="step-number">1</div>
+                    <div class="step-text">在 ~/.myagent/skills/ 创建 SKILL.md 文件</div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">2</div>
+                    <div class="step-text">Agent 自动加载所有 Skills</div>
+                </div>
+                <div class="step-item">
+                    <div class="step-number">3</div>
+                    <div class="step-text">通过 @mention 或自动触发使用</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scene 7: Closing (125-130s) -->
+        <div class="scene-content" id="scene-closing">
+            <div class="closing-logo">MyAgent</div>
+            <p class="closing-text">
+                立即开始构建你的智能 AI 助手<br>
+                <a href="https://github.com/your-repo/myagent">github.com/your-repo/myagent</a>
+            </p>
+        </div>
+
+    </div>
+
+    <script>
+        // Scene start times (in seconds)
+        const sceneTimes = {
+            title: 0,
+            intro: 5,
+            quickstart: 25,
+            features: 50,
+            architecture: 80,
+            extension: 105,
+            closing: 125
+        };
+
+        // Main timeline
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+
+        // Initialize all scenes as hidden
+        const allScenes = ['title', 'intro', 'quickstart', 'features', 'architecture', 'extension', 'closing'];
+        gsap.set(allScenes.map(s => `#scene-${s}`), { opacity: 0, visibility: 'hidden' });
+
+        // ==================== SCENE 1: TITLE (0-5s) ====================
+        tl.set('#scene-title', { opacity: 1, visibility: 'visible' }, 0);
+        tl.from('#scene-title .title-main', { y: 80, opacity: 0, duration: 0.8, ease: 'power3.out' }, 0);
+        tl.from('#scene-title .title-sub', { y: 60, opacity: 0, duration: 0.8, ease: 'power3.out' }, 0.3);
+        tl.to('#scene-title .title-main', { y: -60, opacity: 0, duration: 0.5, ease: 'power3.in' }, sceneTimes.intro - 0.5);
+        tl.to('#scene-title .title-sub', { y: -40, opacity: 0, duration: 0.5, ease: 'power3.in' }, sceneTimes.intro - 0.4);
+        tl.set('#scene-title', { opacity: 0, visibility: 'hidden' }, sceneTimes.intro);
+
+        // ==================== SCENE 2: INTRODUCTION (5-25s) ====================
+        tl.set('#scene-intro', { opacity: 1, visibility: 'visible' }, sceneTimes.intro);
+        tl.from('#scene-intro .scene-title', { y: 60, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.intro);
+        tl.from('#scene-intro .scene-text', { y: 40, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.intro + 0.2);
+        tl.from('#scene-intro .feature-card', { y: 50, opacity: 0, duration: 0.5, stagger: 0.15, ease: 'power3.out' }, sceneTimes.intro + 0.8);
+        tl.to('#scene-intro .feature-card', { y: -30, opacity: 0, duration: 0.4, stagger: 0.08, ease: 'power3.in' }, sceneTimes.quickstart - 0.5);
+        tl.to('#scene-intro .scene-title, #scene-intro .scene-text', { opacity: 0, duration: 0.4, ease: 'power3.in' }, sceneTimes.quickstart - 0.4);
+        tl.set('#scene-intro', { opacity: 0, visibility: 'hidden' }, sceneTimes.quickstart);
+
+        // ==================== SCENE 3: QUICK START (25-50s) ====================
+        tl.set('#scene-quickstart', { opacity: 1, visibility: 'visible' }, sceneTimes.quickstart);
+        tl.from('#scene-quickstart .scene-title', { y: 60, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.quickstart);
+        tl.from('#scene-quickstart .step-item', { x: -60, opacity: 0, duration: 0.5, stagger: 0.2, ease: 'power3.out' }, sceneTimes.quickstart + 0.3);
+        tl.from('#scene-quickstart .code-block', { y: 40, opacity: 0, duration: 0.5, ease: 'power3.out' }, sceneTimes.quickstart + 0.6);
+        tl.from('#scene-quickstart .highlight-box', { scale: 0.9, opacity: 0, duration: 0.6, ease: 'back.out(1.7)' }, sceneTimes.quickstart + 1.5);
+        tl.to('#scene-quickstart .scene-title, #scene-quickstart .code-block, #scene-quickstart .highlight-box, #scene-quickstart .step-item', { opacity: 0, duration: 0.4, ease: 'power3.in' }, sceneTimes.features - 0.5);
+        tl.set('#scene-quickstart', { opacity: 0, visibility: 'hidden' }, sceneTimes.features);
+
+        // ==================== SCENE 4: FEATURES (50-80s) ====================
+        tl.set('#scene-features', { opacity: 1, visibility: 'visible' }, sceneTimes.features);
+        tl.from('#scene-features .scene-title', { y: 60, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.features);
+        tl.from('#scene-features .feature-card', { y: 50, opacity: 0, duration: 0.5, stagger: 0.12, ease: 'power3.out' }, sceneTimes.features + 0.3);
+        tl.to('#scene-features .feature-card', { y: -30, opacity: 0, duration: 0.4, stagger: 0.08, ease: 'power3.in' }, sceneTimes.architecture - 0.5);
+        tl.to('#scene-features .scene-title', { opacity: 0, duration: 0.4, ease: 'power3.in' }, sceneTimes.architecture - 0.4);
+        tl.set('#scene-features', { opacity: 0, visibility: 'hidden' }, sceneTimes.architecture);
+
+        // ==================== SCENE 5: ARCHITECTURE (80-105s) ====================
+        tl.set('#scene-architecture', { opacity: 1, visibility: 'visible' }, sceneTimes.architecture);
+        tl.from('#scene-architecture .scene-title', { y: 60, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.architecture);
+        tl.from('#scene-architecture .arch-box', { scale: 0.8, opacity: 0, duration: 0.6, stagger: 0.2, ease: 'back.out(1.7)' }, sceneTimes.architecture + 0.3);
+        tl.from('#scene-architecture .arch-arrow', { scale: 0, opacity: 0, duration: 0.5, stagger: 0.2, ease: 'back.out(2)' }, sceneTimes.architecture + 0.6);
+        tl.from('#scene-architecture .scene-text', { y: 40, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.architecture + 1);
+        tl.from('#scene-architecture .highlight-box', { scale: 0.9, opacity: 0, duration: 0.6, ease: 'back.out(1.7)' }, sceneTimes.architecture + 1.5);
+        tl.to('#scene-architecture .scene-title, #scene-architecture .scene-text, #scene-architecture .arch-box, #scene-architecture .arch-arrow, #scene-architecture .highlight-box', { opacity: 0, duration: 0.4, ease: 'power3.in' }, sceneTimes.extension - 0.5);
+        tl.set('#scene-architecture', { opacity: 0, visibility: 'hidden' }, sceneTimes.extension);
+
+        // ==================== SCENE 6: EXTENSION (105-125s) ====================
+        tl.set('#scene-extension', { opacity: 1, visibility: 'visible' }, sceneTimes.extension);
+        tl.from('#scene-extension .scene-title', { y: 60, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.extension);
+        tl.from('#scene-extension .scene-text', { y: 40, opacity: 0, duration: 0.5, ease: 'power3.out' }, sceneTimes.extension + 0.2);
+        tl.from('#scene-extension .code-block', { y: 40, opacity: 0, duration: 0.5, ease: 'power3.out' }, sceneTimes.extension + 0.5);
+        tl.from('#scene-extension .step-item', { x: -60, opacity: 0, duration: 0.5, stagger: 0.15, ease: 'power3.out' }, sceneTimes.extension + 1.2);
+        tl.to('#scene-extension .scene-title, #scene-extension .scene-text, #scene-extension .code-block, #scene-extension .step-item', { opacity: 0, duration: 0.4, ease: 'power3.in' }, sceneTimes.closing - 0.5);
+        tl.set('#scene-extension', { opacity: 0, visibility: 'hidden' }, sceneTimes.closing);
+
+        // ==================== SCENE 7: CLOSING (125-130s) ====================
+        tl.set('#scene-closing', { opacity: 1, visibility: 'visible' }, sceneTimes.closing);
+        tl.from('#scene-closing .closing-logo', { scale: 0.8, opacity: 0, duration: 0.8, ease: 'back.out(1.7)' }, sceneTimes.closing);
+        tl.from('#scene-closing .closing-text', { y: 40, opacity: 0, duration: 0.6, ease: 'power3.out' }, sceneTimes.closing + 0.4);
+
+        // Register timeline
+        window.__timelines['main'] = tl;
+    </script>
+</body>
+</html>

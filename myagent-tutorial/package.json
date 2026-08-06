@@ -1,0 +1,16 @@
+{
+  "name": "myagent-tutorial",
+  "version": "1.0.0",
+  "description": "MyAgent 项目教学视频",
+  "private": true,
+  "scripts": {
+    "dev": "npx hyperframes preview",
+    "render": "npx hyperframes render --quality high --fps 30 --output myagent-tutorial.mp4"
+  },
+  "hyperframes": {
+    "composition": "index.html",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  }
+}
