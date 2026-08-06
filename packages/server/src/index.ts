@@ -23,6 +23,7 @@ import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";
 import { setupSettingsRoutes } from "./settings-routes.js";
 import { setupAgentRoutes } from "./agent-routes.js";
+import { setupQuickPromptRoutes } from "./quick-prompt-routes.js";
 import { setupCronRoutes } from "./cron-routes.js";
 import { mcpManager } from "./mcp-manager.js";
 import { restoreAllJobs, cronStore } from "./tools/cron-store.js";
@@ -51,7 +52,7 @@ function findPublicDir(): string | null {
 }
 
 async function main() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 }); // 10MB（debugEvents 含原始 LLM 请求体可能较大）
 
   // 插件
   await app.register(cors, { origin: config.corsOrigin });
@@ -67,6 +68,7 @@ async function main() {
 
   // Agent 配置管理 API（角色预设 CRUD）
   setupAgentRoutes(app);
+  setupQuickPromptRoutes(app);
 
   // 定时任务管理 API
   setupCronRoutes(app);
