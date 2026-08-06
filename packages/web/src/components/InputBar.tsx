@@ -7,24 +7,14 @@ import { useChatStore, type SkillInfo } from "../stores/chat";
 import { useAgentsStore } from "../stores/agents";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
 import { useCodeRefStore, formatCodeRefs, type CodeRef } from "../stores/code-refs";
+import { useQuickPromptStore, type QuickPrompt } from "../stores/quick-prompts";
 import { Icon } from "./Icon";
 import { AgentManager } from "./AgentManager";
+import { QuickPromptManager } from "./QuickPromptManager";
 
 const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
 const MAX_HISTORY = 50;
-
-// ── 快捷指令模板 ──
-const QUICK_PROMPTS: Array<{ icon: string; label: string; text: string }> = [
-  { icon: "📁", label: "分析项目", text: "帮我分析一下当前项目的结构和技术栈，总结主要模块和它们的职责" },
-  { icon: "🐛", label: "调试代码", text: "帮我看看这个报错是什么原因，给出修复方案：" },
-  { icon: "🔍", label: "联网搜索", text: "帮我搜索一下" },
-  { icon: "📝", label: "代码审查", text: "帮我审查这段代码，指出潜在问题和优化建议：" },
-  { icon: "🧪", label: "写测试", text: "帮我为这个函数写单元测试：" },
-  { icon: "📖", label: "解释概念", text: "帮我解释一下" },
-  { icon: "🔄", label: "重构", text: "帮我重构这段代码，提高可读性和可维护性：" },
-  { icon: "🚀", label: "性能优化", text: "帮我分析这段代码的性能瓶颈，并给出优化方案：" },
-];
 
 export interface AttachedImage {
   data: string;    // base64 (no prefix)
@@ -123,8 +113,17 @@ export function InputBar() {
     activeIndex: number;
   }>({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
 
-  // ── 快捷指令面板 ──
+  // ── 快捷指令面板（浮层）──
   const [showQuickPrompts, setShowQuickPrompts] = useState(false);
+  const [showPromptManager, setShowPromptManager] = useState(false);
+  const quickPrompts = useQuickPromptStore(s => s.prompts);
+  const quickPromptLoaded = useQuickPromptStore(s => s.loaded);
+  const loadQuickPrompts = useQuickPromptStore(s => s.load);
+
+  // 首次展开时加载快捷指令
+  useEffect(() => {
+    if (showQuickPrompts && !quickPromptLoaded) loadQuickPrompts();
+  }, [showQuickPrompts, quickPromptLoaded, loadQuickPrompts]);
 
   // ── 图片处理 ──
   const processImageFiles = useCallback(async (files: File[]) => {
@@ -424,29 +423,6 @@ export function InputBar() {
           </div>
         )}
 
-        {/* 快捷指令面板 */}
-        {showQuickPrompts && (
-          <div className="quick-prompts-panel">
-            <div className="quick-prompts-header">
-              <span>快捷指令</span>
-              <button className="quick-prompts-close" onClick={() => setShowQuickPrompts(false)}>✕</button>
-            </div>
-            <div className="quick-prompts-grid">
-              {QUICK_PROMPTS.map((p, i) => (
-                <button
-                  key={i}
-                  className="quick-prompt-item"
-                  onClick={() => insertQuickPrompt(p.text)}
-                  title={p.text}
-                >
-                  <span className="quick-prompt-icon">{p.icon}</span>
-                  <span className="quick-prompt-label">{p.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="input-row">
           {/* Agent 选择器 */}
           <div className="agent-selector" ref={agentDropdownRef}>
@@ -501,17 +477,51 @@ export function InputBar() {
             <Icon name="i-paperclip" size={18} />
           </button>
 
-          {/* 快捷指令按钮 */}
-          <button
-            className={`input-attach ${showQuickPrompts ? "active" : ""}`}
-            onClick={() => setShowQuickPrompts(v => !v)}
-            type="button"
-            aria-label="快捷指令"
-            title="快捷指令"
-            style={showQuickPrompts ? { color: "var(--accent)" } : undefined}
-          >
-            ⚡
-          </button>
+          {/* 快捷指令按钮 + 浮层 */}
+          <div style={{ position: "relative" }}>
+            <button
+              className={`input-attach ${showQuickPrompts ? "active" : ""}`}
+              onClick={() => setShowQuickPrompts(v => !v)}
+              type="button"
+              aria-label="快捷指令"
+              title="快捷指令"
+              style={showQuickPrompts ? { color: "var(--accent)" } : undefined}
+            >
+              ⚡
+            </button>
+            {showQuickPrompts && (
+              <div className="qp-popover">
+                <div className="qp-popover-header">
+                  <span>快捷指令</span>
+                  <button
+                    type="button"
+                    className="qp-popover-manage"
+                    onClick={() => { setShowQuickPrompts(false); setShowPromptManager(true); }}
+                  >管理…</button>
+                </div>
+                <div className="qp-popover-list">
+                  {quickPrompts.length === 0 && !quickPromptLoaded && (
+                    <div className="qp-popover-empty">加载中...</div>
+                  )}
+                  {quickPrompts.length === 0 && quickPromptLoaded && (
+                    <div className="qp-popover-empty">暂无指令，点击「管理」添加</div>
+                  )}
+                  {quickPrompts.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="qp-popover-item"
+                      onClick={() => insertQuickPrompt(p.text)}
+                      title={p.text}
+                    >
+                      <span className="qp-popover-icon">{p.icon}</span>
+                      <span className="qp-popover-label">{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <textarea
             ref={taRef}
@@ -627,6 +637,9 @@ export function InputBar() {
 
       {showAgentManager && (
         <AgentManager onClose={() => setShowAgentManager(false)} onSwitchActive={(id) => switchAgent(id)} />
+      )}
+      {showPromptManager && (
+        <QuickPromptManager onClose={() => setShowPromptManager(false)} />
       )}
     </div>
   );

@@ -38,6 +38,8 @@ export const PATHS = {
   workspaces: join(AGENT_DIR, "workspaces.json"),
   /** Todo 列表（按 chatSessionId 隔离） */
   todos: join(AGENT_DIR, "todos.json"),
+  /** 快捷指令（用户可增删改） */
+  quickPrompts: join(AGENT_DIR, "quick-prompts.json"),
 
   // ── 定时任务 ──
   cronJobs: join(AGENT_DIR, "cron-jobs.json"),
