@@ -210,6 +210,7 @@ function FileTree({
 }) {
   const [items, setItems] = useState<FileItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null); // 正在添加到上下文的文件路径
   const expanded = expandedDirs.has(basePath);
 
   const load = useCallback(async () => {
@@ -223,12 +224,45 @@ function FileTree({
   if (depth === 0 || expanded) load();
   if (!loaded) return <div style={{ paddingLeft: depth * 14 + 12 }} className="sb-file-loading">...</div>;
 
+  // 添加文件到上下文：读取文件内容 → 加入 codeRefs
+  const handleAddToContext = async (e: React.MouseEvent, filePath: string) => {
+    e.stopPropagation();
+    if (adding) return;
+    setAdding(filePath);
+    try {
+      const res = await fetch(`/api/workspace/${wsId}/file?path=${encodeURIComponent(filePath)}`);
+      const data = await res.json();
+      if (!res.ok) return;
+      const lines = (data.content as string).split("\n");
+      const MAX_LINES = 300; // 超过 300 行截断
+      const truncated = lines.length > MAX_LINES;
+      const content = truncated
+        ? lines.slice(0, MAX_LINES).join("\n") + `\n\n... (文件共 ${lines.length} 行，已截断，请用 read 工具查看完整内容)`
+        : data.content;
+      const fileName = filePath.split("/").pop() || filePath;
+      useCodeRefStore.getState().add({
+        filePath,
+        fileName,
+        language: data.language || "text",
+        startLine: 1,
+        endLine: truncated ? MAX_LINES : lines.length,
+        content,
+        fullFile: true,
+      });
+    } catch (err) {
+      console.error("[FileTree] addToContext failed:", err);
+    } finally {
+      setAdding(null);
+    }
+  };
+
   return (
     <>
       {items.map(item => {
         const isDir = item.type === "dir";
         const isOpen = expandedDirs.has(item.path);
         const isActive = currentPath === item.path;
+        const isLoading = adding === item.path;
         return (
           <div key={item.path}>
             <div
@@ -249,6 +283,17 @@ function FileTree({
                 <Icon name="i-file" size={15} className="file-node-icon" />
               )}
               <span className="file-node-name">{item.name}</span>
+              {/* 文件类型：hover 显示"加到上下文"按钮 */}
+              {!isDir && (
+                <button
+                  className={`file-node-action${isLoading ? " loading" : ""}`}
+                  onClick={(e) => handleAddToContext(e, item.path)}
+                  title={isLoading ? "添加中..." : "添加到上下文"}
+                  type="button"
+                >
+                  {isLoading ? <Icon name="i-loader" size={13} /> : <Icon name="i-plus" size={13} />}
+                </button>
+              )}
             </div>
             {isDir && isOpen && (
               <FileTree

@@ -13,6 +13,7 @@ import { setLlmInterceptorSession } from "./llm-interceptor.js";
 import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput, getSkillPaths } from "./agent-registry.js";
 import { abortSubagents } from "./subagent-runner.js";
 import { pushPendingImages } from "./tools/image-tool.js";
+import { resolveAsk, abortAsks } from "./tools/ask-tool.js";
 import { todoStore } from "./tools/index.js";
 
 export function setupSSEGateway(app: FastifyInstance) {
@@ -162,6 +163,10 @@ export function setupSSEGateway(app: FastifyInstance) {
       const IDLE_TIMEOUT_MS = 180_000; // 3 分钟无任何事件判定卡死
       let lastActivity = Date.now();
       const idleUnsub = agent.subscribe?.(() => { lastActivity = Date.now(); });
+      // 同时监听 event-bus：ask_user 工具的心跳（ask_heartbeat）能重置 idle 计时
+      const busUnsub = subscribe((event) => {
+        if (event.chatSessionId === id) lastActivity = Date.now();
+      });
       const idleChecker = setInterval(() => {
         if (Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
           clearInterval(idleChecker);
@@ -177,7 +182,7 @@ export function setupSSEGateway(app: FastifyInstance) {
       }, 15_000);
       idleChecker.unref?.();
 
-      const cleanup = () => { clearInterval(idleChecker); idleUnsub?.(); };
+      const cleanup = () => { clearInterval(idleChecker); idleUnsub?.(); busUnsub?.(); };
       // 设置 LLM 拦截器的当前会话（让 fetch patch 知道把原始请求/响应发给哪个会话）
       setLlmInterceptorSession(id);
       agent.prompt(message, { images: promptImages as any })
@@ -197,12 +202,30 @@ export function setupSSEGateway(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     // 先终止该会话下所有活跃的子 agent（防止主会话停了子 agent 还在跑）
     abortSubagents(id);
+    // 终止所有 pending 的 ask_user 提问
+    abortAsks(id);
     const agent = getAgent(id);
     if (agent) {
       await agent.abort();
     } else {
       // agent 不存在（已被 destroy/重建/重启）：发 error 事件让前端解锁
       emit({ type: "error", chatSessionId: id, payload: { message: "agent_unavailable" }, ts: Date.now() });
+    }
+    reply.send({ success: true });
+  });
+
+  // ── 用户回答 ask_user 提问 ──
+  app.post("/api/agent/:id/ask-response", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { toolCallId?: string; values?: string[]; labels?: string[] } | null;
+    if (!body?.toolCallId || !body.values || !body.labels) {
+      reply.status(400).send({ error: "Missing toolCallId/values/labels" });
+      return;
+    }
+    const ok = resolveAsk(id, body.toolCallId, body.values, body.labels);
+    if (!ok) {
+      reply.status(404).send({ error: "No pending ask for this toolCallId" });
+      return;
     }
     reply.send({ success: true });
   });

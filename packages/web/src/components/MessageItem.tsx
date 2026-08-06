@@ -8,6 +8,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock as CodeHighlight } from "./CodeBlock";
 import type { Message, ToolExecution, SubagentState, SystemNotice, DebugLLMEvent } from "../stores/chat";
+import { useChatStore } from "../stores/chat";
+import { sseClient } from "../services/sse-client";
 import { MermaidBlock } from "./MermaidBlock";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { getMessageStats } from "../utils/sessionStats";
@@ -61,6 +63,11 @@ function MessageItemInner({ msg, subagents, onOpenSub, retryStatus, isLastAssist
 
         {/* ── 过程区：统一折叠/展开 + 总用时 ── */}
         <ProcessSection msg={msg} subagents={subagents} onOpenSub={onOpenSub} />
+
+        {/* ask_user 交互卡片（始终可见，不藏在折叠过程区内） */}
+        {msg.tools?.filter(t => t.tool === "ask_user").map(tool => (
+          <AskUserCard key={tool.toolCallId} tool={tool} />
+        ))}
 
         {/* 统一生成状态指示器（重试/等待/初始三合一，同时只显示一个） */}
         <GeneratingStatus msg={msg} retryStatus={retryStatus} />
@@ -205,10 +212,102 @@ function GeneratingStatus({ msg, retryStatus }: { msg: Message; retryStatus?: { 
   return null;
 }
 
+// ── ask_user 交互卡片：Agent 向用户提问，选项按钮 ──
+// 单选：点击即提交；多选：勾选切换 + 确认按钮
+// pending 时渲染可点击按钮；answered 后折叠为灰色摘要
+function AskUserCard({ tool }: { tool: ToolExecution }) {
+  const chatSessionId = useChatStore(s => s.activeChatSessionId);
+  const running = tool.status === "running";
+  const input = tool.input as { question?: string; multiple?: boolean; options?: Array<{ label: string; value: string; description?: string }> } | undefined;
+  const question = input?.question ?? "";
+  const multiple = input?.multiple === true;
+  const options = input?.options ?? [];
+  const outputText = typeof tool.output === "string" ? tool.output : "";
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  // 单选：点击即提交
+  const handleSingle = (value: string, label: string) => {
+    if (!running || !chatSessionId) return;
+    sseClient.askResponse(chatSessionId, tool.toolCallId, [value], [label]);
+  };
+
+  // 多选：切换勾选
+  const toggle = (i: number) => {
+    if (!running) return;
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
+
+  // 多选确认
+  const handleMultiConfirm = () => {
+    if (!chatSessionId || selected.size === 0) return;
+    const values = [...selected].map(i => options[i].value);
+    const labels = [...selected].map(i => options[i].label);
+    sseClient.askResponse(chatSessionId, tool.toolCallId, values, labels);
+  };
+
+  if (!running) {
+    // 已回答：紧凑摘要
+    return (
+      <div className="ask-card answered">
+        <span className="ask-q-icon">💬</span>
+        <span className="ask-q-text">{question}</span>
+        <span className="ask-arrow">→</span>
+        <span className="ask-answer">{outputText || "已跳过"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ask-card active">
+      <div className="ask-question">
+        <span className="ask-q-icon">💬</span>
+        <span className="ask-q-text">{question}</span>
+        {multiple && <span className="ask-badge">多选</span>}
+      </div>
+      <div className="ask-options">
+        {options.map((opt, i) => {
+          const checked = selected.has(i);
+          return (
+            <button
+              key={i}
+              className={`ask-option${multiple ? " checkable" : ""}${checked ? " checked" : ""}`}
+              onClick={() => multiple ? toggle(i) : handleSingle(opt.value, opt.label)}
+              type="button"
+            >
+              {multiple && <span className="ask-check">{checked ? "☑" : "☐"}</span>}
+              <span className="ask-opt-content">
+                <span className="ask-opt-label">{opt.label}</span>
+                {opt.description && <span className="ask-opt-desc">{opt.description}</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {multiple && (
+        <div className="ask-footer">
+          <span className="ask-count">{selected.size > 0 ? `已选 ${selected.size} 项` : "请选择"}</span>
+          <button
+            className="ask-confirm-btn"
+            onClick={handleMultiConfirm}
+            disabled={selected.size === 0}
+            type="button"
+          >
+            确认
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 过程区：统一折叠/展开，显示总用时 + 步骤数 ──
 function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
   const [open, setOpen] = useState(false);
-  const tools = msg.tools || [];
+  const tools = (msg.tools || []).filter(t => t.tool !== "ask_user"); // ask_user 单独渲染为交互卡片
   const llmEvents = msg.debugEvents || [];
   const hasInterleaved = tools.some(t => t.precedingThinking?.trim());
   const hasThinking = !!(msg.thinking && msg.thinking.trim()) || hasInterleaved;

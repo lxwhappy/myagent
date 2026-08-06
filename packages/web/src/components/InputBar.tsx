@@ -379,51 +379,7 @@ export function InputBar() {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {/* 图片预览栏 */}
-        {attachedImages.length > 0 && (
-          <div className="attachments">
-            {attachedImages.map((img, i) => (
-              <div key={i} className="attach-chip" style={{ padding: "2px", background: "transparent" }}>
-                <img src={img.previewUrl} alt="" style={{ width: 36, height: 36, borderRadius: "var(--radius-sm)", objectFit: "cover" }} />
-                <button
-                  className="attach-remove"
-                  onClick={() => removeImage(i)}
-                  type="button"
-                  aria-label="移除图片"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
-                >
-                  <Icon name="i-x" size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 代码引用片段栏（来自右侧文件预览面板的选中，支持多片段累积） */}
-        {codeRefs.length > 0 && (
-          <div className="attachments coderef-bar">
-            {codeRefs.map(r => (
-              <div key={r.id} className="coderef-chip" title={r.filePath}>
-                <Icon name="i-code" size={12} />
-                <span className="coderef-name">{r.fileName}</span>
-                <span className="coderef-lines">
-                  {r.startLine === r.endLine ? `L${r.startLine}` : `L${r.startLine}-L${r.endLine}`}
-                </span>
-                <button
-                  type="button"
-                  className="attach-remove"
-                  onClick={() => removeCodeRef(r.id)}
-                  aria-label="移除引用"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
-                >
-                  <Icon name="i-x" size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="input-row">
+        <div className="input-toolbar">
           {/* Agent 选择器 */}
           <div className="agent-selector" ref={agentDropdownRef}>
             <button
@@ -522,7 +478,55 @@ export function InputBar() {
               </div>
             )}
           </div>
+        </div>
 
+        {/* 图片预览栏 + 代码引用栏（输入内容的一部分，紧贴 textarea） */}
+        {(attachedImages.length > 0 || codeRefs.length > 0) && (
+          <>
+            {attachedImages.length > 0 && (
+              <div className="attachments">
+                {attachedImages.map((img, i) => (
+                  <div key={i} className="attach-chip" style={{ padding: "2px", background: "transparent" }}>
+                    <img src={img.previewUrl} alt="" style={{ width: 36, height: 36, borderRadius: "var(--radius-sm)", objectFit: "cover" }} />
+                    <button
+                      className="attach-remove"
+                      onClick={() => removeImage(i)}
+                      type="button"
+                      aria-label="移除图片"
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
+                    >
+                      <Icon name="i-x" size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {codeRefs.length > 0 && (
+              <div className="attachments coderef-bar">
+                {codeRefs.map(r => (
+                  <div key={r.id} className={`coderef-chip${r.fullFile ? " full-file" : ""}`} title={r.filePath}>
+                    <Icon name={r.fullFile ? "i-file" : "i-code"} size={12} />
+                    <span className="coderef-name">{r.fileName}</span>
+                    <span className="coderef-lines">
+                      {r.fullFile ? "全文" : r.startLine === r.endLine ? `L${r.startLine}` : `L${r.startLine}-L${r.endLine}`}
+                    </span>
+                    <button
+                      type="button"
+                      className="attach-remove"
+                      onClick={() => removeCodeRef(r.id)}
+                      aria-label="移除引用"
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
+                    >
+                      <Icon name="i-x" size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="input-row">
           <textarea
             ref={taRef}
             className="input"

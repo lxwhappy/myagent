@@ -1,21 +1,21 @@
-// stores/code-refs.ts — 代码引用片段（跨组件传递）
+// stores/code-refs.ts — 代码引用片段 + 整文件引用（跨组件传递）
 //
-// 用途：右侧文件预览面板（FilePreviewPane）里选中若干行代码，
-// 作为引用片段暂存到这里；输入框（InputBar）订阅它，显示为 chip，
-// 发送时拼进消息文本，让 agent 能精确定位「文件路径 + 行号范围 + 代码」。
-//
-// 设计：不持久化（会话级临时状态）；多片段累积；去重靠 id。
+// 用途：
+// 1. 右侧文件预览面板选中若干行代码 → 代码片段引用（snippet）
+// 2. 左侧文件目录树点击"+"按钮 → 整文件引用（fullFile）
+// 输入框（InputBar）订阅它，显示为 chip，发送时拼进消息文本。
 
 import { create } from "zustand";
 
 export interface CodeRef {
   id: string;
-  filePath: string;      // 工作空间相对路径，如 packages/web/src/App.tsx
-  fileName: string;      // 文件名，用于 chip 显示，如 App.tsx
+  filePath: string;      // 工作空间相对路径
+  fileName: string;      // 文件名，用于 chip 显示
   language: string;      // 代码语言，用于围栏渲染
   startLine: number;     // 起始行号（1-based）
   endLine: number;       // 结束行号（1-based，含）
-  content: string;       // 选中的代码原文
+  content: string;       // 代码原文
+  fullFile?: boolean;    // 整文件引用标记（chip 显示"全文"而非行号）
 }
 
 interface CodeRefState {
@@ -43,6 +43,10 @@ export function formatCodeRefs(refs: CodeRef[]): string {
   if (!refs.length) return "";
   return refs
     .map((r) => {
+      if (r.fullFile) {
+        // 整文件引用：标注"全文"
+        return `\n\n> 📎 文件 \`${r.filePath}\`（全文${r.startLine > 1 ? `，从 L${r.startLine}` : ""}）\n\n\`\`\`${r.language}\n${r.content}\n\`\`\``;
+      }
       const range = r.startLine === r.endLine ? `L${r.startLine}` : `L${r.startLine}-${r.endLine}`;
       return `\n\n> 📎 引用自 \`${r.filePath}:${range}\`\n\n\`\`\`${r.language}\n${r.content}\n\`\`\``;
     })

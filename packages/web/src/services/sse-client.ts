@@ -98,6 +98,18 @@ class SSEClient {
     }
   }
 
+  async askResponse(chatSessionId: string, toolCallId: string, values: string[], labels: string[]) {
+    try {
+      await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/ask-response`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolCallId, values, labels }),
+      });
+    } catch (err) {
+      console.error("[sse] askResponse failed:", err);
+    }
+  }
+
   async destroyAgent(chatSessionId: string) {
     this.knownAgents.delete(chatSessionId);
     try {

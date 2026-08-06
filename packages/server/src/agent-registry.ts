@@ -19,6 +19,7 @@ import { createTodoTool, createDelegateTool, customTools, todoStore } from "./to
 import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js";
 import { webSearchTool, webFetchTool } from "./tools/web-tool.js";
 import { createCronTool } from "./tools/cron-tool.js";
+import { createAskUserTool } from "./tools/ask-tool.js";
 import { setFireFn } from "./tools/cron-store.js";
 import { runSubagent, abortSubagents } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
@@ -129,7 +130,8 @@ export async function createAgent(
   const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId, cwd });
   const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
   const cronTool = createCronTool(chatSessionId);
-  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, cronTool, ...mcpTools];
+  const askUserTool = createAskUserTool(chatSessionId);
+  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, cronTool, askUserTool, ...mcpTools];
 
   // 合并 excludeTools：基础排除 + per-agent 禁用工具
   const excludeTools = ["find", "ls", ...(agentCfg?.disabledTools ?? [])];
