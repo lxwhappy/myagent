@@ -2572,6 +2572,8 @@
 
 /* 让 sidebar header 区域可以溢出（ws-dropdown 需要超出 sidebar 边界） */
 .sidebar { overflow: visible; position: relative; }
+/* 收起侧栏时取消 min-width + 恢复 overflow:hidden，否则内容溢出仍然可见 */
+.app.sidebar-hidden .sidebar { min-width: 0; overflow: hidden; }
 /* sidebar 拖拽调宽手柄 */
 
 /* ── 系统通知卡片（上下文压缩等） ── */

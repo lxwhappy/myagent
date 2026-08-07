@@ -496,7 +496,11 @@ textarea { resize: none; }
   background: var(--surface);
   min-height: 56px;
 }
-.sidebar-toggle { display: none; }
+/* main header 的侧栏切换按钮：
+   桌面端 — 侧栏展开时隐藏（侧栏自身有收起按钮），收起时显示（作为展开入口）
+   移动端 — 始终显示（侧栏是 fixed drawer，需要入口滑出） */
+.icon-btn.sidebar-toggle { display: none; }
+.app.sidebar-hidden .icon-btn.sidebar-toggle { display: flex; }
 .chat-title-group { display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; }
 .chat-title {
   font-size: var(--text-base); font-weight: 600;
@@ -1444,7 +1448,7 @@ textarea { resize: none; }
     transition: transform var(--motion-base) var(--ease-standard);
   }
   .app.sidebar-open .sidebar { transform: translateX(0); }
-  .sidebar-toggle { display: flex; }
+  .icon-btn.sidebar-toggle { display: flex; }
   .sidebar-close { display: flex; }
   .app.sidebar-open ~ .backdrop { display: block; }
   .suggestions { grid-template-columns: 1fr; }
