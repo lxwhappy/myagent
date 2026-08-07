@@ -140,7 +140,7 @@ export async function createAgent(
     model,
     cwd,
     resourceLoader: loader,
-    thinkingLevel: "medium",
+    thinkingLevel: "off",  // 默认关闭思考，前端可手动开启（省3-15s/轮）
     excludeTools,
     customTools: allCustomTools,
   });

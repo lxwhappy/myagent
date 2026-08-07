@@ -224,6 +224,12 @@ export function useChat() {
         case "tool_execution_start":
           if (sid) { chat.addToolStart(sid, { toolCallId: msg.payload.toolCallId, tool: msg.payload.tool, input: msg.payload.input }); scheduleStreamingPersist(sid); }
           break;
+        case "bash_execution_update":
+          // bash 命令流式输出：实时追加到工具卡片
+          if (sid && msg.payload?.delta) {
+            chat.appendToolPartial(sid, msg.payload.id || "", msg.payload.delta);
+          }
+          break;
         case "tool_execution_end":
           if (sid) { chat.updateToolEnd(sid, msg.payload.toolCallId, msg.payload.result, msg.payload.isError, msg.payload?.debug); scheduleStreamingPersist(sid); }
           break;

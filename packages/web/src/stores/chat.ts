@@ -84,9 +84,10 @@ export interface ToolExecution {
   output?: unknown;
   isError?: boolean;
   status: "running" | "done" | "error";
-  precedingThinking?: string; // 该工具调用之前的模型思考段（交替渲染用）
-  durationMs?: number;   // Debug: 工具执行耗时
-  startTs?: number;      // Debug: 工具执行开始时间戳
+  precedingThinking?: string;
+  durationMs?: number;
+  startTs?: number;
+  partialOutput?: string;  // bash 流式输出（执行中实时累积）
 }
 
 /** 子 agent 运行状态（delegate_task 工具触发的隔离子任务） */
@@ -208,6 +209,7 @@ interface ChatStore {
   forceResetGenerating: (id: string) => void;
   addToolStart: (id: string, exec: Partial<ToolExecution> & { toolCallId: string }) => void;
   updateToolEnd: (id: string, toolCallId: string, result: unknown, isError: boolean, debug?: { durationMs?: number; startTs?: number }) => void;
+  appendToolPartial: (id: string, toolCallId: string, delta: string) => void;
   addSkillUsed: (id: string, skill: SkillUsage) => void;
   setRetryStatus: (id: string, status: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null) => void;
   addDebugLLM: (id: string, evt: DebugLLMEvent) => void;
@@ -221,9 +223,9 @@ export const useChatStore = create<ChatStore>((set) => ({
   sessions: {},
   activeChatSessionId: null,
   connected: false,
-  // 思考默认开启：localStorage 未设过(首次)或显式设为 "1" → 开；仅当显式 "0" → 关。
-  // 这样老用户若手动关过仍保持关闭，新用户/未操作过的人默认能看到 agent 推理过程。
-  thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") !== "0"; } catch { return true; } })(),
+  // 思考默认关闭：思考模式会让 GLM-4.7 每轮多花 3-15s 生成推理 token。
+  // 大部分场景不需要深度思考，用户可手动点 🧠 按钮开启。
+  thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") === "1"; } catch { return false; } })(),
   activeSubId: null,
 
   setConnected: (v) => set({ connected: v }),
@@ -370,7 +372,24 @@ export const useChatStore = create<ChatStore>((set) => ({
     const msgs = [...sess.messages];
     const last = msgs[msgs.length - 1];
     if (last?.role === "assistant" && last.tools) {
-      msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === toolCallId ? { ...t, output: result, isError, status: isError ? "error" : "done", durationMs: debug?.durationMs, startTs: debug?.startTs } as ToolExecution : t) };
+      msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === toolCallId ? { ...t, output: result, isError, status: isError ? "error" : "done", durationMs: debug?.durationMs, startTs: debug?.startTs, partialOutput: undefined } as ToolExecution : t) };
+    }
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+  }),
+
+  appendToolPartial: (id, toolCallId, delta) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    const msgs = [...sess.messages];
+    const last = msgs[msgs.length - 1];
+    if (last?.role === "assistant" && last.tools) {
+      msgs[msgs.length - 1] = {
+        ...last,
+        tools: last.tools.map(t =>
+          t.status === "running"
+            ? { ...t, partialOutput: (t.partialOutput || "") + delta }
+            : t
+        ),
+      };
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
   }),

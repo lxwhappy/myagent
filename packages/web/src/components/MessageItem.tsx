@@ -460,8 +460,12 @@ function SkillBlock({ tool, skillName }: { tool: ToolExecution; skillName: strin
 
 // ── 工具调用块：低调样式，默认折叠详情 ──
 function ToolBlock({ tool }: { tool: ToolExecution }) {
-  const [open, setOpen] = useState(false);
   const running = tool.status === "running";
+  const hasPartial = !!(running && tool.partialOutput);
+  const [open, setOpen] = useState(false);
+  // bash 流式输出时自动展开
+  const [autoOpened, setAutoOpened] = useState(false);
+  if (hasPartial && !autoOpened) { setAutoOpened(true); setOpen(true); }
   const errored = tool.status === "error";
   const summary = extractToolSummary(tool);
   const inputText = tool.input != null ? fmtIO(tool.input) : "";
@@ -486,6 +490,12 @@ function ToolBlock({ tool }: { tool: ToolExecution }) {
             <div className="tl-section">
               <div className="tl-section-label">input</div>
               <pre className="tl-code"><code>{inputText}</code></pre>
+            </div>
+          )}
+          {running && tool.partialOutput && (
+            <div className="tl-section">
+              <div className="tl-section-label">output (streaming)</div>
+              <pre className="tl-code"><code>{tool.partialOutput}</code></pre>
             </div>
           )}
           {tool.output != null && (

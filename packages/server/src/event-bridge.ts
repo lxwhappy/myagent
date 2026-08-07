@@ -138,17 +138,6 @@ export class EventBridge {
           break;
         }
 
-        case "message_update": {
-          const ae = (event as any).assistantMessageEvent;
-          if (!ae) break;
-          if (ae.type === "text_delta" && typeof ae.delta === "string") {
-            send("message_update", { delta: ae.delta });
-          } else if (ae.type === "thinking_delta" && typeof ae.delta === "string") {
-            send("thinking_delta", { delta: ae.delta });
-          }
-          break;
-        }
-
         case "tool_execution_start": {
           const toolName = (event as any).toolName;
           const toolCallId = (event as any).toolCallId;
@@ -173,6 +162,13 @@ export class EventBridge {
           send("tool_execution_update", {
             toolCallId: (event as any).toolCallId,
             partial: (event as any).partialResult,
+          });
+          break;
+        case "bash_execution_update":
+          // SDK bash 工具的流式输出（stdout 每个 chunk）
+          send("bash_execution_update", {
+            id: (event as any).id,
+            delta: (event as any).delta,
           });
           break;
         case "tool_execution_end": {
