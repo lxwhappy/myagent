@@ -3618,6 +3618,11 @@
   opacity: 0.6; font-size: 11px; flex-shrink: 0;
   font-family: var(--font-mono, monospace);
 }
+.process-tokens {
+  font-size: 11px; flex-shrink: 0; opacity: 0.65;
+  font-family: var(--font-mono, monospace);
+  color: var(--accent);
+}
 .process-time {
   margin-left: auto; flex-shrink: 0;
   font-size: 11px; color: var(--accent); opacity: 0.8;
@@ -3787,6 +3792,16 @@
   flex-shrink: 0; font-size: 11px; color: var(--accent);
   white-space: nowrap;
 }
+.tl-tokens { opacity: 0.75; font-family: var(--font-mono, monospace); }
+.tl-duration {
+  margin-left: auto; flex-shrink: 0;
+  font-size: 10px; opacity: 0.45;
+  font-family: var(--font-mono, monospace);
+}
+/* LLM 调用行：低调，不可展开 */
+.tl-llm .tl-header { cursor: default; }
+.tl-llm .tl-icon { opacity: 0.5; color: var(--muted, inherit); }
+.tl-llm .tl-label { opacity: 0.55; font-weight: 400; }
 .tl-chevron {
   flex-shrink: 0; opacity: 0.4; transition: transform 0.15s, opacity 0.12s;
 }

@@ -90,12 +90,14 @@ export function getSystemInfo(): string {
     }
   }
 
-  cachedInfo = [
+    // NOTE: 不在这里注入 Working Directory —— 那应该用 process.cwd()（服务器进程目录），
+    // 对工作空间级 agent 来说是错的。SDK 的 DefaultResourceLoader 已经按 agent 的 cwd
+    // 正确注入了 "Current working directory: <workspace-path>"，这里不再重复。
+    cachedInfo = [
     `<system-info>`,
     `Operating System: ${osName} (${archName})`,
     `Shell: ${shell}`,
     `Home: ${home}`,
-    `Working Directory: ${process.cwd()}`,
     ``,
     `已安装的命令: ${available.join(", ")}`,
     `未安装的命令（不要使用，按替代方案执行）: ${missing.join(", ")}`,

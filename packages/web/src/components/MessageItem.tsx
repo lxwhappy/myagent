@@ -3,7 +3,7 @@
 // 过程用低调样式（小字、浅色、可折叠），正文正常渲染。
 // 主会话和子 agent 视图共用同一套渲染，样式完全一致。
 
-import { useState, useRef, useEffect, memo, Fragment } from "react";
+import { useState, useRef, useEffect, memo, Fragment, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock as CodeHighlight } from "./CodeBlock";
@@ -335,11 +335,17 @@ function AskUserCard({ tool }: { tool: ToolExecution }) {
 function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents?: SubagentState[]; onOpenSub?: (subId: string) => void }) {
   const [open, setOpen] = useState(false);
   const tools = (msg.tools || []).filter(t => t.tool !== "ask_user"); // ask_user 单独渲染为交互卡片
-  const llmEvents = msg.debugEvents || [];
+  // 过滤掉空调用（SDK 对部分 provider 会多发 usage 全为 0 的 message_end）
+  const llmEvents = (msg.debugEvents || []).filter(e => {
+    const u = e.usage;
+    if (!u) return false;
+    return u.input > 0 || u.output > 0 || (u.reasoning ?? 0) > 0;
+  });
   const hasInterleaved = tools.some(t => t.precedingThinking?.trim());
   const hasThinking = !!(msg.thinking && msg.thinking.trim()) || hasInterleaved;
   const hasTools = tools.length > 0;
-  const hasContent = hasThinking || hasTools;
+  const hasLLMCalls = llmEvents.length > 0;
+  const hasContent = hasThinking || hasTools || hasLLMCalls;
 
   // 步骤数：与 DebugTimeline 统一口径 = LLM 调用数 + 工具数
   // （有 debugEvents 时用它；旧消息没有则回退到工具数+思考段）
@@ -362,6 +368,13 @@ function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents
     })();
 
   const fmtMs = (ms: number) => ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`;
+  const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
+
+  // token 总量：累加所有 LLM 调用的 input/output
+  const totalInput = llmEvents.reduce((s, e) => s + (e.usage?.input ?? 0), 0);
+  const totalOutput = llmEvents.reduce((s, e) => s + (e.usage?.output ?? 0), 0);
+  const hasTokens = totalInput > 0 || totalOutput > 0;
+
   if (!hasContent) return null;
 
   return (
@@ -370,57 +383,111 @@ function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents
         <Icon name="i-activity" size={13} />
         <span className="process-label">过程</span>
         <span className="process-summary">{stepCount} 步</span>
+        {hasTokens && <span className="process-tokens" title="本次对话 token 用量">↑{toTok(totalInput)} ↓{toTok(totalOutput)}</span>}
         {totalMs > 0 && <span className="process-time">{fmtMs(totalMs)}</span>}
         <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
       </button>
       {open && (
         <div className="process-body">
-          {!hasInterleaved && msg.thinking && msg.thinking.trim() && (
-            <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
-          )}
-          {tools.map(tool => {
-            // read SKILL.md → 渲染为技能加载块
-            const skillName = detectSkillRead(tool);
-            return (
-            <Fragment key={tool.toolCallId}>
-              {hasInterleaved && tool.precedingThinking?.trim() && (
-                <ThinkingBlock thinking={tool.precedingThinking} />
-              )}
-              {tool.tool === "delegate_task" ? (
-                (() => {
+          {(() => {
+            // 用全部工具（含 ask_user）构建 LLM↔工具 交替映射，
+            // 渲染时跳过 ask_user（它单独渲染为交互卡片）
+            const allTools = (msg.tools || []);
+            let llmCounter = 0;
+
+            const rows: ReactNode[] = [];
+            for (let i = 0; i < allTools.length; i++) {
+              const at = allTools[i];
+              // LLM 调用 i（该工具前的）
+              const evt = llmEvents[llmCounter];
+              if (evt) {
+                const thinking = at.precedingThinking;
+                if (thinking && thinking.trim()) {
+                  rows.push(<ThinkingBlock key={`llm-${llmCounter}`} thinking={thinking} streaming={false} usage={evt.usage} />);
+                } else {
+                  rows.push(<LLMCallRow key={`llm-${llmCounter}`} evt={evt} />);
+                }
+              }
+              llmCounter++;
+              // 渲染该工具（跳过 ask_user）
+              if (at.tool !== "ask_user") {
+                const skillName = detectSkillRead(at);
+                if (at.tool === "delegate_task") {
                   const sub = subagents?.[subagents.length - 1];
-                  return sub ? (
-                    <SubagentBlock tool={tool} sub={sub} onOpen={() => onOpenSub?.(sub.subId)} />
-                  ) : (
-                    <ToolBlock tool={tool} />
-                  );
-                })()
-              ) : skillName ? (
-                <SkillBlock tool={tool} skillName={skillName} />
-              ) : (
-                <ToolBlock tool={tool} />
-              )}
-            </Fragment>
-            );
-          })}
-          {hasInterleaved && msg.thinking && msg.thinking.trim() && (
-            <ThinkingBlock thinking={msg.thinking} streaming={msg.isStreaming} />
-          )}
+                  rows.push(sub
+                    ? <SubagentBlock key={at.toolCallId} tool={at} sub={sub} onOpen={() => onOpenSub?.(sub.subId)} />
+                    : <ToolBlock key={at.toolCallId} tool={at} />);
+                } else if (skillName) {
+                  rows.push(<SkillBlock key={at.toolCallId} tool={at} skillName={skillName} />);
+                } else {
+                  rows.push(<ToolBlock key={at.toolCallId} tool={at} />);
+                }
+              }
+            }
+            // 最终回复的 LLM 调用
+            const finalEvt = llmEvents[llmCounter];
+            if (finalEvt) {
+              const thinking = msg.thinking;
+              if (thinking && thinking.trim()) {
+                rows.push(<ThinkingBlock key={`llm-${llmCounter}`} thinking={thinking} streaming={msg.isStreaming} usage={finalEvt.usage} />);
+              } else {
+                rows.push(<LLMCallRow key={`llm-${llmCounter}`} evt={finalEvt} />);
+              }
+            }
+            // 边缘情况：无工具且有 LLM 调用
+            if (allTools.length === 0 && llmEvents.length > 0 && rows.length === 0) {
+              const evt = llmEvents[0];
+              const thinking = msg.thinking;
+              if (thinking && thinking.trim()) {
+                rows.push(<ThinkingBlock key="llm-0" thinking={thinking} streaming={msg.isStreaming} usage={evt.usage} />);
+              } else {
+                rows.push(<LLMCallRow key="llm-0" evt={evt} />);
+              }
+            }
+            // 剩余未映射的 LLM 调用（安全兜底）
+            for (let j = llmCounter + 1; j < llmEvents.length; j++) {
+              rows.push(<LLMCallRow key={`llm-${j}`} evt={llmEvents[j]} />);
+            }
+            return rows;
+          })()}
         </div>
       )}
     </div>
   );
 }
 
+// ── LLM 调用行：没有思考内容时的简洁展示，只显示 token 和耗时 ──
+function LLMCallRow({ evt }: { evt: DebugLLMEvent }) {
+  const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
+  const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "";
+  return (
+    <div className="tl-item tl-llm">
+      <div className="tl-header">
+        <span className="tl-icon"><Icon name="i-activity" size={12} /></span>
+        <span className="tl-label">LLM 调用</span>
+        <span className="tl-status">
+          {evt.usage && <span className="tl-tokens" title={`输入 ${evt.usage.input} · 输出 ${evt.usage.output}${evt.usage.reasoning ? ` · 推理 ${evt.usage.reasoning}` : ""}`}>↑{toTok(evt.usage.input)} ↓{toTok(evt.usage.output)}</span>}
+        </span>
+        {evt.durationMs != null && <span className="tl-duration">{toMs(evt.durationMs)}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── 思考过程块：低调样式，默认折叠详情 ──
-function ThinkingBlock({ thinking, streaming }: { thinking: string; streaming?: boolean }) {
+function ThinkingBlock({ thinking, streaming, usage }: { thinking: string; streaming?: boolean; usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; reasoning?: number; totalTokens: number; cost?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number } } }) {
   const [open, setOpen] = useState(false);
+  const toTok = (n?: number) => n != null ? (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)) : "0";
   return (
     <div className={`tl-item tl-thinking${open ? " open" : ""}${streaming ? " streaming" : ""}`}>
       <button className="tl-header" onClick={() => setOpen(!open)}>
         <span className="tl-icon"><Icon name="i-lightbulb" size={13} /></span>
         <span className="tl-label">思考过程</span>
-        <span className="tl-status">{streaming ? "思考中…" : `${Math.ceil(thinking.length / 4)} tok`}</span>
+        <span className="tl-status">
+          {streaming ? "思考中…" : usage
+            ? <span className="tl-tokens" title={`输入 ${usage.input} · 输出 ${usage.output}${usage.reasoning ? ` · 推理 ${usage.reasoning}` : ""}`}>↑{toTok(usage.input)} ↓{toTok(usage.output)}</span>
+            : `${Math.ceil(thinking.length / 4)} tok`}
+        </span>
         <Icon name="i-chevron" size={12} className={`tl-chevron${open ? "" : " collapsed"}`} />
       </button>
       {open && (

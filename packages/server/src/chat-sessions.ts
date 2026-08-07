@@ -56,6 +56,8 @@ export interface ChatSession {
   // 最近一次 agent_end 的 usage 快照，刷新后可恢复
   lastUsage?: unknown;
   pinned?: boolean;
+  // SDK 底层 session 文件路径，用于 agent 重建时恢复对话历史
+  sdkSessionFile?: string;
 }
 
 // index 条目：不含 messages 的轻量元数据，用于列表查询
@@ -306,6 +308,15 @@ export const chatSessionStore = {
     if (!s) return;
     s.lastUsage = usage;
     await writeSession(s, false); // 不更新 index（元数据没变）
+  },
+
+  // 存 SDK session 文件路径（agent 重建时恢复对话历史）
+  async update(id: string, patch: Partial<ChatSession>) {
+    await ensureLoaded();
+    const s = await loadSession(id);
+    if (!s) return;
+    Object.assign(s, patch);
+    await writeSession(s, false);
   },
 
   async remove(id: string) {

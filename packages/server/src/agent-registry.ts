@@ -3,10 +3,12 @@
 // 替代旧的 per-WebSocket ConnectionManager。
 // 所有 agent 在全局注册，事件通过 event-bus 广播给 SSE 客户端。
 
+import { existsSync } from "fs";
 import {
   createAgentSession,
   type AgentSession,
   DefaultResourceLoader,
+  SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { getModel } from "@earendil-works/pi-ai/compat";
 import { config } from "./config.js";
@@ -136,6 +138,21 @@ export async function createAgent(
   // 合并 excludeTools：基础排除 + per-agent 禁用工具
   const excludeTools = ["find", "ls", ...(agentCfg?.disabledTools ?? [])];
 
+  // ── 恢复 SDK session 历史 ──
+  // 默认 createAgentSession 每次创建新 session（无历史）。
+  // 如果该 chatSession 之前有 SDK session 文件，用 SessionManager.open 恢复完整对话历史。
+  // 否则用 continueRecent 尝试加载同 cwd 下最近的 session（如服务重启后）。
+  let sessionManager: SessionManager | undefined;
+  const existingChatSession = await chatSessionStore.get(chatSessionId).catch(() => undefined);
+  const savedSdkFile = existingChatSession?.sdkSessionFile;
+  if (savedSdkFile && existsSync(savedSdkFile)) {
+    // 精确恢复：用之前保存的 session 文件
+    sessionManager = SessionManager.open(savedSdkFile, undefined, cwd);
+    console.log(`[agent] resuming SDK session from ${savedSdkFile.split("/").pop()}`);
+  }
+  // 如果没有精确文件，不在这里用 continueRecent —— 同 cwd 可能有多个 chat session，
+  // continueRecent 会拿到错误的对话。首次创建就让它新建。
+
   const { session } = await createAgentSession({
     model,
     cwd,
@@ -143,7 +160,14 @@ export async function createAgent(
     thinkingLevel: "off",  // 默认关闭思考，前端可手动开启（省3-15s/轮）
     excludeTools,
     customTools: allCustomTools,
+    ...(sessionManager ? { sessionManager } : {}),
   });
+
+  // 持久化 SDK session 文件路径，下次重建时恢复
+  const sdkFile = session.sessionManager.getSessionFile();
+  if (sdkFile && sdkFile !== savedSdkFile) {
+    chatSessionStore.update(chatSessionId, { sdkSessionFile: sdkFile }).catch(() => {});
+  }
 
   const skillsResult = loader.getSkills();
   const skills = skillsResult.skills.map(s => ({ name: s.name, description: s.description }));

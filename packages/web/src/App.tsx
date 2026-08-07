@@ -90,14 +90,16 @@ export default function App() {
   }, []);
 
   const selectWorkspace = async (wsId: string) => {
-    const ws = wsStore.workspaces.find(w => w.id === wsId);
-    wsStore.setActive(wsId);
+    // 用 getState() 读取最新 state，不用闭包中的 wsStore（可能 stale）
+    const curWsStore = useWorkspaceStore.getState();
+    const ws = curWsStore.workspaces.find(w => w.id === wsId);
+    curWsStore.setActive(wsId);
     localStorage.setItem("myagent:activeWsId", wsId);
     await sessions.loadSessions(wsId);
     const wsSessions = useWorkspaceStore.getState().sessionsByWs[wsId] || [];
     if (wsSessions.length > 0) {
       const recent = wsSessions[0];
-      wsStore.setActiveSession(recent.id);
+      curWsStore.setActiveSession(recent.id);
       // 销毁旧 agent，用新 cwd 重建
       await sseClient.destroyAgent(recent.id);
       useChatStore.getState().setAgentCreated(recent.id, []);
@@ -109,12 +111,13 @@ export default function App() {
   };
 
   const handleNewSession = async () => {
-    if (!wsStore.activeId) {
+    const curWsStore = useWorkspaceStore.getState();
+    if (!curWsStore.activeId) {
       setShowDirBrowser(true);
       return;
     }
-    const chatSession = await sessions.createSession(wsStore.activeId);
-    const ws = wsStore.workspaces.find(w => w.id === wsStore.activeId);
+    const chatSession = await sessions.createSession(curWsStore.activeId);
+    const ws = curWsStore.workspaces.find(w => w.id === curWsStore.activeId);
     createChatSession(chatSession.id, ws?.path);
     if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
     (window as any).__chatToAppSession[chatSession.id] = chatSession.id;
