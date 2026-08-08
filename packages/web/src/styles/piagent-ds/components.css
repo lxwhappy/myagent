@@ -705,6 +705,7 @@ textarea { resize: none; }
 .download-menu-divider { height: 1px; background: var(--border); margin: 4px 8px; }
 .download-menu-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 6px 10px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
 .download-menu-label-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 4px; }
+.dm-jsonl-hint { font-size: 10px; color: var(--muted); padding: 0 10px 4px; opacity: 0.8; }
 .download-menu-open-dir {
   font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm);
   background: transparent; border: 1px solid var(--border); color: var(--muted);

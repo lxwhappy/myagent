@@ -9,6 +9,7 @@ import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
 import { useAgentsStore } from "./stores/agents";
 import { useAgentTeamsStore } from "./stores/agent-teams";
+import { useOrchestrationModesStore } from "./stores/orchestration-modes";
 import { useSessions } from "./hooks/useSessions";
 import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -41,6 +42,7 @@ export default function App() {
   const settingsView = useUIStore(s => s.settingsView);
   const openSettings = useUIStore(s => s.openSettings);
   const closeSettings = useUIStore(s => s.closeSettings);
+  const activeChatSessionId = useChatStore(s => s.activeChatSessionId);
   useEffect(() => {
     if (gotoFilesTab > 0) setSidebarTab("files");
   }, [gotoFilesTab]);
@@ -91,6 +93,8 @@ export default function App() {
     useAgentsStore.getState().load().catch(e => console.error("Failed to load agents:", e));
     // 加载 Agent 团队列表
     useAgentTeamsStore.getState().load().catch(e => console.error("Failed to load agent teams:", e));
+    // 加载编排模式列表（内置 + 自定义）
+    useOrchestrationModesStore.getState().load().catch(e => console.error("Failed to load orchestration modes:", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -552,7 +556,15 @@ export default function App() {
         />
       </aside>
 
-      {/* ===== Main ===== */}
+      {/* ===== Main 或 设置子页面 ===== */}
+      {settingsView ? (
+        <SettingsPanel
+          onClose={closeSettings}
+          onSwitchWorkspace={handleSwitchWs}
+          onAddWorkspace={() => setShowDirBrowser(true)}
+          onSwitchAgent={switchAgent}
+        />
+      ) : (
       <main className={`main ${wsStore.drawerOpen ? "preview-open" : ""}`}>
         {/* Chat Header — 在 main 里，不在 ChatPanel 里 */}
         <header className="chat-head">
@@ -629,7 +641,7 @@ export default function App() {
               </button>
               {downloadMenuOpen && (
                 <DownloadMenu
-                  sessionId={useChatStore.getState().activeChatSessionId}
+                  sessionId={activeChatSessionId}
                   onDownloadJson={downloadCurrentSession}
                   onDownloadMarkdown={downloadAsMarkdown}
                   onClose={() => setDownloadMenuOpen(false)}
@@ -675,17 +687,10 @@ export default function App() {
         )}
         </div>
       </main>
+      )}
 
       {showDirBrowser && (
         <DirBrowser onSelect={handleSelectDir} onCancel={() => setShowDirBrowser(false)} />
-      )}
-      {settingsView && (
-        <SettingsPanel
-          onClose={closeSettings}
-          onSwitchWorkspace={handleSwitchWs}
-          onAddWorkspace={() => setShowDirBrowser(true)}
-          onSwitchAgent={switchAgent}
-        />
       )}
       {showWorktreeDialog && activeWs && gitBranches && (
         <WorktreeDialog
@@ -1018,7 +1023,7 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
         {/* Session ID 快速复制 */}
         {sessionId && (
           <div className="dm-session-id">
-            <span className="dm-session-id-label">Session ID</span>
+            <span className="dm-session-id-label">会话 ID</span>
             <code className="dm-session-id-value" title={sessionId}>{sessionId}</code>
             <button className="dm-session-id-copy" onClick={copySessionId} type="button">
               {copied ? "✓ 已复制" : "复制"}
@@ -1041,7 +1046,7 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
         </button>
         <div className="download-menu-divider" />
         <div className="download-menu-label-row">
-          <span className="download-menu-label">Agent 原始日志 (JSONL)</span>
+          <span className="download-menu-label">SDK 原始日志 (JSONL)</span>
           <button className="download-menu-open-dir" onClick={openLogDir} type="button" title="在 Finder 中打开日志目录">
             📂 打开目录
           </button>

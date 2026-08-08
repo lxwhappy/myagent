@@ -2,8 +2,10 @@
 //
 // 列表从后端 /api/agent-teams 拉取。
 // 团队是一组已有 Agent 预设的有序编排方案。
+// 编排模式从 /api/orchestration-modes 拉取（内置 + 自定义）。
 
 import { create } from "zustand";
+import type { NodeStatus } from "./team-flow";
 
 export interface TeamMember {
   agentId: string;
@@ -11,7 +13,12 @@ export interface TeamMember {
   instructions?: string;
 }
 
-export type TeamMode = "pipeline" | "supervisor" | "evaluator";
+export interface DagEdge {
+  source: number;
+  target: number;
+}
+
+export type TeamMode = string;
 
 export interface AgentTeam {
   id: string;
@@ -21,6 +28,9 @@ export interface AgentTeam {
   mode: TeamMode;
   members: TeamMember[];
   maxRetries?: number;
+  dagEdges?: DagEdge[];
+  optionValues?: Record<string, string | number>;
+  customPrompt?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -31,8 +41,8 @@ export const useAgentTeamsStore = create<{
 
   load: () => Promise<void>;
   getById: (id: string) => AgentTeam | undefined;
-  create: (input: { name: string; description?: string; icon?: string; mode?: TeamMode; members?: TeamMember[]; maxRetries?: number }) => Promise<AgentTeam | null>;
-  update: (id: string, patch: Partial<Pick<AgentTeam, "name" | "description" | "icon" | "mode" | "members" | "maxRetries">>) => Promise<boolean>;
+  create: (input: { name: string; description?: string; icon?: string; mode?: TeamMode; members?: TeamMember[]; maxRetries?: number; dagEdges?: DagEdge[]; optionValues?: Record<string, string | number>; customPrompt?: string }) => Promise<AgentTeam | null>;
+  update: (id: string, patch: Partial<Pick<AgentTeam, "name" | "description" | "icon" | "mode" | "members" | "maxRetries" | "dagEdges" | "optionValues" | "customPrompt">>) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
 }>((set, get) => ({
   teams: [],

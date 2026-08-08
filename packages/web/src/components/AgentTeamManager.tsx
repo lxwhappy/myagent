@@ -1,26 +1,20 @@
 // components/AgentTeamManager.tsx — Agent 团队管理
 //
 // 团队是一组已有 Agent 预设的有序编排方案。
-// 支持创建/编辑/删除团队，添加成员（引用已有 Agent），设置角色和执行顺序。
-// 典型用法：开发Agent写代码 → 测试Agent检查 → 审查Agent总结
+// 编排模式从 /api/orchestration-modes 动态拉取（内置 8 种 + 自定义）。
 //
 // AgentTeamManagerSection：内联内容（嵌入设置页面），无 portal/overlay。
 // AgentTeamManager：弹窗 wrapper（向后兼容）。
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useAgentTeamsStore, type AgentTeam, type TeamMember, type TeamMode } from "../stores/agent-teams";
+import { useAgentTeamsStore, type AgentTeam, type TeamMember } from "../stores/agent-teams";
 import { useAgentsStore } from "../stores/agents";
+import { useOrchestrationModesStore, type OrchestrationMode } from "../stores/orchestration-modes";
 import { Icon } from "./Icon";
-import { AgentFlowGraph, buildFlowFromTeam, type FlowNodeDef, type FlowEdgeDef } from "./AgentFlowGraph";
+import { AgentFlowGraph, buildFlowFromTopology, type FlowNodeDef, type FlowEdgeDef } from "./AgentFlowGraph";
 
 const TEAM_EMOJI_CHOICES = ["👥", "🔧", "🔬", "🏗", "🎯", "⚡", "🚀", "🛡", "📋", "🔄"];
-
-const MODE_META: Record<TeamMode, { label: string; icon: string; desc: string }> = {
-  pipeline: { label: "流水线", icon: "➡️", desc: "A → B → C，顺序执行，上一步输出传给下一步" },
-  supervisor: { label: "主控调度", icon: "🎯", desc: "Supervisor 智能分解任务，按需调度专家" },
-  evaluator: { label: "评估迭代", icon: "🔄", desc: "生成 → 评估 → 不达标重试，直到通过" },
-};
 
 interface EditState {
   isNew: boolean;
@@ -28,12 +22,16 @@ interface EditState {
   icon: string;
   name: string;
   description: string;
-  mode: TeamMode;
+  mode: string;
   members: TeamMember[];
   maxRetries: number;
+  optionValues: Record<string, string | number>;
+  dagEdges?: Array<{ source: number; target: number }>;
+  customPrompt?: string;
+  promptTouched: boolean;  // 用户是否修改过提示词（决定是否覆盖模式默认）
 }
 
-const blankEdit: EditState = { isNew: true, icon: "👥", name: "", description: "", mode: "pipeline", members: [], maxRetries: 2 };
+const blankEdit: EditState = { isNew: true, icon: "👥", name: "", description: "", mode: "pipeline", members: [], maxRetries: 2, optionValues: {}, promptTouched: false };
 
 /**
  * Agent 团队管理内联内容 — 嵌入设置页面使用。
@@ -41,22 +39,47 @@ const blankEdit: EditState = { isNew: true, icon: "👥", name: "", description:
 export function AgentTeamManagerSection() {
   const teams = useAgentTeamsStore(s => s.teams);
   const agents = useAgentsStore(s => s.agents);
+  const modes = useOrchestrationModesStore(s => s.modes);
+  const loadModes = useOrchestrationModesStore(s => s.load);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // 加载编排模式列表
+  useEffect(() => { if (modes.length === 0) loadModes(); }, []);
+
+  // 模式查找辅助
+  const getMode = (id: string): OrchestrationMode | undefined => modes.find(m => m.id === id);
 
   const startNew = () => setEditing({ ...blankEdit });
   const startEdit = (t: AgentTeam) => setEditing({
     isNew: false, id: t.id, icon: t.icon, name: t.name,
     description: t.description, mode: t.mode || "pipeline", members: [...t.members],
     maxRetries: t.maxRetries ?? 2,
+    optionValues: t.optionValues ?? {},
+    dagEdges: t.dagEdges,
+    customPrompt: t.customPrompt,
+    promptTouched: !!t.customPrompt?.trim(),
   });
 
   const handleSave = async () => {
     if (!editing) return;
     if (!editing.name.trim()) { alert("请填写团队名称"); return; }
     if (editing.members.length === 0) { alert("请至少添加一个成员"); return; }
-    if (editing.mode === "evaluator" && editing.members.length < 2) { alert("评估模式至少需要 2 个成员（生成+评估）"); return; }
+    const modeDef = getMode(editing.mode);
+    if (modeDef && editing.members.length < modeDef.minMembers) {
+      alert(`此模式至少需要 ${modeDef.minMembers} 个成员`);
+      return;
+    }
+    if (modeDef?.maxMembers && editing.members.length > modeDef.maxMembers) {
+      alert(`此模式最多支持 ${modeDef.maxMembers} 个成员`);
+      return;
+    }
     setSaving(true);
+    // 构建选项值
+    const optionValues: Record<string, string | number> = { ...editing.optionValues };
+    if (modeDef?.options?.some(o => o.key === "maxRetries")) {
+      optionValues.maxRetries = editing.maxRetries;
+    }
     if (editing.isNew) {
       const created = await useAgentTeamsStore.getState().create({
         name: editing.name.trim(),
@@ -64,7 +87,10 @@ export function AgentTeamManagerSection() {
         icon: editing.icon,
         mode: editing.mode,
         members: editing.members,
-        maxRetries: editing.mode === "evaluator" ? editing.maxRetries : undefined,
+        maxRetries: editing.maxRetries,
+        optionValues,
+        dagEdges: editing.mode === "custom" ? editing.dagEdges : undefined,
+        customPrompt: editing.promptTouched ? editing.customPrompt : undefined,
       });
       if (created) setEditing(null);
     } else if (editing.id) {
@@ -74,7 +100,10 @@ export function AgentTeamManagerSection() {
         icon: editing.icon,
         mode: editing.mode,
         members: editing.members,
-        maxRetries: editing.mode === "evaluator" ? editing.maxRetries : undefined,
+        maxRetries: editing.maxRetries,
+        optionValues,
+        dagEdges: editing.mode === "custom" ? editing.dagEdges : undefined,
+        customPrompt: editing.promptTouched ? editing.customPrompt : undefined,
       });
       if (ok) setEditing(null);
     }
@@ -90,10 +119,9 @@ export function AgentTeamManagerSection() {
   // ── 成员操作 ──
   const addMember = (agentId: string) => {
     if (!editing) return;
-    const agent = agents.find(a => a.id === agentId);
     setEditing({
       ...editing,
-      members: [...editing.members, { agentId, role: agent?.name ?? "成员" }],
+      members: [...editing.members, { agentId, role: "成员" }],
     });
   };
 
@@ -123,6 +151,7 @@ export function AgentTeamManagerSection() {
   const agentIcon = (id: string) => agents.find(a => a.id === id)?.icon ?? "❓";
 
   if (editing) {
+    const currentMode = getMode(editing.mode);
     return (
       <div className="agent-mgr-form">
         {/* 图标 + 名称 */}
@@ -174,41 +203,116 @@ export function AgentTeamManagerSection() {
         <div className="agent-edit-field">
           <label>编排模式</label>
           <div className="team-mode-selector">
-            {(Object.entries(MODE_META) as [TeamMode, typeof MODE_META[TeamMode]][]).map(([key, meta]) => (
+            {modes.map(m => (
               <button
-                key={key}
+                key={m.id}
                 type="button"
-                className={`team-mode-card ${editing.mode === key ? "active" : ""}`}
-                onClick={() => setEditing({ ...editing, mode: key })}
+                className={`team-mode-card ${editing.mode === m.id ? "active" : ""}`}
+                onClick={() => setEditing({ ...editing, mode: m.id })}
               >
-                <span className="team-mode-icon">{meta.icon}</span>
+                <span className="team-mode-icon">{m.icon}</span>
                 <div className="team-mode-text">
-                  <span className="team-mode-label">{meta.label}</span>
-                  <span className="team-mode-desc">{meta.desc}</span>
+                  <span className="team-mode-label">
+                    {m.name}
+                    {!m.isBuiltIn && <span className="team-mode-custom-tag">自定义</span>}
+                  </span>
+                  <span className="team-mode-desc">{m.description}</span>
                 </div>
               </button>
             ))}
           </div>
-          {editing.mode === "evaluator" && (
-            <div className="team-retries-row">
-              <label className="team-retries-label">最大重试次数</label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={editing.maxRetries}
-                onChange={e => setEditing({ ...editing, maxRetries: Math.min(5, Math.max(1, parseInt(e.target.value) || 2)) })}
-                className="settings-input team-retries-input"
-              />
+          {/* 模式专属选项 */}
+          {currentMode?.options?.map(opt => (
+            <div key={opt.key} className="team-retries-row">
+              <label className="team-retries-label">{opt.label}</label>
+              {opt.type === "number" ? (
+                <input
+                  type="number"
+                  min={opt.min}
+                  max={opt.max}
+                  value={editing.optionValues[opt.key] ?? opt.default ?? 0}
+                  onChange={e => setEditing({
+                    ...editing,
+                    optionValues: { ...editing.optionValues, [opt.key]: parseInt(e.target.value) || 0 },
+                    // 兼容 maxRetries 字段
+                    ...(opt.key === "maxRetries" ? { maxRetries: parseInt(e.target.value) || 2 } : {}),
+                  })}
+                  className="settings-input team-retries-input"
+                />
+              ) : opt.type === "select" ? (
+                <select
+                  className="settings-input team-retries-input"
+                  value={String(editing.optionValues[opt.key] ?? opt.default ?? "")}
+                  onChange={e => setEditing({
+                    ...editing,
+                    optionValues: { ...editing.optionValues, [opt.key]: e.target.value },
+                  })}
+                >
+                  {opt.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="settings-input team-retries-input"
+                  value={String(editing.optionValues[opt.key] ?? opt.default ?? "")}
+                  onChange={e => setEditing({
+                    ...editing,
+                    optionValues: { ...editing.optionValues, [opt.key]: e.target.value },
+                  })}
+                />
+              )}
             </div>
-          )}
+          ))}
         </div>
 
         {/* DAG 可视化预览 */}
-        {editing.members.length > 0 && (
+        {editing.members.length > 0 && currentMode && (
           <div className="agent-edit-field">
             <label>流程预览</label>
-            <TeamFlowPreview editing={editing} agentIcon={agentIcon} agentName={agentName} />
+            <TeamFlowPreview
+              editing={editing}
+              mode={currentMode}
+              agentIcon={agentIcon}
+              agentName={agentName}
+              onDagEdgesChange={(dagEdges) => setEditing({ ...editing, dagEdges })}
+            />
+          </div>
+        )}
+
+        {/* 编排指令：展示模式默认模板，用户可修改 */}
+        {currentMode && editing.members.length > 0 && (
+          <div className="agent-edit-field">
+            <label>
+              编排指令
+              {!editing.promptTouched
+                ? <span className="agent-tools-hint">（模式默认，修改后覆盖）</span>
+                : <span className="agent-tools-hint">（已自定义，清空恢复默认）</span>
+              }
+              {editing.promptTouched && (
+                <button
+                  type="button"
+                  className="agent-fullprompt-raw"
+                  onClick={() => setEditing({ ...editing, customPrompt: undefined, promptTouched: false })}
+                >恢复默认</button>
+              )}
+            </label>
+            <textarea
+              className="agent-edit-prompt team-prompt-editor"
+              value={editing.promptTouched
+                ? (editing.customPrompt ?? "")
+                : currentMode.promptTemplate}
+              onChange={(e) => setEditing({
+                ...editing,
+                customPrompt: e.target.value,
+                promptTouched: true,
+              })}
+              placeholder={currentMode.promptTemplate}
+              rows={10}
+            />
+            <div className="agent-edit-hint">
+              模板变量 <code>{`{{members_list}}`}</code> <code>{`{{user_message}}`}</code> 等会在执行时自动替换为实际值。
+              选中成员后修改角色名/指令会实时影响编排效果。
+            </div>
           </div>
         )}
 
@@ -218,6 +322,11 @@ export function AgentTeamManagerSection() {
             团队成员（按执行顺序）
             {editing.members.length > 0 && (
               <span className="agent-tools-hint">（{editing.members.length} 个成员）</span>
+            )}
+            {currentMode && (
+              <span className="agent-tools-hint">
+                （{currentMode.minMembers}{currentMode.maxMembers ? `-${currentMode.maxMembers}` : "+"} 个）
+              </span>
             )}
           </label>
 
@@ -300,10 +409,9 @@ export function AgentTeamManagerSection() {
           </div>
         </div>
 
-        <div className="agent-edit-hint">
-          团队成员按顺序执行：用户消息先发给第一个成员，其输出作为上下文传给下一个成员。
-          可用于"开发→测试→审查"等流水线场景。
-        </div>
+        {currentMode?.detail && (
+          <div className="agent-edit-hint">{currentMode.detail}</div>
+        )}
 
         <div className="agent-edit-actions">
           <button className="settings-close-btn" onClick={() => setEditing(null)} disabled={saving}>取消</button>
@@ -319,33 +427,37 @@ export function AgentTeamManagerSection() {
     <div className="agent-mgr-body">
       {teams.length > 0 ? (
         <div className="agent-mgr-list">
-          {teams.map(t => (
-            <div key={t.id} className="agent-mgr-row">
-              <span className="agent-mgr-icon">{t.icon}</span>
-              <div className="agent-mgr-info">
-                <span className="agent-mgr-name">
-                  {t.name}
-                  <span className="team-mode-badge">{MODE_META[t.mode || "pipeline"]?.icon} {MODE_META[t.mode || "pipeline"]?.label}</span>
-                </span>
-                {t.description && <span className="agent-mgr-desc">{t.description}</span>}
-                <span className="team-mgr-members">
-                  {t.members.map((m, i) => (
-                    <span key={i} className="team-mgr-member-chip">
-                      {agentIcon(m.agentId)} {m.role}
-                    </span>
-                  ))}
-                </span>
+          {teams.map(t => {
+            const modeDef = getMode(t.mode);
+            return (
+              <div key={t.id} className="agent-mgr-row">
+                <span className="agent-mgr-icon">{t.icon}</span>
+                <div className="agent-mgr-info">
+                  <span className="agent-mgr-name">
+                    {t.name}
+                    <span className="team-mode-badge">{modeDef?.icon ?? "🔧"} {modeDef?.name ?? t.mode}</span>
+                  </span>
+                  {t.description && <span className="agent-mgr-desc">{t.description}</span>}
+                  <span className="team-mgr-members">
+                    {t.members.map((m, i) => (
+                      <span key={i} className="team-mgr-member-chip">
+                        {agentIcon(m.agentId)} {agentName(m.agentId)}
+                        {m.role && m.role !== "成员" && <span className="team-mgr-member-role">{m.role}</span>}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+                <div className="agent-mgr-actions">
+                  <button className="agent-mgr-edit" onClick={() => startEdit(t)} title="编辑">
+                    <Icon name="i-edit" size={14} />
+                  </button>
+                  <button className="agent-mgr-del" onClick={() => handleDelete(t)} title="删除">
+                    <Icon name="i-trash" size={14} />
+                  </button>
+                </div>
               </div>
-              <div className="agent-mgr-actions">
-                <button className="agent-mgr-edit" onClick={() => startEdit(t)} title="编辑">
-                  <Icon name="i-edit" size={14} />
-                </button>
-                <button className="agent-mgr-del" onClick={() => handleDelete(t)} title="删除">
-                  <Icon name="i-trash" size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="team-mgr-empty">
@@ -379,25 +491,61 @@ export function AgentTeamManager({ onClose }: { onClose: () => void }) {
 }
 
 // ── 团队流程预览组件 ──
-function TeamFlowPreview({ editing, agentIcon, agentName }: {
+// 非 custom 模式：只读自动布局预览
+// custom 模式：可拖拽节点 + 连线 + 删边，边变化通过 onDagEdgesChange 回传父组件
+function TeamFlowPreview({ editing, mode, agentIcon, agentName, onDagEdgesChange }: {
   editing: EditState;
+  mode: OrchestrationMode;
   agentIcon: (id: string) => string;
   agentName: (id: string) => string;
+  onDagEdgesChange?: (edges: Array<{ source: number; target: number }>) => void;
 }) {
   const { nodes, edges } = useMemo(() => {
     const membersWithInfo = editing.members.map(m => ({
-      ...m,
-      icon: agentIcon(m.agentId),
+      id: m.agentId,
       name: agentName(m.agentId),
+      role: m.role,
+      icon: agentIcon(m.agentId),
     }));
-    return buildFlowFromTeam(membersWithInfo, editing.mode);
-  }, [editing.members, editing.mode, agentIcon, agentName]);
+    return buildFlowFromTopology(membersWithInfo, mode.topology, editing.dagEdges, undefined);
+  }, [editing.members, editing.dagEdges, mode.topology, agentIcon, agentName]);
 
   if (nodes.length === 0) return null;
 
+  // custom 模式：editable 编辑器
+  const isCustom = mode.topology === "dag";
+
+  if (isCustom) {
+    return (
+      <div className="team-flow-preview team-flow-editable">
+        <div className="team-flow-edit-hint">
+          <span>💡 拖拽节点调整位置 · 从右侧连接点拖到下一个节点创建依赖 · 选中连线后按 Delete 删除</span>
+        </div>
+        <AgentFlowGraph
+          nodes={nodes}
+          edges={edges}
+          layout={mode.layout}
+          height={280}
+          showControls={true}
+          editable
+          onEdgesChange={(newEdges) => {
+            // 将边 ID（node-N → node-M）转换回成员索引
+            const dagEdges = newEdges.map(e => {
+              const sourceIdx = parseInt(e.source.replace("node-", "")) || 0;
+              const targetIdx = parseInt(e.target.replace("node-", "")) || 0;
+              return { source: sourceIdx, target: targetIdx };
+            }).filter(e => e.source !== e.target);
+            onDagEdgesChange?.(dagEdges);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 非 custom 模式：只读
   return (
     <div className="team-flow-preview">
-      <AgentFlowGraph nodes={nodes} edges={edges} mode={editing.mode} height={220} showControls={false} />
+      <AgentFlowGraph nodes={nodes} edges={edges} layout={mode.layout} height={220} showControls={false} />
     </div>
   );
 }

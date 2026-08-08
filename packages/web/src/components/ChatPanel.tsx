@@ -5,7 +5,7 @@ import { useChat } from "../hooks/useChat";
 import { useChatStore } from "../stores/chat";
 import { MessageItem } from "./MessageItem";
 import { Icon } from "./Icon";
-import { TodoPanel } from "./TodoPanel";
+import { StatusDock } from "./StatusDock";
 
 const SUGGESTIONS: Array<{ text: string; icon: string }> = [
   { text: "帮我看看当前目录有什么文件", icon: "i-folder" },
@@ -87,7 +87,7 @@ export function ChatPanel() {
   // ── 主会话视图 ──
   return (
     <div className="chat-panel-inner">
-      <TodoPanel />
+      <StatusDock />
 
       <div className="messages">
         {showSkills && (

@@ -496,9 +496,22 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const session = await chatSessionStore.get(id);
     if (!session) return reply.code(404).send({ error: "Session not found" });
+
+    // 优先用 sdkSessionFile 精确定位当前会话的 jsonl 文件
+    if (session.sdkSessionFile && existsSync(session.sdkSessionFile)) {
+      const s = await stat(session.sdkSessionFile);
+      const name = session.sdkSessionFile.split("/").pop()!;
+      return {
+        logs: [{ name, size: s.size, mtime: s.mtime.toISOString() }],
+        dir: session.sdkSessionFile.slice(0, session.sdkSessionFile.lastIndexOf("/")),
+        current: name,
+      };
+    }
+
+    // 回退：旧会话没有 sdkSessionFile，或新会话还没创建 agent
+    // 用 session ID 在文件名中匹配（session ID 现在统一作为 SDK session ID）
     const ws = workspaces.get(session.workspaceId);
     if (!ws) return { logs: [] };
-
     const dirs = getLogDirs(ws.path);
     const logs: { name: string; size: number; mtime: string }[] = [];
     const seen = new Set<string>();
@@ -516,6 +529,11 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
         }
       } catch {}
     }
+    // 用 session ID 过滤：文件名中包含 session ID 的就是当前会话的
+    const matched = logs.filter(l => l.name.includes(id));
+    if (matched.length > 0) {
+      return { logs: matched, dir: foundDir ?? dirs[0] };
+    }
     logs.sort((a, b) => b.mtime.localeCompare(a.mtime));
     return { logs, dir: foundDir ?? dirs[0] };
   });
@@ -527,9 +545,21 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     }
     const session = await chatSessionStore.get(id);
     if (!session) return reply.code(404).send({ error: "Session not found" });
+
+    // 优先用 sdkSessionFile 直接定位
+    if (session.sdkSessionFile) {
+      const name = session.sdkSessionFile.split("/").pop();
+      if (name === filename && existsSync(session.sdkSessionFile)) {
+        const content = await readFile(session.sdkSessionFile, "utf-8");
+        reply.header("Content-Type", "application/jsonl;charset=utf-8");
+        reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+        return content;
+      }
+    }
+
+    // 回退：在 workspace 日志目录中查找
     const ws = workspaces.get(session.workspaceId);
     if (!ws) return reply.code(404).send({ error: "Workspace not found" });
-
     const dirs = getLogDirs(ws.path);
     let filepath: string | null = null;
     for (const dir of dirs) {
@@ -549,15 +579,25 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const session = await chatSessionStore.get(id);
     if (!session) return reply.code(404).send({ error: "Session not found" });
-    const ws = workspaces.get(session.workspaceId);
-    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
 
-    const dirs = getLogDirs(ws.path);
+    // 优先用 sdkSessionFile 定位当前会话的日志目录
     let dir: string | null = null;
-    for (const d of dirs) {
-      if (existsSync(d)) { dir = d; break; }
+    if (session.sdkSessionFile) {
+      const logDir = session.sdkSessionFile.slice(0, session.sdkSessionFile.lastIndexOf("/"));
+      if (existsSync(logDir)) dir = logDir;
     }
-    if (!dir) dir = dirs[0];
+
+    // 回退：按 workspace 路径推算
+    if (!dir) {
+      const ws = workspaces.get(session.workspaceId);
+      if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+      const dirs = getLogDirs(ws.path);
+      for (const d of dirs) {
+        if (existsSync(d)) { dir = d; break; }
+      }
+      if (!dir) dir = dirs[0];
+    }
+
     // 创建目录确保存在（首次打开时）
     try { await mkdir(dir, { recursive: true }); } catch {}
 

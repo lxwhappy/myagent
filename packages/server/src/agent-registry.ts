@@ -149,9 +149,10 @@ export async function createAgent(
     // 精确恢复：用之前保存的 session 文件
     sessionManager = SessionManager.open(savedSdkFile, undefined, cwd);
     console.log(`[agent] resuming SDK session from ${savedSdkFile.split("/").pop()}`);
+  } else {
+    // 新会话：用 chatSessionId 作为 SDK session ID，统一两套 ID 体系
+    sessionManager = SessionManager.create(cwd, undefined, { id: chatSessionId });
   }
-  // 如果没有精确文件，不在这里用 continueRecent —— 同 cwd 可能有多个 chat session，
-  // continueRecent 会拿到错误的对话。首次创建就让它新建。
 
   const { session } = await createAgentSession({
     model,
@@ -160,7 +161,7 @@ export async function createAgent(
     thinkingLevel: "off",  // 默认关闭思考，前端可手动开启（省3-15s/轮）
     excludeTools,
     customTools: allCustomTools,
-    ...(sessionManager ? { sessionManager } : {}),
+    sessionManager,
   });
 
   // 持久化 SDK session 文件路径，下次重建时恢复

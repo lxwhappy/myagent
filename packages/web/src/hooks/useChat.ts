@@ -4,7 +4,8 @@
 
 import { useEffect, useCallback } from "react";
 import { sseClient } from "../services/sse-client";
-import { useChatStore } from "../stores/chat";
+import { useChatStore, type SkillInfo } from "../stores/chat";
+import { useTeamFlowStore } from "../stores/team-flow";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useAgentsStore } from "../stores/agents";
 import { playCompletionSound } from "../hooks/useAudio";
@@ -266,7 +267,12 @@ export function useChat() {
 
         // ── 子 agent（delegate_task 工具触发的隔离子任务）──
         case "subagent_start":
-          if (sid && msg.payload) chat.addSubagent(sid, { subId: msg.payload.subId, goal: msg.payload.goal, status: "running", toolCount: 0 });
+          if (sid && msg.payload) {
+            chat.addSubagent(sid, { subId: msg.payload.subId, goal: msg.payload.goal, status: "running", toolCount: 0 });
+            // 团队执行可视化：从 goal 解析 [team:nodeId] 标记
+            const nodeId = useTeamFlowStore.getState().resolveNodeId(msg.payload.goal);
+            if (nodeId) useTeamFlowStore.getState().updateNode(nodeId, { status: "running" });
+          }
           break;
         case "subagent_progress":
           if (sid && msg.payload) chat.updateSubagentProgress(sid, msg.payload.subId, msg.payload.tool);
@@ -275,6 +281,20 @@ export function useChat() {
           if (sid && msg.payload) {
             const p = msg.payload;
             chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, tokenBreakdown: p.tokenBreakdown, durationMs: p.durationMs, error: p.error });
+            // 团队执行可视化：更新节点状态
+            const tfState = useTeamFlowStore.getState();
+            if (tfState.active) {
+              const runningNode = tfState.active.nodes.find(n => n.status === "running");
+              if (runningNode) {
+                tfState.updateNode(runningNode.id, {
+                  status: p.error ? "error" : "done",
+                  duration: p.durationMs,
+                  summary: p.summary,
+                });
+              }
+              const allDone = tfState.active.nodes.every(n => n.status === "done" || n.status === "error" || n.status === "skipped");
+              if (allDone) tfState.onEnd();
+            }
           }
           break;
 
@@ -335,6 +355,16 @@ export function useChat() {
         case "auto_retry_end":
           if (sid) { chat.setRetryStatus(sid, null); }
           break;
+
+        // ── 团队执行可视化事件 ──
+        case "team_flow_start": {
+          if (msg.payload) useTeamFlowStore.getState().onStart(msg.payload);
+          break;
+        }
+        case "team_flow_end": {
+          useTeamFlowStore.getState().onEnd();
+          break;
+        }
 
         case "error":
           console.error("[agent error]", msg.payload);

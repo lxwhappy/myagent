@@ -260,6 +260,12 @@ function AskUserCard({ tool }: { tool: ToolExecution }) {
     sseClient.askResponse(chatSessionId, tool.toolCallId, values, labels);
   };
 
+  // 跳过：让 Agent 自主决策
+  const handleSkip = () => {
+    if (!chatSessionId) return;
+    sseClient.askResponse(chatSessionId, tool.toolCallId, ["__skip__"], ["你自己决定"]);
+  };
+
   if (!running) {
     // 已回答：紧凑摘要
     const answerLabel = (() => {
@@ -327,6 +333,10 @@ function AskUserCard({ tool }: { tool: ToolExecution }) {
           </button>
         </div>
       )}
+      {/* 跳过按钮：用户无法/不想回答时，让 Agent 自主决策 */}
+      <button className="ask-skip-btn" onClick={handleSkip} type="button">
+        跳过，你自己决定
+      </button>
     </div>
   );
 }
@@ -515,10 +525,7 @@ function SkillBlock({ tool, skillName }: { tool: ToolExecution; skillName: strin
       </button>
       {open && outputText && (
         <div className="tl-detail">
-          <div className="tl-section">
-            <div className="tl-section-label">SKILL.md</div>
-            <pre className="tl-code"><code>{outputText}</code></pre>
-          </div>
+          <IOBlock label="SKILL.md" text={outputText} />
         </div>
       )}
     </div>
@@ -535,8 +542,6 @@ function ToolBlock({ tool }: { tool: ToolExecution }) {
   if (hasPartial && !autoOpened) { setAutoOpened(true); setOpen(true); }
   const errored = tool.status === "error";
   const summary = extractToolSummary(tool);
-  const inputText = tool.input != null ? fmtIO(tool.input) : "";
-  const outputText = tool.output != null ? fmtIO(tool.output, 2000) : "";
 
   return (
     <div className={`tl-item tl-tool${open ? " open" : ""} tl-${tool.status}`}>
@@ -554,22 +559,13 @@ function ToolBlock({ tool }: { tool: ToolExecution }) {
       {open && (
         <div className="tl-detail">
           {tool.input != null && (
-            <div className="tl-section">
-              <div className="tl-section-label">input</div>
-              <pre className="tl-code"><code>{inputText}</code></pre>
-            </div>
+            <IOBlock label="input" text={fmtIO(tool.input)} />
           )}
           {running && tool.partialOutput && (
-            <div className="tl-section">
-              <div className="tl-section-label">output (streaming)</div>
-              <pre className="tl-code"><code>{tool.partialOutput}</code></pre>
-            </div>
+            <IOBlock label="output (streaming)" text={tool.partialOutput} />
           )}
           {tool.output != null && (
-            <div className="tl-section">
-              <div className="tl-section-label">output</div>
-              <pre className="tl-code"><code>{outputText}</code></pre>
-            </div>
+            <IOBlock label="output" text={fmtIO(tool.output, 2000)} isError={errored} />
           )}
         </div>
       )}
@@ -621,6 +617,32 @@ function CopyButton({ text }: { text: string }) {
     <button type="button" className="msg-copy-btn" onClick={copy} title="复制">
       <Icon name={copied ? "i-check" : "i-copy"} size={13} />
     </button>
+  );
+}
+
+// ── IO 区块：input/output 统一渲染，带 label + 复制按钮 + 视觉分隔 ──
+// 用于 ToolBlock / SkillBlock / DebugToolRow，替代手写的 tl-section
+function IOBlock({ label, text, isError }: { label: string; text: string; isError?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+  return (
+    <div className={`io-block${isError ? " io-error" : ""}`}>
+      <div className="io-block-header">
+        <span className="io-block-label">{label}</span>
+        <button type="button" className="io-block-copy" onClick={copy} title="复制">
+          <Icon name={copied ? "i-check" : "i-copy"} size={12} />
+          {copied ? "已复制" : "复制"}
+        </button>
+      </div>
+      <pre className="io-block-code"><code>{text}</code></pre>
+    </div>
   );
 }
 
@@ -1008,11 +1030,9 @@ function DebugLLMRow({ evt, stepNum, isFinal, prevBody }: { evt: DebugLLMEvent; 
 // ── 时间线节点：工具调用 ──
 function DebugToolRow({ tool, stepNum }: { tool: ToolExecution; stepNum: number }) {
   const [expanded, setExpanded] = useState(false);
-  const toMs = (ms?: number) => ms != null ? (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`) : "—";
+  const toMs = (ms?: number) => ms != null ? ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s` : "—";
   const fmtTime = (ts?: number) => ts ? new Date(ts).toLocaleTimeString("zh-CN", { hour12: false, minute: "2-digit", second: "2-digit" }) : "";
   const summary = extractToolSummary(tool);
-  const inputText = tool.input != null ? fmtIO(tool.input) : "";
-  const outputText = tool.output != null ? fmtIO(tool.output, 3000) : "";
 
   return (
     <div className={`dbg-step dbg-step-tool${tool.isError ? " errored" : ""}`}>
@@ -1031,17 +1051,11 @@ function DebugToolRow({ tool, stepNum }: { tool: ToolExecution; stepNum: number 
         </div>
         {expanded && (
           <div className="dbg-step-io">
-            {inputText && (
-              <div className="dbg-io-section">
-                <div className="dbg-io-label">输入</div>
-                <pre className="dbg-io-code">{inputText}</pre>
-              </div>
+            {tool.input != null && (
+              <IOBlock label="输入" text={fmtIO(tool.input)} />
             )}
-            {outputText && (
-              <div className="dbg-io-section">
-                <div className="dbg-io-label">{tool.isError ? "错误" : "输出"}</div>
-                <pre className="dbg-io-code">{outputText}</pre>
-              </div>
+            {tool.output != null && (
+              <IOBlock label={tool.isError ? "错误" : "输出"} text={fmtIO(tool.output, 3000)} isError={tool.isError} />
             )}
           </div>
         )}

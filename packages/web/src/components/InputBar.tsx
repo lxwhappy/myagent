@@ -194,7 +194,7 @@ export function InputBar() {
     processImageFiles(files);
   }, [processImageFiles]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if ((!text.trim() && attachedImages.length === 0 && codeRefs.length === 0) || isGenerating) return;
     addToHistory(text.trim());
     historyRef.current = loadHistory();
@@ -203,7 +203,27 @@ export function InputBar() {
     const images = attachedImages.length > 0
       ? attachedImages.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }))
       : undefined;
-    sendMessage(text, images, codeRefs.length > 0 ? codeRefs : undefined);
+
+    // 团队模式：后端从团队配置（customPrompt 或模式默认模板）生成编排指令
+    let sendText = text;
+    const teamId = activeTeamId;
+    if (teamId) {
+      try {
+        const res = await fetch(`/api/agent-teams/${teamId}/preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text.trim() }),
+        });
+        const data = await res.json();
+        if (data.prompt) {
+          sendText = data.prompt;
+        }
+      } catch {
+        // 后端失败时回退：直接发送用户原文
+      }
+    }
+
+    sendMessage(sendText, images, codeRefs.length > 0 ? codeRefs : undefined);
     // 清理
     setText("");
     clearDraft(draftKey);
@@ -371,38 +391,12 @@ export function InputBar() {
   };
 
   // ── 执行 Agent 团队 ──
-  // 调用后端编排引擎，根据 team.mode 生成对应的指令
-  const handleRunTeam = async (teamId: string) => {
+  // 选中团队即标记激活状态，编排指令由后端从团队配置自动生成
+  const handleRunTeam = (teamId: string) => {
     const team = teams.find(t => t.id === teamId);
     if (!team || team.members.length === 0) return;
     setAgentDropdownOpen(false);
-    setActiveTeamId(teamId); // 标记团队选中状态
-
-    try {
-      // 调用后端预览接口，获取编排指令
-      const res = await fetch(`/api/agent-teams/${teamId}/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim() || "请根据你的角色指令执行任务" }),
-      });
-      const data = await res.json();
-      if (data.prompt) {
-        // 如果输入框已有文本，保留作为上下文
-        const userText = text.trim();
-        setText(userText ? `${data.prompt}\n\n---\n用户原始输入：${userText}` : data.prompt);
-      } else {
-        // 后端失败时回退到前端组装
-        const steps = team.members.map((m, i) => {
-          const agent = agentsList.find(a => a.id === m.agentId);
-          const agentName = agent?.name ?? "未知";
-          return `${i + 1}. [${m.role}] 使用 delegate_task 调用 ${agentName}`;
-        }).join("\n");
-        setText(`[团队任务] 请按以下步骤执行：\n${steps}\n\n用户请求：${text.trim() || "执行任务"}`);
-      }
-    } catch {
-      // 网络错误回退
-      setText(`[团队任务] 请依次调用各专家 Agent 完成任务：${team.members.map(m => m.role).join(" → ")}`);
-    }
+    setActiveTeamId(teamId);
     taRef.current?.focus();
   };
 

@@ -1,25 +1,31 @@
 // components/AgentFlowGraph.tsx — 多 Agent 协作 DAG 可视化
 //
-// 使用 React Flow + Dagre 自动布局渲染 Agent 团队的执行流程图。
-// 节点状态实时更新（pending → running → done → error），由 SSE 事件驱动。
+// 通用 React Flow + Dagre 自动布局渲染引擎。
+// 支持 5 种拓扑：linear / star / fanout / ring / dag
+// 两种模式：
+//   readonly  — 自动布局，不可拖拽（实时执行视图、非 custom 预览）
+//   editable  — 可拖拽节点、可拖拽连线、可删边（custom 模式编辑器）
 //
-// 三种编排模式的 DAG 结构：
-//   pipeline:   A → B → C（线性链）
-//   supervisor: Supervisor → [A, B, C]（星形）
-//   evaluator:  Generator → Evaluator → (pass → done | fail → Generator 重试)
+// 节点状态实时更新（pending → running → done → error），由 SSE 事件驱动。
 
-import { useMemo, useCallback, type CSSProperties } from "react";
+import { useMemo, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
   Background,
   Controls,
+  MiniMap,
   type Node,
   type Edge,
   type NodeProps,
+  type Connection,
+  type EdgeChange,
   Handle,
   Position,
   MarkerType,
+  useNodesState,
+  useEdgesState,
+  addEdge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "@dagrejs/dagre";
@@ -36,19 +42,20 @@ export interface AgentNodeData {
   summary?: string;    // 完成后的摘要
   isCoordinator?: boolean;
   retryCount?: number;
+  editable?: boolean;  // 是否显示可拖拽的 Handle
   [key: string]: unknown;
 }
 
-// ── Dagre 自动布局 ──
-const LAYOUT_OPTIONS = {
-  "pipeline": { rankdir: "LR", nodesep: 40, ranksep: 80 },
-  "supervisor": { rankdir: "TB", nodesep: 50, ranksep: 60 },
-  "evaluator": { rankdir: "LR", nodesep: 40, ranksep: 80 },
-};
+export type LayoutDirection = "LR" | "TB";
 
-function layoutWithDagre(nodes: Node[], edges: Edge[], mode: TeamMode): { nodes: Node[]; edges: Edge[] } {
+// ── Dagre 自动布局 ──
+function layoutWithDagre(nodes: Node[], edges: Edge[], direction: LayoutDirection): { nodes: Node[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
-  g.setGraph(LAYOUT_OPTIONS[mode] || LAYOUT_OPTIONS.supervisor);
+  g.setGraph({
+    rankdir: direction,
+    nodesep: 40,
+    ranksep: direction === "LR" ? 80 : 60,
+  });
   g.setDefaultEdgeLabel(() => ({}));
 
   const NODE_W = 180;
@@ -91,6 +98,15 @@ const STATUS_BG: Record<AgentNodeStatus, string> = {
   skipped: "var(--bg)",
 };
 
+// ── Handle 样式（editable 模式下可见可拖） ──
+const handleStyleHidden: CSSProperties = { opacity: 0 };
+const handleStyleVisible: CSSProperties = {
+  width: 10, height: 10,
+  background: "var(--accent)",
+  border: "2px solid var(--surface)",
+  borderRadius: "50%",
+};
+
 // ── 自定义节点组件 ──
 function AgentNode({ data }: NodeProps) {
   const d = data as AgentNodeData;
@@ -98,6 +114,8 @@ function AgentNode({ data }: NodeProps) {
   const borderColor = STATUS_COLORS[status];
   const bgColor = STATUS_BG[status];
   const isRunning = status === "running";
+  const editable = d.editable;
+  const hStyle = editable ? handleStyleVisible : handleStyleHidden;
 
   const cardStyle: CSSProperties = {
     border: `1.5px solid ${borderColor}`,
@@ -106,14 +124,15 @@ function AgentNode({ data }: NodeProps) {
     padding: "10px 14px",
     width: 180,
     position: "relative",
-    transition: "all var(--motion-fast)",
+    transition: "all var(--motion-fast) var(--ease-standard)",
     boxShadow: isRunning ? `0 0 0 3px color-mix(in oklab, ${borderColor}, transparent 75%)` : "none",
+    cursor: editable ? "grab" : "default",
   };
 
   return (
     <div style={cardStyle}>
-      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <Handle type="target" position={Position.Left} style={hStyle} />
+      <Handle type="target" position={Position.Top} style={hStyle} />
 
       {/* 状态指示点 */}
       <div style={{
@@ -134,6 +153,16 @@ function AgentNode({ data }: NodeProps) {
           color: "var(--fg)",
           fontFamily: "var(--font-body)",
         }}>{d.label}</span>
+        {d.isCoordinator && (
+          <span style={{
+            fontSize: 9,
+            color: "var(--accent)",
+            background: "var(--accent-tint)",
+            borderRadius: "var(--radius-pill)",
+            padding: "1px 6px",
+            fontWeight: 600,
+          }}>主控</span>
+        )}
       </div>
 
       {/* 角色 */}
@@ -155,22 +184,21 @@ function AgentNode({ data }: NodeProps) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right} style={hStyle} />
+      <Handle type="source" position={Position.Bottom} style={hStyle} />
     </div>
   );
 }
 
 const nodeTypes = { agent: AgentNode };
 
-export type TeamMode = "pipeline" | "supervisor" | "evaluator";
-
+// ── 类型定义 ──
 export interface FlowNodeDef {
   id: string;
   label: string;
   role: string;
   icon: string;
-  status?: AgentNodeData["status"];
+  status?: AgentNodeStatus;
   duration?: number;
   retryCount?: number;
   isCoordinator?: boolean;
@@ -185,43 +213,41 @@ export interface FlowEdgeDef {
   dashed?: boolean;
 }
 
-// ── 主组件 ──
+// ── 主组件 props ──
 interface AgentFlowGraphProps {
   nodes: FlowNodeDef[];
   edges: FlowEdgeDef[];
-  mode: TeamMode;
+  layout?: LayoutDirection;
   height?: number | string;
   showControls?: boolean;
+  /** editable 模式：可拖拽节点 + 连线 + 删边 */
+  editable?: boolean;
+  /** editable 模式：边变化回调（增删边时触发） */
+  onEdgesChange?: (edges: FlowEdgeDef[]) => void;
 }
 
-export function AgentFlowGraph({ nodes: nodeDefs, edges: edgeDefs, mode, height = 300, showControls = true }: AgentFlowGraphProps) {
-  const inner = <AgentFlowGraphInner nodes={nodeDefs} edges={edgeDefs} mode={mode} height={height} showControls={showControls} />;
+export function AgentFlowGraph(props: AgentFlowGraphProps) {
+  const inner = <AgentFlowGraphInner {...props} />;
   return <ReactFlowProvider>{inner}</ReactFlowProvider>;
 }
 
-function AgentFlowGraphInner({ nodes: nodeDefs, edges: edgeDefs, mode, height = 300, showControls = true }: AgentFlowGraphProps) {
-  // 转换为 React Flow 格式
+// ── readonly 模式（自动布局，不可交互） ──
+function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height = 300, showControls = true }: AgentFlowGraphProps) {
   const { nodes, edges } = useMemo(() => {
     const rfNodes: Node[] = nodeDefs.map(n => ({
       id: n.id,
       type: "agent",
       data: {
-        label: n.label,
-        role: n.role,
-        icon: n.icon,
+        label: n.label, role: n.role, icon: n.icon,
         status: n.status || "pending",
-        duration: n.duration,
-        retryCount: n.retryCount,
+        duration: n.duration, retryCount: n.retryCount,
         isCoordinator: n.isCoordinator,
       },
-      position: { x: 0, y: 0 }, // Dagre 会覆盖
+      position: { x: 0, y: 0 },
     }));
 
     const rfEdges: Edge[] = edgeDefs.map(e => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      label: e.label,
+      id: e.id, source: e.source, target: e.target, label: e.label,
       animated: e.animated ?? false,
       style: {
         stroke: e.dashed ? "var(--muted)" : "var(--border)",
@@ -233,8 +259,8 @@ function AgentFlowGraphInner({ nodes: nodeDefs, edges: edgeDefs, mode, height = 
       labelBgStyle: { fill: "var(--surface)" },
     }));
 
-    return layoutWithDagre(rfNodes, rfEdges, mode);
-  }, [nodeDefs, edgeDefs, mode]);
+    return layoutWithDagre(rfNodes, rfEdges, layout);
+  }, [nodeDefs, edgeDefs, layout]);
 
   const defaultEdgeOptions = useMemo(() => ({
     style: { stroke: "var(--border)", strokeWidth: 1.5 },
@@ -264,100 +290,265 @@ function AgentFlowGraphInner({ nodes: nodeDefs, edges: edgeDefs, mode, height = 
   );
 }
 
-// ── 辅助：根据团队成员和模式自动生成 DAG 节点和边 ──
-export function buildFlowFromTeam(
-  members: { agentId: string; role: string; icon: string; name: string }[],
-  mode: TeamMode,
-  statuses?: Record<string, AgentNodeData>,
+// ── editable 模式（可拖拽 + 连线 + 删边） ──
+// 设计要点（第一性原理）：
+// 1. Dagre 布局只在首次挂载时做一次 — 用户拖拽后位置由 useNodesState 管理
+// 2. 成员增减：已有节点保留位置，新节点追加到合理位置（不触发全局重布局）
+// 3. 不用 effect 同步外部 nodeDefs → 内部 nodes（避免循环更新导致位置被覆盖）
+// 4. 边变化只在实际增删时通知外部（handleConnect / onEdgesChange）
+function EditableGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height = 300, showControls = true, onEdgesChange: onEdgesChangeExt }: AgentFlowGraphProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChangeInternal] = useEdgesState<Edge>([]);
+  const initialized = useRef(false);
+
+  // ── 首次挂载：Dagre 布局初始化 ──
+  useEffect(() => {
+    if (initialized.current || nodeDefs.length === 0) return;
+    initialized.current = true;
+
+    const rfNodes: Node[] = nodeDefs.map(n => ({
+      id: n.id,
+      type: "agent",
+      data: {
+        label: n.label, role: n.role, icon: n.icon,
+        status: n.status || "pending",
+        duration: n.duration, retryCount: n.retryCount,
+        isCoordinator: n.isCoordinator,
+        editable: true,
+      },
+      position: { x: 0, y: 0 },
+    }));
+    const rfEdges: Edge[] = edgeDefs.map(e => ({
+      id: e.id, source: e.source, target: e.target,
+      animated: e.animated ?? false,
+      style: {
+        stroke: e.dashed ? "var(--muted)" : "var(--border)",
+        strokeWidth: 1.5,
+        strokeDasharray: e.dashed ? "5 3" : undefined,
+      },
+      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
+    }));
+    const laid = layoutWithDagre(rfNodes, rfEdges, layout);
+    setNodes(laid.nodes);
+    setEdges(laid.edges);
+  }, [nodeDefs, edgeDefs, layout, setNodes, setEdges]);
+
+  // ── 成员增减：增量更新（不重置已有节点位置） ──
+  const knownIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const currentIds = new Set(nodeDefs.map(n => n.id));
+    const prevIds = knownIds.current;
+
+    const added = nodeDefs.filter(n => !prevIds.has(n.id));
+    const removed = [...prevIds].filter(id => !currentIds.has(id));
+
+    if (added.length === 0 && removed.length === 0) return;
+
+    // 删除已移除的节点和关联边
+    if (removed.length > 0) {
+      setNodes(ns => ns.filter(n => !removed.includes(n.id)));
+      setEdges(es => es.filter(e => !removed.includes(e.source) && !removed.includes(e.target)));
+    }
+
+    // 新增节点：追加到末尾，位置在已有节点右侧
+    if (added.length > 0) {
+      setNodes(ns => {
+        const maxX = ns.length > 0 ? Math.max(...ns.map(n => n.position.x)) : 0;
+        const newNodes = added.map((n, i) => ({
+          id: n.id,
+          type: "agent" as const,
+          data: {
+            label: n.label, role: n.role, icon: n.icon,
+            status: n.status || "pending" as AgentNodeStatus,
+            duration: n.duration, retryCount: n.retryCount,
+            isCoordinator: n.isCoordinator,
+            editable: true,
+          },
+          position: { x: maxX + 220 + i * 220, y: 0 },
+        }));
+        return [...ns, ...newNodes];
+      });
+    }
+
+    knownIds.current = currentIds;
+  }, [nodeDefs, setNodes, setEdges]);
+
+  // ── 连线：拖拽 Handle 创建新边 ──
+  const handleConnect = useCallback((conn: Connection) => {
+    if (!conn.source || !conn.target) return;
+    if (conn.source === conn.target) return;
+    setEdges(eds => addEdge({
+      ...conn,
+      animated: false,
+      style: { stroke: "var(--border)", strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
+    }, eds));
+  }, [setEdges]);
+
+  // ── edges 增删后通知外部（只在边数量变化时通知，避免循环） ──
+  const lastEdgeCount = useRef(0);
+  useEffect(() => {
+    if (edges.length === lastEdgeCount.current) return;
+    lastEdgeCount.current = edges.length;
+    const simpleEdges: FlowEdgeDef[] = edges.map(e => ({
+      id: e.id, source: e.source, target: e.target,
+    }));
+    onEdgesChangeExt?.(simpleEdges);
+  }, [edges, onEdgesChangeExt]);
+
+  const defaultEdgeOptions = useMemo(() => ({
+    style: { stroke: "var(--border)", strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
+  }), []);
+
+  return (
+    <div style={{ width: "100%", height, position: "relative" }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChangeInternal}
+        onConnect={handleConnect}
+        defaultEdgeOptions={defaultEdgeOptions}
+        fitView
+        fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }}
+        proOptions={{ hideAttribution: true }}
+        nodesDraggable
+        nodesConnectable
+        elementsSelectable
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch
+        deleteKeyCode={["Backspace", "Delete"]}
+      >
+        <Background color="var(--border)" gap={20} size={1} />
+        {showControls && <Controls position="bottom-right" showInteractive={false} />}
+        <MiniMap
+          position="bottom-left"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          nodeColor={() => "var(--accent-tint)"}
+          maskColor="color-mix(in oklab, var(--bg), transparent 40%)"
+          pannable
+          zoomable
+        />
+      </ReactFlow>
+    </div>
+  );
+}
+
+// ── 主入口：根据 editable 分发 ──
+function AgentFlowGraphInner(props: AgentFlowGraphProps) {
+  if (props.editable) return <EditableGraph {...props} />;
+  return <ReadonlyGraph {...props} />;
+}
+
+// ── 辅助：根据团队成员和拓扑类型自动生成 DAG 节点和边（前端版） ──
+export type GraphTopology = "linear" | "star" | "fanout" | "ring" | "dag";
+
+export function buildFlowFromTopology(
+  members: { id: string; name: string; role: string; icon: string }[],
+  topology: GraphTopology,
+  customEdges?: Array<{ source: number; target: number }>,
+  statuses?: Record<string, { status: AgentNodeStatus; duration?: number; retryCount?: number }>,
 ): { nodes: FlowNodeDef[]; edges: FlowEdgeDef[] } {
   if (members.length === 0) return { nodes: [], edges: [] };
 
-  if (mode === "pipeline") {
-    const nodes: FlowNodeDef[] = members.map((m, i) => ({
-      id: `step-${i}`,
-      label: m.name,
-      role: m.role,
-      icon: m.icon,
-      status: statuses?.[`step-${i}`]?.status,
-      duration: statuses?.[`step-${i}`]?.duration,
-    }));
-    const edges: FlowEdgeDef[] = members.slice(0, -1).map((_, i) => ({
-      id: `e-${i}`,
-      source: `step-${i}`,
-      target: `step-${i + 1}`,
-    }));
-    return { nodes, edges };
-  }
+  const edge = (s: string, t: string, opts?: Partial<FlowEdgeDef>): FlowEdgeDef => ({
+    id: `e-${s}-${t}`, source: s, target: t, ...opts,
+  });
 
-  if (mode === "supervisor") {
-    const nodes: FlowNodeDef[] = [
-      {
-        id: "supervisor",
-        label: "Supervisor",
-        role: "主控调度",
-        icon: "🎯",
-        isCoordinator: true,
-        status: statuses?.["supervisor"]?.status,
-      },
-      ...members.map((m, i) => ({
-        id: `worker-${i}`,
-        label: m.name,
-        role: m.role,
-        icon: m.icon,
-        status: statuses?.[`worker-${i}`]?.status,
-        duration: statuses?.[`worker-${i}`]?.duration,
-      })),
-    ];
-    const edges: FlowEdgeDef[] = members.map((_, i) => ({
-      id: `e-sup-${i}`,
-      source: "supervisor",
-      target: `worker-${i}`,
-    }));
-    return { nodes, edges };
-  }
+  switch (topology) {
+    case "linear": {
+      const nodes: FlowNodeDef[] = members.map((m, i) => ({
+        id: `step-${i}`, label: m.name, role: m.role, icon: m.icon,
+        status: statuses?.[`step-${i}`]?.status,
+        duration: statuses?.[`step-${i}`]?.duration,
+      }));
+      const edges: FlowEdgeDef[] = members.slice(0, -1).map((_, i) =>
+        edge(`step-${i}`, `step-${i + 1}`),
+      );
+      return { nodes, edges };
+    }
 
-  // evaluator: Generator → Evaluator, fail 回到 Generator
-  if (members.length < 2) {
-    // 只有一个成员时退化为 pipeline
-    return buildFlowFromTeam(members, "pipeline", statuses);
+    case "star": {
+      const nodes: FlowNodeDef[] = [
+        { id: "coordinator", label: members[0].name, role: members[0].role, icon: members[0].icon, isCoordinator: true, status: statuses?.["coordinator"]?.status },
+        ...members.slice(1).map((m, i) => ({
+          id: `worker-${i}`, label: m.name, role: m.role, icon: m.icon,
+          status: statuses?.[`worker-${i}`]?.status,
+        })),
+      ];
+      const edges: FlowEdgeDef[] = members.slice(1).map((_, i) =>
+        edge("coordinator", `worker-${i}`),
+      );
+      return { nodes, edges };
+    }
+
+    case "fanout": {
+      const n = members.length;
+      const nodes: FlowNodeDef[] = [
+        { id: "splitter-0", label: members[0].name, role: members[0].role, icon: members[0].icon, isCoordinator: true, status: statuses?.["splitter-0"]?.status },
+        ...members.slice(1, -1).map((m, i) => ({
+          id: `worker-${i}`, label: m.name, role: m.role, icon: m.icon,
+          status: statuses?.[`worker-${i}`]?.status,
+        })),
+        { id: "reducer-last", label: members[n-1].name, role: members[n-1].role, icon: members[n-1].icon, status: statuses?.["reducer-last"]?.status },
+      ];
+      const workers = members.slice(1, -1);
+      if (workers.length === 0) {
+        return { nodes, edges: [edge("splitter-0", "reducer-last")] };
+      }
+      const edges: FlowEdgeDef[] = [
+        ...workers.map((_, i) => edge("splitter-0", `worker-${i}`)),
+        ...workers.map((_, i) => edge(`worker-${i}`, "reducer-last")),
+      ];
+      return { nodes, edges };
+    }
+
+    case "ring": {
+      const nodes: FlowNodeDef[] = members.map((m, i) => ({
+        id: `debater-${i}`, label: m.name, role: m.role, icon: m.icon,
+        status: statuses?.[`debater-${i}`]?.status,
+      }));
+      const edges: FlowEdgeDef[] = members.map((_, i) => {
+        const next = (i + 1) % members.length;
+        return edge(`debater-${i}`, `debater-${next}`);
+      });
+      return { nodes, edges };
+    }
+
+    case "dag":
+    default: {
+      const nodes: FlowNodeDef[] = members.map((m, i) => ({
+        id: `node-${i}`, label: m.name, role: m.role, icon: m.icon,
+        status: statuses?.[`node-${i}`]?.status,
+      }));
+      const edges: FlowEdgeDef[] = (customEdges || []).map(ce =>
+        edge(`node-${ce.source}`, `node-${ce.target}`),
+      );
+      if (edges.length === 0 && members.length > 1) {
+        for (let i = 0; i < members.length - 1; i++) {
+          edges.push(edge(`node-${i}`, `node-${i + 1}`));
+        }
+      }
+      return { nodes, edges };
+    }
   }
-  const gen = members[0];
-  const eval_ = members[1];
-  const nodes: FlowNodeDef[] = [
-    {
-      id: "generator",
-      label: gen.name,
-      role: gen.role || "生成",
-      icon: gen.icon,
-      status: statuses?.["generator"]?.status,
-      retryCount: statuses?.["generator"]?.retryCount,
-    },
-    {
-      id: "evaluator",
-      label: eval_.name,
-      role: eval_.role || "评估",
-      icon: eval_.icon,
-      status: statuses?.["evaluator"]?.status,
-    },
-  ];
-  const edges: FlowEdgeDef[] = [
-    { id: "e-gen-eval", source: "generator", target: "evaluator" },
-    { id: "e-eval-pass", source: "evaluator", target: "generator", label: "✗ 重试", dashed: true, animated: false },
-  ];
-  // 如果有第三个成员，加为最终输出
-  if (members[2]) {
-    nodes.push({
-      id: "final",
-      label: members[2].name,
-      role: members[2].role || "输出",
-      icon: members[2].icon,
-      status: statuses?.["final"]?.status,
-    });
-    edges.push({ id: "e-eval-pass2", source: "evaluator", target: "final", label: "✓ 通过" });
-  } else {
-    // 标记 evaluator 的 pass 出口
-    edges[1] = { ...edges[1], target: "generator", label: "✗ 退回修改", dashed: true };
-    edges.push({ id: "e-eval-done", source: "evaluator", target: "evaluator", label: "✓ 通过" });
-  }
-  return { nodes, edges };
+}
+
+// ── 向后兼容：旧的 buildFlowFromTeam 签名 ──
+export function buildFlowFromTeam(
+  members: { agentId: string; role: string; icon: string; name: string }[],
+  mode: string,
+  statuses?: Record<string, { status: AgentNodeStatus; duration?: number; retryCount?: number }>,
+): { nodes: FlowNodeDef[]; edges: FlowEdgeDef[] } {
+  const modeToTopology: Record<string, GraphTopology> = {
+    pipeline: "linear", supervisor: "star", evaluator: "linear",
+    parallel: "fanout", debate: "ring", router: "star",
+    mapreduce: "fanout", custom: "dag",
+  };
+  const topology = modeToTopology[mode] || "linear";
+  const adaptedMembers = members.map(m => ({ id: m.agentId, name: m.name, role: m.role, icon: m.icon }));
+  return buildFlowFromTopology(adaptedMembers, topology, undefined, statuses);
 }

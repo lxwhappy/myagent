@@ -36,6 +36,8 @@ export const PATHS = {
   agents: join(AGENT_DIR, "agents.json"),
   /** Agent 团队（多 Agent 编排） */
   agentTeams: join(AGENT_DIR, "agent-teams.json"),
+  /** 自定义编排模式 */
+  orchestrationModes: join(AGENT_DIR, "orchestration-modes.json"),
   /** 工作空间列表 */
   workspaces: join(AGENT_DIR, "workspaces.json"),
   /** Todo 列表（按 chatSessionId 隔离） */

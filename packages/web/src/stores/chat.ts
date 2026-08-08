@@ -323,8 +323,10 @@ export const useChatStore = create<ChatStore>((set) => ({
     const msgs = [...sess.messages]; const last = msgs[msgs.length - 1];
     if (last?.role === "assistant") {
       // 如果正文为空但 thinking 有内容，把 thinking 当正文显示
+      // 但仅在没有任何工具调用时才提升——有 ask_user 等工具时，
+      // thinking 已被快照到 tool.precedingThinking，直接当正文会裸露推理
       const patch: any = { isStreaming: false };
-      if (!last.content && last.thinking && last.thinking.trim()) {
+      if (!last.content && last.thinking && last.thinking.trim() && !(last.tools && last.tools.length)) {
         patch.content = last.thinking.trim();
         patch.thinking = "";
       }

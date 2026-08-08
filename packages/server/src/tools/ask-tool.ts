@@ -17,7 +17,7 @@ interface PendingAsk {
 // key: `${chatSessionId}:${toolCallId}` → pending promise
 const pending = new Map<string, PendingAsk>();
 
-const TIMEOUT_MS = 10 * 60 * 1000; // 10 分钟无回答自动放弃
+const TIMEOUT_MS = 2 * 60 * 1000; // 2 分钟无回答自动放弃（不阻塞对话太久）
 
 /** 用户提交答案（由 REST 端点调用） */
 export function resolveAsk(
@@ -58,13 +58,14 @@ export function createAskUserTool(chatSessionId: string): ToolDefinition {
     name: "ask_user",
     label: "ASK",
     description:
-      "向用户提问并等待回答。当你需要澄清需求、确认选项、或让用户做决定时调用。" +
-      "用户会在界面上看到问题和选项按钮，点击后你会收到答案。" +
-      "question 要简洁；options 每项有 label（显示文字）和 value（实际值）。" +
-      "通常 2-5 个选项，不要太多。multiple=true 时允许多选，用户勾选后点确认提交。" +
-      "每个选项可设 recommended=true 标记你推荐的选项——单选标 1 个推荐项，" +
-      "多选标记你推荐的全选组合。推荐项会在界面上高亮显示，帮助用户快速决策。",
-    promptSnippet: "- ask_user: 向用户提问（澄清需求/确认选项时使用，支持单选/多选，选项可标记 recommended 推荐项）",
+      "仅在真正无法自主决策时才向用户提问。默认应该自己做出合理选择并继续工作，" +
+      "不要因为「可能有多个方案」就停下来问——选你认为最优的方案直接做，在回复中说明你的选择即可。" +
+      "只有在以下情况才调用：1) 多个方案差异巨大且选错代价很高（如删数据 vs 不删）；" +
+      "2) 需要用户提供你无法获取的信息（如密码、业务规则偏好）。" +
+      "如果你推荐某个选项，大概率不应该调用本工具——直接按推荐方案做。" +
+      "question 要简洁；options 每项有 label（显示文字）和 value（实际值），" +
+      "2-5 个选项。multiple=true 时允许多选。每个选项可设 recommended=true 标记推荐项。",
+    promptSnippet: "- ask_user: 仅在选错代价极高或需用户提供信息时才提问。默认自主决策，有推荐就直接做",
     parameters: {
       type: "object",
       properties: {

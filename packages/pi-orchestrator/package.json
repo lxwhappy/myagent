@@ -1,0 +1,27 @@
+{
+  "name": "@myagent/pi-orchestrator",
+  "version": "0.1.0",
+  "description": "Multi-Agent orchestration modes for Pi Agent — pluggable team workflow patterns",
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./src/types.ts": "./src/types.ts",
+    "./src/builtin-modes.ts": "./src/builtin-modes.ts",
+    "./src/registry.ts": "./src/registry.ts",
+    "./src/prompt-builder.ts": "./src/prompt-builder.ts",
+    "./src/graph-builder.ts": "./src/graph-builder.ts",
+    "./types": "./src/types.ts",
+    "./modes": "./src/builtin-modes.ts",
+    "./registry": "./src/registry.ts",
+    "./prompt": "./src/prompt-builder.ts",
+    "./graph": "./src/graph-builder.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

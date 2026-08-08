@@ -15,6 +15,7 @@
     "@fastify/static": "^10.1.2",
     "@fastify/websocket": "^11.0.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@myagent/pi-orchestrator": "workspace:*",
     "@myagent/pi-subagent-extension": "workspace:*",
     "@myagent/pi-todo-extension": "workspace:*",
     "@types/ws": "^8.18.1",

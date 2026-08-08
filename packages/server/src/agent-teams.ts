@@ -20,17 +20,25 @@ export interface TeamMember {
   instructions?: string; // 该步骤的额外指令（追加到 agent 的 systemPrompt 之后）
 }
 
-/** 团队编排模式 */
-export type TeamMode = "pipeline" | "supervisor" | "evaluator";
+/** 团队编排模式（内置 8 种 + 自定义模式 UUID） */
+export type TeamMode = string;  // 内置: pipeline|supervisor|evaluator|parallel|debate|router|mapreduce|custom; 自定义: UUID
+
+export interface DagEdge {
+  source: number;  // 成员索引（0-based）
+  target: number;
+}
 
 export interface AgentTeam {
   id: string;
   name: string;
   description: string;
   icon: string;
-  mode: TeamMode;          // 编排模式（默认 pipeline）
+  mode: TeamMode;          // 编排模式 ID（对应 OrchestrationMode.id）
   members: TeamMember[];   // 有序成员列表
   maxRetries?: number;     // evaluator 模式：最大重试次数（默认 2）
+  dagEdges?: DagEdge[];    // custom 模式：自定义 DAG 边
+  optionValues?: Record<string, string | number>;  // 模式选项值
+  customPrompt?: string;   // 自定义编排指令（覆盖模式默认 promptTemplate）
   createdAt: number;
   updatedAt: number;
 }
@@ -73,6 +81,9 @@ export const agentTeamStore = {
     mode?: TeamMode;
     members?: TeamMember[];
     maxRetries?: number;
+    dagEdges?: DagEdge[];
+    optionValues?: Record<string, string | number>;
+    customPrompt?: string;
   }): Promise<AgentTeam> {
     await ensureLoaded();
     const now = Date.now();
@@ -84,6 +95,9 @@ export const agentTeamStore = {
       mode: input.mode || "pipeline",
       members: input.members || [],
       maxRetries: input.maxRetries,
+      dagEdges: input.dagEdges,
+      optionValues: input.optionValues,
+      customPrompt: input.customPrompt,
       createdAt: now,
       updatedAt: now,
     };
@@ -93,7 +107,7 @@ export const agentTeamStore = {
     return team;
   },
 
-  async update(id: string, patch: Partial<Pick<AgentTeam, "name" | "description" | "icon" | "mode" | "members" | "maxRetries">>): Promise<AgentTeam | undefined> {
+  async update(id: string, patch: Partial<Pick<AgentTeam, "name" | "description" | "icon" | "mode" | "members" | "maxRetries" | "dagEdges" | "optionValues" | "customPrompt">>): Promise<AgentTeam | undefined> {
     await ensureLoaded();
     const team = teams.find(t => t.id === id);
     if (!team) return undefined;
@@ -103,6 +117,9 @@ export const agentTeamStore = {
     if (patch.mode !== undefined) team.mode = patch.mode;
     if (patch.members !== undefined) team.members = patch.members;
     if (patch.maxRetries !== undefined) team.maxRetries = patch.maxRetries;
+    if (patch.dagEdges !== undefined) team.dagEdges = patch.dagEdges;
+    if (patch.optionValues !== undefined) team.optionValues = patch.optionValues;
+    if (patch.customPrompt !== undefined) team.customPrompt = patch.customPrompt;
     team.updatedAt = Date.now();
     await persist();
     return team;

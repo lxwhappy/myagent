@@ -84,10 +84,18 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace, onSw
     },
   ];
 
+  // 当前分区标题（header 中显示）
+  const ALL_ITEMS = NAV_GROUPS.flatMap(g => g.items);
+  const currentTitle = ALL_ITEMS.find(i => i.key === tab)?.label ?? "设置";
+
   return (
     <div className="settings-page">
-      <div className="settings-page-header">
-        <h2>设置</h2>
+      <div className="settings-panel-header">
+        <button className="settings-back-btn" onClick={onClose} title="返回 (Esc)">
+          <Icon name="i-chevron" size={16} className="settings-back-chevron" />
+          <span>返回</span>
+        </button>
+        <h2 className="settings-panel-title">{currentTitle}</h2>
         <button className="settings-close" onClick={onClose} title="关闭 (Esc)">✕</button>
       </div>
       <div className="settings-layout">
