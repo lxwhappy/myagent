@@ -366,6 +366,20 @@ export function useChat() {
           break;
         }
 
+        // ── Autopilot 全自动执行事件 ──
+        case "autopilot_phase": {
+          if (sid && msg.payload) {
+            const p = msg.payload as { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string };
+            chat.setAutopilotState(sid, p);
+            // 完成或出错时，把最终结果作为 assistant 消息注入对话流
+            if (p.phase === "done" || p.phase === "error") {
+              const summary = buildAutopilotSummary(p);
+              chat.finishAutopilot(sid, summary);
+            }
+          }
+          break;
+        }
+
         case "error":
           console.error("[agent error]", msg.payload);
           if (sid) {
@@ -700,4 +714,22 @@ function saveReply(chatSessionId: string) {
       body: JSON.stringify(body),
     });
   }
+}
+
+/** 构建 autopilot 完成后的摘要消息 */
+function buildAutopilotSummary(p: { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string }): string {
+  if (p.error) {
+    return `**自动驾驶执行出错**\n\n任务：${p.task}\n错误：${p.error}`;
+  }
+  const parts: string[] = [`**自动驾驶完成**（${p.round} 轮迭代）`];
+  parts.push(`\n**任务：** ${p.task}`);
+  if (p.analysis) parts.push(`\n**分析：** ${p.analysis.slice(0, 500)}`);
+  if (p.plan) parts.push(`\n**计划：** ${p.plan.slice(0, 500)}`);
+  if (p.result) parts.push(`\n**最终结果：**\n${p.result}`);
+  if (p.issues && p.issues.length > 0) {
+    parts.push(`\n**未解决问题：**`);
+    p.issues.forEach((iss, i) => parts.push(`${i + 1}. ${iss}`));
+  }
+  if (p.verification) parts.push(`\n**验证：** ${p.verification.slice(0, 300)}`);
+  return parts.join("\n");
 }

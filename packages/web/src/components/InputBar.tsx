@@ -11,6 +11,7 @@ import { useQuickPromptStore, type QuickPrompt } from "../stores/quick-prompts";
 import { Icon } from "./Icon";
 import { useAgentTeamsStore } from "../stores/agent-teams";
 import { useUIStore } from "../stores/ui";
+import { sseClient } from "../services/sse-client";
 import { QuickPromptManager } from "./QuickPromptManager";
 
 const MAX_HEIGHT = 200;
@@ -233,6 +234,22 @@ export function InputBar() {
     // 引用片段不清空——保留到用户手动删除（点 chip 上的 ✕）
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
     setShowQuickPrompts(false);
+    if (taRef.current) taRef.current.style.height = "auto";
+  };
+
+  // ── 自动驾驶：全自动分析→规划→执行→验证→修复 ──
+  const handleAutopilot = () => {
+    if (!text.trim() || isGenerating || !activeChatSessionId) return;
+    const task = text.trim();
+    addToHistory(task);
+    historyRef.current = loadHistory();
+    histIndexRef.current = -1;
+    useChatStore.getState().addUserMessage(activeChatSessionId, task);
+    useChatStore.getState().setAutopilotState(activeChatSessionId, { phase: "analyze", round: 0, task });
+    sseClient.autopilot(activeChatSessionId, task);
+    setText("");
+    clearDraft(draftKey);
+    setActiveTeamId(null);
     if (taRef.current) taRef.current.style.height = "auto";
   };
 
@@ -621,12 +638,23 @@ export function InputBar() {
             </div>
           )}
 
-          {/* 思考开关 */}
+          {/* 自动驾驶 */}
           <button
-            className={`input-thinking${thinkingEnabled ? " active" : ""}`}
+            className="btn-input-action"
+            onClick={handleAutopilot}
+            disabled={!canSend}
+            type="button"
+            aria-label="自动驾驶"
+            title="自动驾驶：分析→规划→执行→验证→修复，全自动循环"
+          >
+            🚀
+          </button>
+
+          {/* 思考模式切换 */}
+          <button
+            className={`btn-input-action ${thinkingEnabled ? "active" : ""}`}
             onClick={toggleThinking}
             type="button"
-            aria-label="切换思考模式"
             title={thinkingEnabled ? "思考已开启（点击关闭）" : "思考已关闭（点击开启，模型会先思考再回答）"}
           >
             🧠

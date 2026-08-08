@@ -119,6 +119,26 @@ class SSEClient {
     }
   }
 
+  async autopilot(chatSessionId: string, task: string) {
+    try {
+      await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/autopilot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task }),
+      });
+    } catch (err) {
+      console.error("[sse] autopilot failed:", err);
+    }
+  }
+
+  async abortAutopilot(chatSessionId: string) {
+    try {
+      await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/autopilot/abort`, { method: "POST" });
+    } catch (err) {
+      console.error("[sse] abortAutopilot failed:", err);
+    }
+  }
+
   onMessage(handler: MessageHandler) {
     this.handler = handler;
   }

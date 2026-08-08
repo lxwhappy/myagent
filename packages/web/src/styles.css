@@ -4816,3 +4816,41 @@
 
 /* ── 快捷指令面板 ── */
 /* quick-prompts 旧面板样式已移除，新版浮层样式在 components.css */
+
+/* ── Autopilot 进度展示 ── */
+.autopilot-progress {
+  margin: 8px 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent);
+  animation: autopilot-pulse 2s ease-in-out infinite;
+}
+@keyframes autopilot-pulse {
+  0%, 100% { border-color: var(--accent); }
+  50% { border-color: var(--accent-active); }
+}
+.autopilot-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--accent);
+}
+.autopilot-icon { font-size: 16px; }
+.autopilot-round {
+  font-size: 11px; padding: 2px 6px; border-radius: var(--radius-pill);
+  background: var(--accent); color: #fff;
+}
+.autopilot-error { color: var(--danger); font-size: 12px; }
+.autopilot-steps {
+  display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap;
+}
+.autopilot-step {
+  font-size: 12px; color: var(--muted);
+  display: flex; align-items: center; gap: 3px;
+}
+.autopilot-step.done { color: var(--accent); }
+.autopilot-step.active { color: var(--accent-active); font-weight: 600; }
+.autopilot-detail {
+  margin-top: 8px; font-size: 11px; color: var(--muted);
+  background: var(--bg); padding: 6px 8px; border-radius: var(--radius-sm);
+  white-space: pre-wrap; max-height: 60px; overflow: hidden;
+}

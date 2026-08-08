@@ -163,16 +163,27 @@ interface SessionChatState {
   availableTools: string[];    // 该会话实际可用的工具名列表
   toolsWithSource: { name: string; source: string; pkg?: string }[]; // 带来源分类的工具列表
   disabledTools: string[];     // 该会话被禁用的工具名列表
-  retryStatus?: {              // API 自动重试状态（SDK retry）
+  retryStatus?: {
     attempt: number;
     maxAttempts: number;
     delayMs: number;
     errorMessage: string;
   } | null;
+  autopilot?: {
+    phase: string;
+    round: number;
+    task: string;
+    analysis?: string;
+    plan?: string;
+    result?: string;
+    verification?: string;
+    issues?: string[];
+    error?: string;
+  } | null;
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null, autopilot: null });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
@@ -212,6 +223,8 @@ interface ChatStore {
   appendToolPartial: (id: string, toolCallId: string, delta: string) => void;
   addSkillUsed: (id: string, skill: SkillUsage) => void;
   setRetryStatus: (id: string, status: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null) => void;
+  setAutopilotState: (id: string, state: { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string }) => void;
+  finishAutopilot: (id: string, summary: string) => void;
   addDebugLLM: (id: string, evt: DebugLLMEvent) => void;
   /** 删除最后一条 assistant 消息（用于重新生成） */
   removeLastAssistant: (id: string) => string | null;
@@ -412,6 +425,19 @@ export const useChatStore = create<ChatStore>((set) => ({
   setRetryStatus: (id, status) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, retryStatus: status } } };
+  }),
+
+  setAutopilotState: (id, state) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, autopilot: state, isGenerating: true } } };
+  }),
+
+  finishAutopilot: (id, summary) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    const msgs = [...sess.messages];
+    // 把 autopilot 结果作为一条 assistant 消息注入
+    msgs.push({ id: `a-${msgCounter++}`, role: "assistant", content: summary, tools: [] });
+    return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs, autopilot: null, isGenerating: false } } };
   }),
 
   addDebugLLM: (id, evt) => set((s) => {

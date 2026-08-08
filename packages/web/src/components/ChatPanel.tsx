@@ -21,6 +21,7 @@ export function ChatPanel() {
   const setActiveSub = useChatStore(s => s.setActiveSub);
   const sid = useChatStore(s => s.activeChatSessionId);
   const subagents = useChatStore(s => sid ? s.sessions[sid]?.subagents : undefined) ?? [];
+  const autopilot = useChatStore(s => sid ? s.sessions[sid]?.autopilot : null);
   const retryStatus = useChatStore(s => sid ? s.sessions[sid]?.retryStatus : null) ?? null;
   const activeSub = useChatStore(s => {
     if (!activeSubId || !sid) return undefined;
@@ -135,6 +136,9 @@ export function ChatPanel() {
           </div>
         )}
 
+        {/* Autopilot 进度条 */}
+        {autopilot && <AutopilotProgress state={autopilot} />}
+
         {/* 消息列表：subagents 和 onOpenSub 传给 MessageItem，让 delegate_task 渲染为可跳转卡片 */}
         {messages.map((msg, i) => (
           <MessageItem
@@ -150,6 +154,47 @@ export function ChatPanel() {
 
         <div ref={bottomRef} />
       </div>
+    </div>
+  );
+}
+
+// ── Autopilot 进度展示 ──
+const PHASE_LABELS: Record<string, string> = {
+  analyze: "分析中",
+  plan: "规划中",
+  execute: "执行中",
+  verify: "验证中",
+  repair: "修复中",
+  done: "已完成",
+  error: "出错",
+};
+
+function AutopilotProgress({ state }: { state: { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string } }) {
+  const phases = ["analyze", "plan", "execute", "verify"];
+  const currentIdx = phases.indexOf(state.phase);
+  const isDone = state.phase === "done" || state.phase === "error";
+
+  return (
+    <div className="autopilot-progress">
+      <div className="autopilot-header">
+        <span className="autopilot-icon">🚀</span>
+        <span className="autopilot-title">自动驾驶</span>
+        {state.round > 0 && <span className="autopilot-round">第 {state.round} 轮</span>}
+        {state.error && <span className="autopilot-error">{state.error}</span>}
+      </div>
+      <div className="autopilot-steps">
+        {phases.map((p, i) => (
+          <span key={p} className={`autopilot-step ${i < currentIdx ? "done" : ""} ${i === currentIdx && !isDone ? "active" : ""}`}>
+            {i < currentIdx || isDone ? "✓" : i === currentIdx ? "●" : "○"} {PHASE_LABELS[p]}
+          </span>
+        ))}
+      </div>
+      {state.phase === "execute" && state.result && (
+        <div className="autopilot-detail">{state.result.slice(0, 200)}...</div>
+      )}
+      {state.phase === "verify" && state.verification && (
+        <div className="autopilot-detail">{state.verification.slice(0, 200)}</div>
+      )}
     </div>
   );
 }

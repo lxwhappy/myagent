@@ -10,11 +10,13 @@
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
 import { setLlmInterceptorSession } from "./llm-interceptor.js";
-import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput, getSkillPaths } from "./agent-registry.js";
+import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput, getSkillPaths, getAgentCwd } from "./agent-registry.js";
 import { abortSubagents } from "./subagent-runner.js";
 import { pushPendingImages } from "./tools/image-tool.js";
 import { resolveAsk, abortAsks } from "./tools/ask-tool.js";
 import { todoStore } from "./tools/index.js";
+import { runAutopilot, abortAutopilot } from "./autopilot-runner.js";
+import { config } from "./config.js";
 
 export function setupSSEGateway(app: FastifyInstance) {
   // ── 全局 SSE 事件流 ──
@@ -234,6 +236,28 @@ export function setupSSEGateway(app: FastifyInstance) {
   app.delete("/api/agent/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     destroyAgent(id);
+    reply.send({ success: true });
+  });
+
+  // ── Autopilot 全自动执行 ──
+  app.post("/api/agent/:id/autopilot", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { task?: string; agentId?: string } | null;
+    const task = body?.task?.trim();
+    if (!task) {
+      reply.status(400).send({ error: "task is required" });
+      return;
+    }
+    const cwd = getAgentCwd(id) ?? config.workDir;
+    // 异步启动，不等完成
+    runAutopilot(id, task, cwd, body?.agentId);
+    reply.send({ success: true, message: "autopilot started" });
+  });
+
+  // ── 中止 Autopilot ──
+  app.post("/api/agent/:id/autopilot/abort", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    abortAutopilot(id);
     reply.send({ success: true });
   });
 }
