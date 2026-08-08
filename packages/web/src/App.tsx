@@ -16,11 +16,10 @@ import { useThemeStore } from "./stores/theme";
 import { useUIStore } from "./stores/ui";
 
 export default function App() {
-  const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo, subToken, subDurationMs, subStatus } = useChat();
+  const { createChatSession, sendMessage, abort, loadSession, usage, modelInfo, subToken, subDurationMs, subStatus, switchAgent } = useChat();
   const wsStore = useWorkspaceStore();
   const sessions = useSessions();
   const [showDirBrowser, setShowDirBrowser] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
@@ -34,11 +33,14 @@ export default function App() {
   // Worktree 创建对话框
   const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
   const [worktreeCreating, setWorktreeCreating] = useState(false);
-  const { mode: themeMode, resolved: themeResolved, toggle: toggleTheme } = useThemeStore();
+  const themeResolved = useThemeStore(s => s.resolved);
 
   // 订阅 UI store：TaskSummaryCard 点击文件 → 切换到侧栏文件 tab
   const gotoFilesTab = useUIStore(s => s.gotoFilesTab);
   const openFileRequest = useUIStore(s => s.openFileRequest);
+  const settingsView = useUIStore(s => s.settingsView);
+  const openSettings = useUIStore(s => s.openSettings);
+  const closeSettings = useUIStore(s => s.closeSettings);
   useEffect(() => {
     if (gotoFilesTab > 0) setSidebarTab("files");
   }, [gotoFilesTab]);
@@ -227,8 +229,8 @@ export default function App() {
     } catch (e: any) { alert(e.message); }
   };
 
-  const handlersRef = useRef({ handleNewSession, wsStore, showDirBrowser, setShowDirBrowser, setShowSettings });
-  handlersRef.current = { handleNewSession, wsStore, showDirBrowser, setShowDirBrowser, setShowSettings };
+  const handlersRef = useRef({ handleNewSession, wsStore, showDirBrowser, setShowDirBrowser, openSettings, closeSettings, settingsView });
+  handlersRef.current = { handleNewSession, wsStore, showDirBrowser, setShowDirBrowser, openSettings, closeSettings, settingsView };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -239,12 +241,14 @@ export default function App() {
         if (key === "escape") { e.preventDefault(); h.setShowDirBrowser(false); }
         return;
       }
+      // 设置页面打开时 Esc 关闭
+      if (h.settingsView && key === "escape") { e.preventDefault(); h.closeSettings(); return; }
       if (key === "escape") return;
       if (isMod) {
         if (e.shiftKey && key === "w") { e.preventDefault(); h.wsStore.toggleDrawer(); }
         else if (!e.shiftKey && key === "n") { e.preventDefault(); h.handleNewSession(); }
         else if (!e.shiftKey && key === "b") { e.preventDefault(); h.wsStore.toggleSidebar(); }
-        else if (!e.shiftKey && key === ",") { e.preventDefault(); h.setShowSettings(true); }
+        else if (!e.shiftKey && key === ",") { e.preventDefault(); h.openSettings(); }
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -506,18 +510,18 @@ export default function App() {
         <div className="sb-footer">
           <SidebarTokenRow usage={usage} modelInfo={modelInfo} subToken={subToken} subDurationMs={subDurationMs} subStatus={subStatus} />
           <div className="user-row">
-            <div className="user-avatar" onClick={() => setShowSettings(true)}>鑫</div>
-            <span className="user-name-sb" onClick={() => setShowSettings(true)}>小鑫</span>
+            <div className="user-avatar" onClick={() => openSettings("agents")}>鑫</div>
+            <span className="user-name-sb" onClick={() => openSettings("agents")}>小鑫</span>
             <span className="user-plan-tag">{modelInfo?.name ?? modelInfo?.model ?? "zai"}</span>
             <div className="user-row-actions">
               <button
                 className="theme-toggle-btn"
-                onClick={toggleTheme}
-                title={themeMode === "auto" ? `跟随系统（当前：${themeResolved === "dark" ? "深色" : "浅色"}）— 点击切换` : (themeResolved === "dark" ? "深色模式" : "浅色模式")}
+                onClick={() => openSettings("appearance")}
+                title="外观设置"
               >
                 <Icon name={themeResolved === "dark" ? "i-sun" : "i-moon"} size={16} />
               </button>
-              <button className="settings-toggle-btn" onClick={() => setShowSettings(true)} title="设置">
+              <button className="settings-toggle-btn" onClick={() => openSettings()} title="设置 (⌘,)">
                 <Icon name="i-settings" size={15} />
               </button>
             </div>
@@ -675,11 +679,12 @@ export default function App() {
       {showDirBrowser && (
         <DirBrowser onSelect={handleSelectDir} onCancel={() => setShowDirBrowser(false)} />
       )}
-      {showSettings && (
+      {settingsView && (
         <SettingsPanel
-          onClose={() => setShowSettings(false)}
+          onClose={closeSettings}
           onSwitchWorkspace={handleSwitchWs}
           onAddWorkspace={() => setShowDirBrowser(true)}
+          onSwitchAgent={switchAgent}
         />
       )}
       {showWorktreeDialog && activeWs && gitBranches && (

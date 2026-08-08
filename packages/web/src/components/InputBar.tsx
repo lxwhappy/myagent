@@ -9,9 +9,8 @@ import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
 import { useCodeRefStore, formatCodeRefs, type CodeRef } from "../stores/code-refs";
 import { useQuickPromptStore, type QuickPrompt } from "../stores/quick-prompts";
 import { Icon } from "./Icon";
-import { AgentManager } from "./AgentManager";
-import { AgentTeamManager } from "./AgentTeamManager";
 import { useAgentTeamsStore } from "../stores/agent-teams";
+import { useUIStore } from "../stores/ui";
 import { QuickPromptManager } from "./QuickPromptManager";
 
 const MAX_HEIGHT = 200;
@@ -72,10 +71,9 @@ export function InputBar() {
 
   // ── Agent 选择器 ──
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
-  const [showAgentManager, setShowAgentManager] = useState(false);
-  const [showTeamManager, setShowTeamManager] = useState(false);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
+  const openSettings = useUIStore(s => s.openSettings);
 
   // ── Agent 团队 ──
   const teams = useAgentTeamsStore(s => s.teams);
@@ -487,7 +485,7 @@ export function InputBar() {
                 )}
                 <button
                   className="agent-selector-manage"
-                  onClick={() => { setAgentDropdownOpen(false); setShowTeamManager(true); }}
+                  onClick={() => { setAgentDropdownOpen(false); openSettings("teams"); }}
                   type="button"
                 >
                   <Icon name="i-users" size={14} />
@@ -495,7 +493,7 @@ export function InputBar() {
                 </button>
                 <button
                   className="agent-selector-manage"
-                  onClick={() => { setAgentDropdownOpen(false); setShowAgentManager(true); }}
+                  onClick={() => { setAgentDropdownOpen(false); openSettings("agents"); }}
                   type="button"
                 >
                   <Icon name="i-settings" size={14} />
@@ -722,12 +720,6 @@ export function InputBar() {
         </span>
       </div>
 
-      {showAgentManager && (
-        <AgentManager onClose={() => setShowAgentManager(false)} onSwitchActive={(id) => switchAgent(id)} />
-      )}
-      {showTeamManager && (
-        <AgentTeamManager onClose={() => setShowTeamManager(false)} />
-      )}
       {showPromptManager && (
         <QuickPromptManager onClose={() => setShowPromptManager(false)} />
       )}

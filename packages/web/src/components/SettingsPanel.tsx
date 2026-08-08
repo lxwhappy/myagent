@@ -1,12 +1,15 @@
-// components/SettingsPanel.tsx — 设置面板：模型切换 / Skills 列表 / MCP 配置
+// components/SettingsPanel.tsx — 全屏设置页面
+// 整合所有配置：Agent / 团队 / 模型 / 外观 / Skills / 扩展 / MCP / 定时任务 / 工作空间 / Debug
 // Claude Warm Light 暖色调设计
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useDebugStore } from "../stores/debug";
-
-type Tab = "models" | "skills" | "extensions" | "mcp" | "cron" | "workspace" | "debug";
+import { useUIStore, type SettingsSection } from "../stores/ui";
+import { useThemeStore, type ThemeMode } from "../stores/theme";
+import { AgentManagerSection } from "./AgentManager";
+import { AgentTeamManagerSection } from "./AgentTeamManager";
 
 interface ModelInfo {
   id: string;
@@ -40,53 +43,123 @@ interface McpServerConfig {
   env?: Record<string, string>;
 }
 
-export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace }: {
+export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace, onSwitchAgent }: {
   onClose: () => void;
   onSwitchWorkspace: (wsId: string) => void;
   onAddWorkspace: () => void;
+  onSwitchAgent?: (id: string) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("models");
+  // 初始分区从 UI store 读取（外部快捷入口可指定）
+  const initialSection = useUIStore(s => s.settingsView?.section ?? "models");
+  const [tab, setTab] = useState<SettingsSection>(initialSection);
+  // 外部入口重复触发时同步分区（如已打开时再次点不同入口）
+  useEffect(() => { setTab(initialSection); }, [initialSection]);
 
-  const NAV_ITEMS: { key: Tab; icon: string; label: string }[] = [
-    { key: "models", icon: "🤖", label: "模型" },
-    { key: "skills", icon: "⚡", label: "Skills" },
-    { key: "extensions", icon: "📦", label: "扩展" },
-    { key: "mcp", icon: "🔌", label: "MCP" },
-    { key: "cron", icon: "🕐", label: "定时任务" },
-    { key: "workspace", icon: "📁", label: "工作空间" },
-    { key: "debug", icon: "🔧", label: "Debug" },
+  interface NavGroup { label: string; items: { key: SettingsSection; icon: string; label: string }[] }
+  const NAV_GROUPS: NavGroup[] = [
+    {
+      label: "Agent",
+      items: [
+        { key: "agents", icon: "🤖", label: "Agent 管理" },
+        { key: "teams", icon: "👥", label: "团队管理" },
+        { key: "models", icon: "⚡", label: "模型" },
+      ],
+    },
+    {
+      label: "偏好",
+      items: [
+        { key: "appearance", icon: "🎨", label: "外观" },
+        { key: "skills", icon: "📖", label: "Skills" },
+        { key: "extensions", icon: "📦", label: "扩展" },
+        { key: "mcp", icon: "🔌", label: "MCP" },
+      ],
+    },
+    {
+      label: "系统",
+      items: [
+        { key: "cron", icon: "🕐", label: "定时任务" },
+        { key: "workspace", icon: "📁", label: "工作空间" },
+        { key: "debug", icon: "🔧", label: "Debug" },
+      ],
+    },
   ];
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>设置</h2>
-          <button className="settings-close" onClick={onClose} title="关闭">✕</button>
+    <div className="settings-page">
+      <div className="settings-page-header">
+        <h2>设置</h2>
+        <button className="settings-close" onClick={onClose} title="关闭 (Esc)">✕</button>
+      </div>
+      <div className="settings-layout">
+        <nav className="settings-nav settings-nav-grouped">
+          {NAV_GROUPS.map(group => (
+            <div key={group.label} className="settings-nav-section">
+              <div className="settings-nav-group-label">{group.label}</div>
+              {group.items.map(item => (
+                <button
+                  key={item.key}
+                  className={`settings-nav-item ${tab === item.key ? "active" : ""}`}
+                  onClick={() => setTab(item.key)}
+                >
+                  <span className="settings-nav-icon">{item.icon}</span>
+                  <span className="settings-nav-label">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="settings-body">
+          {tab === "agents" && <AgentManagerSection onSwitchActive={onSwitchAgent} />}
+          {tab === "teams" && <AgentTeamManagerSection />}
+          {tab === "models" && <ModelsTab />}
+          {tab === "appearance" && <AppearanceTab />}
+          {tab === "skills" && <SkillsTab />}
+          {tab === "extensions" && <ExtensionsTab />}
+          {tab === "mcp" && <McpTab />}
+          {tab === "cron" && <CronTab />}
+          {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
+          {tab === "debug" && <DebugTab />}
         </div>
-        <div className="settings-layout">
-          <nav className="settings-nav">
-            {NAV_ITEMS.map(item => (
-              <button
-                key={item.key}
-                className={`settings-nav-item ${tab === item.key ? "active" : ""}`}
-                onClick={() => setTab(item.key)}
-              >
-                <span className="settings-nav-icon">{item.icon}</span>
-                <span className="settings-nav-label">{item.label}</span>
-              </button>
-            ))}
-          </nav>
-          <div className="settings-body">
-            {tab === "models" && <ModelsTab />}
-            {tab === "skills" && <SkillsTab />}
-            {tab === "extensions" && <ExtensionsTab />}
-            {tab === "mcp" && <McpTab />}
-            {tab === "cron" && <CronTab />}
-            {tab === "workspace" && <WorkspaceTab onSwitchWorkspace={onSwitchWorkspace} onAddWorkspace={onAddWorkspace} onClose={onClose} />}
-            {tab === "debug" && <DebugTab />}
-          </div>
-        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 外观 Tab（主题模式选择） ──
+function AppearanceTab() {
+  const { mode, resolved, setMode } = useThemeStore();
+
+  const OPTIONS: { value: ThemeMode; icon: string; label: string; desc: string }[] = [
+    { value: "light", icon: "☀️", label: "浅色", desc: "明亮的暖白背景" },
+    { value: "dark", icon: "🌙", label: "深色", desc: "深色护眼背景" },
+    { value: "auto", icon: "🖥️", label: "跟随系统", desc: "自动匹配系统深浅色设置" },
+  ];
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">外观</div>
+      <p className="settings-desc">选择应用的视觉主题。跟随系统模式会实时响应操作系统的深浅色切换。</p>
+      <div className="theme-options">
+        {OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`theme-option-card ${mode === opt.value ? "active" : ""}`}
+            onClick={() => setMode(opt.value)}
+          >
+            <span className="theme-option-icon">{opt.icon}</span>
+            <div className="theme-option-text">
+              <span className="theme-option-label">
+                {opt.label}
+                {opt.value === "auto" && resolved && (
+                  <span className="theme-option-resolved">（当前：{resolved === "dark" ? "深色" : "浅色"}）</span>
+                )}
+              </span>
+              <span className="theme-option-desc">{opt.desc}</span>
+            </div>
+            {mode === opt.value && <span className="theme-option-check">✓</span>}
+          </button>
+        ))}
       </div>
     </div>
   );

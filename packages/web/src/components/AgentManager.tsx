@@ -1,7 +1,10 @@
-// components/AgentManager.tsx — Agent 管理弹窗：增删改查角色预设
+// components/AgentManager.tsx — Agent 管理：增删改查角色预设
 //
 // 每个预设的 systemPrompt 会追加到 AGENTS.md 之后，用于定义 Agent 的人设/专长。
 // 内置「默认」Agent 不可删除/改名，但所有 Agent 的配置都可编辑。
+//
+// AgentManagerSection：内联内容（嵌入设置页面），无 portal/overlay。
+// AgentManager：弹窗 wrapper（向后兼容，目前仅旧入口使用）。
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -25,7 +28,11 @@ interface EditState {
 
 const blankEdit: EditState = { isNew: true, icon: "🤖", name: "", description: "", systemPrompt: "", model: "", disabledTools: [], enabledMcpServers: [] };
 
-export function AgentManager({ onClose, onSwitchActive }: { onClose: () => void; onSwitchActive?: (id: string) => void }) {
+/**
+ * Agent 管理内联内容 — 嵌入设置页面使用。
+ * onSwitchActive: 用户点击设为当前 Agent 时触发（用于切换会话的 agent session）。
+ */
+export function AgentManagerSection({ onSwitchActive }: { onSwitchActive?: (id: string) => void }) {
   const agents = useAgentsStore(s => s.agents);
   const activeAgentId = useAgentsStore(s => s.activeAgentId);
   const [editing, setEditing] = useState<EditState | null>(null);
@@ -77,9 +84,155 @@ export function AgentManager({ onClose, onSwitchActive }: { onClose: () => void;
   const handleActivate = (id: string) => {
     useAgentsStore.getState().setActive(id);
     onSwitchActive?.(id);
-    onClose();
   };
 
+  if (editing) {
+    return (
+      <div className="agent-mgr-form">
+        <div className="agent-edit-field">
+          <label>图标</label>
+          <div className="agent-emoji-row">
+            <input
+              className="agent-emoji-input"
+              value={editing.icon}
+              onChange={(e) => setEditing({ ...editing, icon: e.target.value.slice(0, 4) })}
+              maxLength={4}
+            />
+            <div className="agent-emoji-choices">
+              {EMOJI_CHOICES.map(em => (
+                <button
+                  key={em}
+                  className={`agent-emoji-choice ${editing.icon === em ? "sel" : ""}`}
+                  onClick={() => setEditing({ ...editing, icon: em })}
+                  type="button"
+                >{em}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="agent-edit-field">
+          <label>名称</label>
+          <input
+            className="settings-input"
+            value={editing.name}
+            onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+            placeholder="如：翻译官、代码审查员"
+            maxLength={30}
+          />
+        </div>
+
+        <div className="agent-edit-field">
+          <label>描述（可选）</label>
+          <input
+            className="settings-input"
+            value={editing.description}
+            onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+            placeholder="一句话说明这个 Agent 擅长什么"
+            maxLength={100}
+          />
+        </div>
+
+        <div className="agent-edit-field">
+          <label>模型（可选，留空用默认）</label>
+          <input
+            className="settings-input"
+            value={editing.model}
+            onChange={(e) => setEditing({ ...editing, model: e.target.value })}
+            placeholder="如：glm-4.7"
+          />
+        </div>
+
+        <div className="agent-edit-field">
+          <label>工具开关 {!editing.disabledTools.length && <span className="agent-tools-hint">（全部启用）</span>}</label>
+          <AgentToolsToggle
+            disabledTools={editing.disabledTools}
+            onChange={(tools) => setEditing({ ...editing, disabledTools: tools })}
+          />
+        </div>
+
+        <div className="agent-edit-field">
+          <label>MCP 工具 {editing.enabledMcpServers.length === 0 && <span className="agent-tools-hint">（默认全部关闭）</span>}</label>
+          <AgentMcpSelector
+            enabledMcpServers={editing.enabledMcpServers}
+            onChange={(tools) => setEditing({ ...editing, enabledMcpServers: tools })}
+          />
+        </div>
+
+        <div className="agent-edit-field">
+          <label>角色指令（System Prompt）</label>
+          <textarea
+            className="agent-edit-prompt"
+            value={editing.systemPrompt}
+            onChange={(e) => setEditing({ ...editing, systemPrompt: e.target.value })}
+            placeholder={"定义这个 Agent 的人设、专长、语气、规则…\n例如：\n你是一位资深前端工程师，擅长 React 和 TypeScript。\n回答要简洁，给出可直接运行的代码。"}
+            rows={8}
+          />
+          <div className="agent-edit-hint">
+            这段指令会追加到项目 AGENTS.md 之后，对使用该 Agent 的会话生效。
+            {!editing.isNew && editing.id && (
+              <FullPromptBtn agentId={editing.id} />
+            )}
+          </div>
+        </div>
+
+        <div className="agent-edit-actions">
+          <button className="settings-close-btn" onClick={() => setEditing(null)} disabled={saving}>取消</button>
+          <button className="settings-save-btn" onClick={handleSave} disabled={saving}>
+            {saving ? "保存中…" : "保存"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="agent-mgr-body">
+      <div className="agent-mgr-list">
+        {agents.map(a => (
+          <div
+            key={a.id}
+            className={`agent-mgr-row ${activeAgentId === a.id ? "active" : ""}`}
+            onClick={() => handleActivate(a.id)}
+          >
+            <span className="agent-mgr-icon">{a.icon}</span>
+            <div className="agent-mgr-info">
+              <span className="agent-mgr-name">
+                {a.name}
+                {a.isBuiltIn && <span className="agent-mgr-builtin">内置</span>}
+              </span>
+              {a.description && <span className="agent-mgr-desc">{a.description}</span>}
+              {a.systemPrompt && (
+                <span className="agent-mgr-prompt" title={a.systemPrompt}>
+                  {a.systemPrompt.length > 80 ? a.systemPrompt.slice(0, 80) + "…" : a.systemPrompt}
+                </span>
+              )}
+              {a.model && <span className="agent-mgr-model">{a.model}</span>}
+            </div>
+            {activeAgentId === a.id && <span className="agent-mgr-current" title="当前使用">●</span>}
+            <div className="agent-mgr-actions" onClick={(e) => e.stopPropagation()}>
+              <button className="agent-mgr-edit" onClick={() => startEdit(a)} title="编辑">
+                <Icon name="i-edit" size={14} />
+              </button>
+              {!a.isBuiltIn && (
+                <button className="agent-mgr-del" onClick={() => handleDelete(a)} title="删除">
+                  <Icon name="i-trash" size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button className="agent-mgr-add" onClick={startNew}>
+        <Icon name="i-plus" size={16} />
+        <span>新建 Agent</span>
+      </button>
+    </div>
+  );
+}
+
+// ── 弹窗 wrapper（向后兼容，旧入口使用；新入口统一走设置页面） ──
+export function AgentManager({ onClose, onSwitchActive }: { onClose: () => void; onSwitchActive?: (id: string) => void }) {
   return createPortal(
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-modal agent-manager-modal" onClick={(e) => e.stopPropagation()}>
@@ -87,146 +240,7 @@ export function AgentManager({ onClose, onSwitchActive }: { onClose: () => void;
           <h2>Agent 管理</h2>
           <button className="settings-close" onClick={onClose} title="关闭">✕</button>
         </div>
-
-        {!editing ? (
-          <div className="agent-mgr-body">
-            <div className="agent-mgr-list">
-              {agents.map(a => (
-                <div
-                  key={a.id}
-                  className={`agent-mgr-row ${activeAgentId === a.id ? "active" : ""}`}
-                  onClick={() => handleActivate(a.id)}
-                >
-                  <span className="agent-mgr-icon">{a.icon}</span>
-                  <div className="agent-mgr-info">
-                    <span className="agent-mgr-name">
-                      {a.name}
-                      {a.isBuiltIn && <span className="agent-mgr-builtin">内置</span>}
-                    </span>
-                    {a.description && <span className="agent-mgr-desc">{a.description}</span>}
-                    {a.systemPrompt && (
-                      <span className="agent-mgr-prompt" title={a.systemPrompt}>
-                        {a.systemPrompt.length > 80 ? a.systemPrompt.slice(0, 80) + "…" : a.systemPrompt}
-                      </span>
-                    )}
-                    {a.model && <span className="agent-mgr-model">{a.model}</span>}
-                  </div>
-                  {activeAgentId === a.id && <span className="agent-mgr-current" title="当前使用">●</span>}
-                  <div className="agent-mgr-actions" onClick={(e) => e.stopPropagation()}>
-                    <button className="agent-mgr-edit" onClick={() => startEdit(a)} title="编辑">
-                      <Icon name="i-edit" size={14} />
-                    </button>
-                    {!a.isBuiltIn && (
-                      <button className="agent-mgr-del" onClick={() => handleDelete(a)} title="删除">
-                        <Icon name="i-trash" size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button className="agent-mgr-add" onClick={startNew}>
-              <Icon name="i-plus" size={16} />
-              <span>新建 Agent</span>
-            </button>
-          </div>
-        ) : (
-          <div className="agent-mgr-form">
-            <div className="agent-edit-field">
-              <label>图标</label>
-              <div className="agent-emoji-row">
-                <input
-                  className="agent-emoji-input"
-                  value={editing.icon}
-                  onChange={(e) => setEditing({ ...editing, icon: e.target.value.slice(0, 4) })}
-                  maxLength={4}
-                />
-                <div className="agent-emoji-choices">
-                  {EMOJI_CHOICES.map(em => (
-                    <button
-                      key={em}
-                      className={`agent-emoji-choice ${editing.icon === em ? "sel" : ""}`}
-                      onClick={() => setEditing({ ...editing, icon: em })}
-                      type="button"
-                    >{em}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="agent-edit-field">
-              <label>名称</label>
-              <input
-                className="settings-input"
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                placeholder="如：翻译官、代码审查员"
-                maxLength={30}
-              />
-            </div>
-
-            <div className="agent-edit-field">
-              <label>描述（可选）</label>
-              <input
-                className="settings-input"
-                value={editing.description}
-                onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                placeholder="一句话说明这个 Agent 擅长什么"
-                maxLength={100}
-              />
-            </div>
-
-            <div className="agent-edit-field">
-              <label>模型（可选，留空用默认）</label>
-              <input
-                className="settings-input"
-                value={editing.model}
-                onChange={(e) => setEditing({ ...editing, model: e.target.value })}
-                placeholder="如：glm-4.7"
-              />
-            </div>
-
-            <div className="agent-edit-field">
-              <label>工具开关 {!editing.disabledTools.length && <span className="agent-tools-hint">（全部启用）</span>}</label>
-              <AgentToolsToggle
-                disabledTools={editing.disabledTools}
-                onChange={(tools) => setEditing({ ...editing, disabledTools: tools })}
-              />
-            </div>
-
-            <div className="agent-edit-field">
-              <label>MCP 工具 {editing.enabledMcpServers.length === 0 && <span className="agent-tools-hint">（默认全部关闭）</span>}</label>
-              <AgentMcpSelector
-                enabledMcpServers={editing.enabledMcpServers}
-                onChange={(tools) => setEditing({ ...editing, enabledMcpServers: tools })}
-              />
-            </div>
-
-            <div className="agent-edit-field">
-              <label>角色指令（System Prompt）</label>
-              <textarea
-                className="agent-edit-prompt"
-                value={editing.systemPrompt}
-                onChange={(e) => setEditing({ ...editing, systemPrompt: e.target.value })}
-                placeholder={"定义这个 Agent 的人设、专长、语气、规则…\n例如：\n你是一位资深前端工程师，擅长 React 和 TypeScript。\n回答要简洁，给出可直接运行的代码。"}
-                rows={8}
-              />
-              <div className="agent-edit-hint">
-                这段指令会追加到项目 AGENTS.md 之后，对使用该 Agent 的会话生效。
-                {!editing.isNew && editing.id && (
-                  <FullPromptBtn agentId={editing.id} />
-                )}
-              </div>
-            </div>
-
-            <div className="agent-edit-actions">
-              <button className="settings-close-btn" onClick={() => setEditing(null)} disabled={saving}>取消</button>
-              <button className="settings-save-btn" onClick={handleSave} disabled={saving}>
-                {saving ? "保存中…" : "保存"}
-              </button>
-            </div>
-          </div>
-        )}
+        <AgentManagerSection onSwitchActive={(id) => { onSwitchActive?.(id); onClose(); }} />
       </div>
     </div>,
     document.body,
@@ -247,8 +261,7 @@ const FALLBACK_TOOLS_SRC: ToolItem[] = [
   { name: "edit", source: "builtin" }, { name: "bash", source: "builtin" },
   { name: "zai_web_search", source: "custom" }, { name: "web_fetch", source: "custom" },
   { name: "analyze_image", source: "custom" }, { name: "todo", source: "custom" },
-  { name: "delegate_task", source: "custom" },
-  { name: "cron_task", source: "custom" },
+  { name: "delegate_task", source: "custom" }, { name: "cron_task", source: "custom" },
   { name: "source_check", source: "extension", pkg: "pi-web-access" },
   { name: "fetch_content", source: "extension", pkg: "pi-web-access" },
   { name: "get_search_content", source: "extension", pkg: "pi-web-access" },
