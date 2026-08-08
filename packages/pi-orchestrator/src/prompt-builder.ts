@@ -29,6 +29,7 @@ export function buildPrompt(ctx: PromptBuildContext): string {
   membersWithIds.forEach((m, i) => {
     memberVars[`member_${i}_name`] = m.name;
     memberVars[`member_${i}_role`] = m.role;
+    memberVars[`member_${i}_icon`] = m.icon;
     memberVars[`member_${i}_instructions`] = m.instructions ? `\n${m.role}额外要求：${m.instructions}\n` : "";
     // 特殊条件变量：member_N_nameexists_true / member_N_nameexists_false
     memberVars[`member_${i}_nameexists_true`] = members[i] ? "" : "";

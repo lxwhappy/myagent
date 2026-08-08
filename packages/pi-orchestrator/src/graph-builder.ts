@@ -62,6 +62,13 @@ export function assignNodeIds(
     case "ring":
       return members.map((m, i) => ({ ...m, nodeId: `debater-${i}` }));
 
+    case "loop":
+      // 第一个是 executor，第二个是 evaluator，第三个（可选）是 finalizer
+      return members.map((m, i) => ({
+        ...m,
+        nodeId: i === 0 ? "executor" : i === 1 ? "evaluator" : "finalizer",
+      }));
+
     case "dag":
     default:
       return members.map((m, i) => ({ ...m, nodeId: `node-${i}` }));
@@ -168,6 +175,27 @@ export function buildGraph(
           members[next].nodeId,
           { dashed: false },
         ));
+      }
+      return { nodes, edges };
+    }
+
+    // ── loop: executor → evaluator → (back to executor if FAIL) ──
+    case "loop": {
+      const executor = members[0];
+      const evaluator = members[1];
+      const finalizer = members[2];
+      const nodes = [
+        buildNode(executor),
+        buildNode(evaluator),
+        ...(finalizer ? [buildNode(finalizer)] : []),
+      ];
+      const edges: FlowEdgeDef[] = [
+        edge(executor.nodeId, evaluator.nodeId, { label: "评估" }),
+        // 回环边（虚线，表示条件回退）
+        edge(evaluator.nodeId, executor.nodeId, { label: "FAIL 重试", dashed: true, animated: true }),
+      ];
+      if (finalizer) {
+        edges.push(edge(evaluator.nodeId, finalizer.nodeId, { label: "PASS" }));
       }
       return { nodes, edges };
     }

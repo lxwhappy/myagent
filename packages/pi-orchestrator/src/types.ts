@@ -14,6 +14,7 @@ export type GraphTopology =
   | "star"      // 中心→[A,B,C]（supervisor, router）
   | "fanout"    // Split→[A,B,C]→Merge（parallel, mapreduce）
   | "ring"      // A↔B↔C↔A（debate）
+  | "loop"      // executor→evaluator 回环（loop）
   | "dag";      // 用户自定义边（custom）
 
 /** Dagre 布局方向 */
@@ -118,4 +119,6 @@ export interface PromptBuildContext {
   userMessage: string;
   /** 模式选项的实际值（key → value） */
   optionValues: Record<string, string | number>;
+  /** 共享黑板：前序步骤的产出，注入到后续步骤的 context（loop 模式用） */
+  sharedContext?: string;
 }

@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 
-export type GraphTopology = "linear" | "star" | "fanout" | "ring" | "dag";
+export type GraphTopology = "linear" | "star" | "fanout" | "ring" | "loop" | "dag";
 export type LayoutDirection = "LR" | "TB";
 
 export interface ModeOption {

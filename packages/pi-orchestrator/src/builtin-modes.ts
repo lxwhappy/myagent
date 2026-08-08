@@ -241,4 +241,58 @@ export const BUILTIN_MODES: OrchestrationMode[] = [
 
 用户请求：{{user_message}}`,
   },
+
+  // ── 9. Loop 循环迭代 ──
+  {
+    id: "loop",
+    name: "循环迭代",
+    icon: "🔄",
+    description: "执行 → 评估 → 不达标重试，死磕到底",
+    detail: "第一个成员负责执行，第二个负责评估，不通过则带反馈重试。适合需要反复打磨的任务",
+    isBuiltIn: true,
+    minMembers: 2,
+    maxMembers: 3,
+    topology: "loop",
+    layout: "LR",
+    options: [
+      { key: "maxRetries", label: "最大循环次数", type: "number", default: 3, min: 1, max: 10 },
+    ],
+    promptTemplate: `[团队任务 · 循环迭代模式] 执行 → 评估 → 不达标重试，直到通过或达到上限。
+
+角色分配：
+- [executor] {{member_0_icon}} {{member_0_name}}（{{member_0_role}}）— 负责执行任务
+- [evaluator] {{member_1_icon}} {{member_1_name}}（{{member_1_role}}）— 负责评估质量
+
+执行流程（最多循环 {{max_retries}} 次）：
+
+第 1 轮：
+1. 调用 delegate_task（goal 开头包含 [team:executor]），让 {{member_0_name}} 完成用户请求
+2. 调用 delegate_task（goal 开头包含 [team:evaluator]），让 {{member_1_name}} 评估执行结果
+   - 评估输出格式必须为：
+     - PASS — 如果质量达标，附简要说明
+     - FAIL — 如果不达标，列出具体问题
+3. 如果 PASS → 输出最终结果，结束
+4. 如果 FAIL → 进入第 2 轮
+
+第 2+ 轮（修复迭代）：
+1. 调用 delegate_task（goal 开头包含 [team:executor]），让 {{member_0_name}} 根据评估反馈修复
+   - context 参数必须包含上一轮评估者的具体问题列表
+2. 再次调用 {{member_1_name}} 评估（同第 1 轮步骤 2）
+3. 如果 PASS → 输出最终结果，结束
+4. 如果 FAIL 且未达上限 → 继续下一轮
+
+如果达到 {{max_retries}} 次仍未通过：
+- 输出当前最佳结果
+- 列出仍未解决的问题
+- 不要说"已完成"，要明确标注未完成的项
+
+关键规则：
+- 每轮 executor 的 context 必须包含评估者的反馈
+- 评估者必须给出明确的 PASS/FAIL 判断，不能模棱两可
+- executor 修复时必须针对评估者提出的问题逐条修复
+{{member_2_nameexists_true}}
+- {{member_2_name}}（{{member_2_role}}）作为最终审核者，在 executor 和 evaluator 都通过后做最终确认{{member_2_nameexists_false}}
+
+用户请求：{{user_message}}`,
+  },
 ];

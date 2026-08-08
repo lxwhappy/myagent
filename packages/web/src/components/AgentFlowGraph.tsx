@@ -444,7 +444,7 @@ function AgentFlowGraphInner(props: AgentFlowGraphProps) {
 }
 
 // ── 辅助：根据团队成员和拓扑类型自动生成 DAG 节点和边（前端版） ──
-export type GraphTopology = "linear" | "star" | "fanout" | "ring" | "dag";
+export type GraphTopology = "linear" | "star" | "fanout" | "ring" | "loop" | "dag";
 
 export function buildFlowFromTopology(
   members: { id: string; name: string; role: string; icon: string }[],
@@ -518,6 +518,23 @@ export function buildFlowFromTopology(
       return { nodes, edges };
     }
 
+    case "loop": {
+      const nodeIds = members.map((_, i) =>
+        i === 0 ? "executor" : i === 1 ? "evaluator" : "finalizer");
+      const nodes: FlowNodeDef[] = members.map((m, i) => ({
+        id: nodeIds[i], label: m.name, role: m.role, icon: m.icon,
+        status: statuses?.[nodeIds[i]]?.status,
+      }));
+      const edges: FlowEdgeDef[] = [
+        edge("executor", "evaluator", { label: "评估" }),
+        edge("evaluator", "executor", { label: "FAIL 重试", dashed: true, animated: true }),
+      ];
+      if (members.length > 2) {
+        edges.push(edge("evaluator", "finalizer", { label: "PASS" }));
+      }
+      return { nodes, edges };
+    }
+
     case "dag":
     default: {
       const nodes: FlowNodeDef[] = members.map((m, i) => ({
@@ -546,7 +563,7 @@ export function buildFlowFromTeam(
   const modeToTopology: Record<string, GraphTopology> = {
     pipeline: "linear", supervisor: "star", evaluator: "linear",
     parallel: "fanout", debate: "ring", router: "star",
-    mapreduce: "fanout", custom: "dag",
+    mapreduce: "fanout", custom: "dag", loop: "loop",
   };
   const topology = modeToTopology[mode] || "linear";
   const adaptedMembers = members.map(m => ({ id: m.agentId, name: m.name, role: m.role, icon: m.icon }));
