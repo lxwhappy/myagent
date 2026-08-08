@@ -8,6 +8,7 @@ import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
 import { useAgentsStore } from "./stores/agents";
+import { useAgentTeamsStore } from "./stores/agent-teams";
 import { useSessions } from "./hooks/useSessions";
 import { sseClient } from "./services/sse-client";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -86,6 +87,8 @@ export default function App() {
 
     // 加载 Agent 预设列表
     useAgentsStore.getState().load().catch(e => console.error("Failed to load agents:", e));
+    // 加载 Agent 团队列表
+    useAgentTeamsStore.getState().load().catch(e => console.error("Failed to load agent teams:", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -964,6 +967,7 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
   onClose: () => void;
 }) {
   const [logs, setLogs] = useState<{ name: string; size: number; mtime: string }[] | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -975,8 +979,20 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
 
   const downloadLog = (filename: string) => {
     if (!sessionId) return;
-    // 直接用浏览器导航触发下载（后端设置了 Content-Disposition）
     window.open(`/api/sessions/${sessionId}/agent-logs/${encodeURIComponent(filename)}`, "_blank");
+  };
+
+  const openLogDir = () => {
+    if (!sessionId) return;
+    fetch(`/api/sessions/${sessionId}/agent-logs-dir`).catch(() => {});
+  };
+
+  const copySessionId = () => {
+    if (!sessionId) return;
+    navigator.clipboard.writeText(sessionId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   };
 
   const fmtSize = (bytes: number) => {
@@ -994,6 +1010,16 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
     <>
       <div className="download-menu-overlay" onClick={onClose} />
       <div className="download-menu">
+        {/* Session ID 快速复制 */}
+        {sessionId && (
+          <div className="dm-session-id">
+            <span className="dm-session-id-label">Session ID</span>
+            <code className="dm-session-id-value" title={sessionId}>{sessionId}</code>
+            <button className="dm-session-id-copy" onClick={copySessionId} type="button">
+              {copied ? "✓ 已复制" : "复制"}
+            </button>
+          </div>
+        )}
         <button className="download-menu-item" onClick={() => { onDownloadJson(); onClose(); }}>
           <span className="dm-icon">📄</span>
           <div className="dm-text">
@@ -1009,7 +1035,12 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
           </div>
         </button>
         <div className="download-menu-divider" />
-        <div className="download-menu-label">Agent 原始日志 (JSONL)</div>
+        <div className="download-menu-label-row">
+          <span className="download-menu-label">Agent 原始日志 (JSONL)</span>
+          <button className="download-menu-open-dir" onClick={openLogDir} type="button" title="在 Finder 中打开日志目录">
+            📂 打开目录
+          </button>
+        </div>
         {logs === null ? (
           <div className="download-menu-loading">加载中…</div>
         ) : logs.length === 0 ? (

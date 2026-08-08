@@ -704,8 +704,35 @@ textarea { resize: none; }
 
 .download-menu-divider { height: 1px; background: var(--border); margin: 4px 8px; }
 .download-menu-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 6px 10px 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.download-menu-label-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 4px; }
+.download-menu-open-dir {
+  font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  cursor: pointer; transition: all var(--motion-fast);
+}
+.download-menu-open-dir:hover { color: var(--accent); border-color: var(--accent); }
 .download-menu-loading, .download-menu-empty { padding: 12px 10px; font-size: 12px; color: var(--muted); text-align: center; }
 .download-menu-logs { display: flex; flex-direction: column; gap: 1px; }
+
+/* Session ID 快速复制条 */
+.dm-session-id {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; margin-bottom: 4px;
+  background: var(--bg); border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.dm-session-id-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+.dm-session-id-value {
+  flex: 1; min-width: 0; font-size: 11px; font-family: var(--font-mono);
+  color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dm-session-id-copy {
+  flex-shrink: 0; font-size: 11px; padding: 2px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: all var(--motion-fast);
+}
+.dm-session-id-copy:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Icon buttons */
 .icon-btn {

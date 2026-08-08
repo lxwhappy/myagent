@@ -316,6 +316,9 @@ function FileTree({
 export function FilePreviewPane() {
   const ws = useWorkspace();
   const wsStore = useWorkspaceStore();
+  const openFiles = useWorkspaceStore(s => s.openFiles);
+  const activeFilePath = useWorkspaceStore(s => s.activeFilePath);
+  const closeFileTab = useWorkspaceStore(s => s.closeFileTab);
   const [viewMode, setViewMode] = useState<"source" | "diff">("source");
   const [diffData, setDiffData] = useState<string | null | undefined>(undefined); // undefined=未加载, null=无diff, string=diff内容
   const [diffLoading, setDiffLoading] = useState(false);
@@ -323,9 +326,19 @@ export function FilePreviewPane() {
   const [selInfo, setSelInfo] = useState<{ start: number; end: number; text: string } | null>(null);
 
   const close = () => {
-    ws.closeFile();
     wsStore.setDrawerOpen(false);
   };
+
+  // 切换 tab（点击 tab header）
+  const switchTab = useCallback((path: string) => {
+    wsStore.setActiveTab(path);
+  }, [wsStore]);
+
+  // 关闭单个 tab
+  const handleCloseTab = useCallback((e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    closeFileTab(path);
+  }, [closeFileTab]);
 
   // mouseup 后读取选区，基于 react-syntax-highlighter 的 [data-line] 行标记精确还原起止行号
   const handleSelectionUp = useCallback(() => {
@@ -379,6 +392,35 @@ export function FilePreviewPane() {
 
   return (
     <div className="preview-pane">
+      {/* ── Tab Bar：多文件标签 ── */}
+      {openFiles.length > 0 && (
+        <div className="preview-tabbar">
+          <div className="preview-tabs-scroll">
+            {openFiles.map(tab => {
+              const isActive = activeFilePath === tab.path;
+              const name = tab.path.split("/").pop();
+              return (
+                <div
+                  key={tab.path}
+                  className={`preview-tab ${isActive ? "active" : ""}`}
+                  onClick={() => switchTab(tab.path)}
+                  title={tab.path}
+                >
+                  <span className="preview-tab-name">{name}</span>
+                  <button
+                    className="preview-tab-close"
+                    onClick={(e) => handleCloseTab(e, tab.path)}
+                    title="关闭"
+                    type="button"
+                  >
+                    <Icon name="i-x" size={11} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="preview-head">
         <Icon name="i-file" size={16} className="preview-file-icon" />
         <span className="preview-filename">{ws.currentFile.path.split("/").pop()}</span>
@@ -453,7 +495,7 @@ export function FilePreviewPane() {
             content={ws.currentFile.content}
             showLineNumbers
             tagLines
-            customStyle={{ margin: 0, fontSize: "13px", background: "var(--code-bg)" }}
+            customStyle={{ margin: 0, fontSize: "13px", background: "transparent" }}
           />
         )}
       </div>

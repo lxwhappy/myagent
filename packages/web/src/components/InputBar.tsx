@@ -10,6 +10,8 @@ import { useCodeRefStore, formatCodeRefs, type CodeRef } from "../stores/code-re
 import { useQuickPromptStore, type QuickPrompt } from "../stores/quick-prompts";
 import { Icon } from "./Icon";
 import { AgentManager } from "./AgentManager";
+import { AgentTeamManager } from "./AgentTeamManager";
+import { useAgentTeamsStore } from "../stores/agent-teams";
 import { QuickPromptManager } from "./QuickPromptManager";
 
 const MAX_HEIGHT = 200;
@@ -71,7 +73,18 @@ export function InputBar() {
   // ── Agent 选择器 ──
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const [showAgentManager, setShowAgentManager] = useState(false);
+  const [showTeamManager, setShowTeamManager] = useState(false);
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Agent 团队 ──
+  const teams = useAgentTeamsStore(s => s.teams);
+
+  // 当前选中的团队（选中团队后覆盖 Agent 显示）
+  const activeTeam = activeTeamId ? teams.find(t => t.id === activeTeamId) : null;
+  // 选择器按钮上显示的图标+名称
+  const selectorIcon = activeTeam?.icon ?? currentAgent?.icon ?? "🤖";
+  const selectorName = activeTeam?.name ?? currentAgent?.name ?? "MyAgent";
 
   // ── Draft 持久化：会话切换时恢复草稿 ──
   const draftKey = activeChatSessionId ?? "__default";
@@ -196,6 +209,7 @@ export function InputBar() {
     // 清理
     setText("");
     clearDraft(draftKey);
+    setActiveTeamId(null); // 发送后回到普通 Agent 模式
     attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); });
     setAttachedImages([]);
     // 引用片段不清空——保留到用户手动删除（点 chip 上的 ✕）
@@ -354,7 +368,44 @@ export function InputBar() {
 
   const handleSelectAgent = (id: string) => {
     setAgentDropdownOpen(false);
+    setActiveTeamId(null); // 切回普通 Agent，清除团队选中
     if (id !== currentAgent?.id) switchAgent(id);
+  };
+
+  // ── 执行 Agent 团队 ──
+  // 调用后端编排引擎，根据 team.mode 生成对应的指令
+  const handleRunTeam = async (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team || team.members.length === 0) return;
+    setAgentDropdownOpen(false);
+    setActiveTeamId(teamId); // 标记团队选中状态
+
+    try {
+      // 调用后端预览接口，获取编排指令
+      const res = await fetch(`/api/agent-teams/${teamId}/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text.trim() || "请根据你的角色指令执行任务" }),
+      });
+      const data = await res.json();
+      if (data.prompt) {
+        // 如果输入框已有文本，保留作为上下文
+        const userText = text.trim();
+        setText(userText ? `${data.prompt}\n\n---\n用户原始输入：${userText}` : data.prompt);
+      } else {
+        // 后端失败时回退到前端组装
+        const steps = team.members.map((m, i) => {
+          const agent = agentsList.find(a => a.id === m.agentId);
+          const agentName = agent?.name ?? "未知";
+          return `${i + 1}. [${m.role}] 使用 delegate_task 调用 ${agentName}`;
+        }).join("\n");
+        setText(`[团队任务] 请按以下步骤执行：\n${steps}\n\n用户请求：${text.trim() || "执行任务"}`);
+      }
+    } catch {
+      // 网络错误回退
+      setText(`[团队任务] 请依次调用各专家 Agent 完成任务：${team.members.map(m => m.role).join(" → ")}`);
+    }
+    taRef.current?.focus();
   };
 
   useEffect(() => {
@@ -386,10 +437,10 @@ export function InputBar() {
               className="agent-selector-btn"
               onClick={() => setAgentDropdownOpen(v => !v)}
               type="button"
-              title={`当前 Agent：${currentAgent?.name ?? "默认"}`}
+              title={activeTeam ? `当前团队：${activeTeam.name}` : `当前 Agent：${currentAgent?.name ?? "默认"}`}
             >
-              <span className="agent-selector-icon">{currentAgent?.icon ?? "🤖"}</span>
-              <span className="agent-selector-name">{currentAgent?.name ?? "MyAgent"}</span>
+              <span className="agent-selector-icon">{selectorIcon}</span>
+              <span className="agent-selector-name">{selectorName}</span>
               <Icon name="i-chevron" size={12} className={`agent-selector-chevron ${agentDropdownOpen ? "open" : ""}`} />
             </button>
             {agentDropdownOpen && (
@@ -410,6 +461,38 @@ export function InputBar() {
                   </button>
                 ))}
                 <div className="agent-selector-divider" />
+                {/* 团队列表 */}
+                {teams.length > 0 && (
+                  <>
+                    {teams.map(t => (
+                      <button
+                        key={t.id}
+                        className={`agent-selector-item ${activeTeamId === t.id ? "active" : ""}`}
+                        onClick={() => handleRunTeam(t.id)}
+                        type="button"
+                        title={t.description}
+                      >
+                        <span className="agent-selector-item-icon">{t.icon}</span>
+                        <span className="agent-selector-item-text">
+                          <span className="agent-selector-item-name">{t.name}</span>
+                          <span className="agent-selector-item-desc">
+                            {t.members.map(m => m.role).join(" → ")}
+                          </span>
+                        </span>
+                        {activeTeamId === t.id && <Icon name="i-check" size={14} className="agent-selector-item-check" />}
+                      </button>
+                    ))}
+                    <div className="agent-selector-divider" />
+                  </>
+                )}
+                <button
+                  className="agent-selector-manage"
+                  onClick={() => { setAgentDropdownOpen(false); setShowTeamManager(true); }}
+                  type="button"
+                >
+                  <Icon name="i-users" size={14} />
+                  <span>团队管理…</span>
+                </button>
                 <button
                   className="agent-selector-manage"
                   onClick={() => { setAgentDropdownOpen(false); setShowAgentManager(true); }}
@@ -641,6 +724,9 @@ export function InputBar() {
 
       {showAgentManager && (
         <AgentManager onClose={() => setShowAgentManager(false)} onSwitchActive={(id) => switchAgent(id)} />
+      )}
+      {showTeamManager && (
+        <AgentTeamManager onClose={() => setShowTeamManager(false)} />
       )}
       {showPromptManager && (
         <QuickPromptManager onClose={() => setShowPromptManager(false)} />

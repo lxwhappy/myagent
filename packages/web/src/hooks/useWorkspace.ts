@@ -39,14 +39,14 @@ export function useWorkspace() {
     return data.items;
   }, []);
 
-  // ── 打开文件 ──
+  // ── 打开文件（多 tab 模式：加入 tab 列表 + 激活）──
   const openFile = useCallback(async (wsId: string, path: string) => {
     store.setFileLoading(true);
     try {
       const res = await fetch(`/api/workspace/${wsId}/file?path=${encodeURIComponent(path)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      store.setCurrentFile(data);
+      store.openFileInTab(data);
     } catch (e: any) {
       console.error(e);
     } finally {
@@ -70,6 +70,6 @@ export function useWorkspace() {
     listDir,
     openFile,
     searchFiles,
-    closeFile: () => store.setCurrentFile(null),
+    closeFile: () => store.closeAllTabs(),
   };
 }

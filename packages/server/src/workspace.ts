@@ -4,7 +4,7 @@ import { existsSync } from "fs";
 import { join, resolve, relative, extname, basename } from "path";
 import { randomUUID } from "crypto";
 import { chatSessionStore } from "./chat-sessions.js";
-import { PATHS, AGENT_DIR } from "./paths.js";
+import { PATHS, AGENT_DIR, OLD_AGENT_DIR } from "./paths.js";
 
 // ── 工作空间存储（内存 + 磁盘持久化） ──
 interface Workspace {
@@ -323,7 +323,7 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
           if (IGNORE.includes(e.name)) continue;
           const full = join(dir, e.name);
           if (e.name.toLowerCase().includes(term)) {
-            const rel = relative(ws.path, full);
+            const rel = relative(ws!.path, full);
             if (!seen.has(rel)) {
               seen.add(rel);
               results.push({ name: e.name, path: rel, type: e.isDirectory() ? "dir" : "file" });
@@ -478,43 +478,50 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // ── Agent 原始 jsonl 日志（pi-coding-agent 产出的完整 session 记录）──
-  // jsonl 存储在 ~/.pi/agent/sessions/<cwd编码>/ 目录下
+  // ── Agent 原始 jsonl 日志 ──
+  // SDK 可能把 jsonl 写到 ~/.myagent/sessions/ 或 ~/.pi/agent/sessions/
+  // 取决于 SDK 版本和 agentDir 解析。同时搜索两个路径确保兼容。
 
-  // 列出当前会话工作空间下的所有 jsonl 日志文件
+  /** 根据 ws.path 得到所有可能的 sessions 目录名（SDK 的 cwd 编码规则） */
+  function getLogDirs(wsPath: string): string[] {
+    const encoded = wsPath.replace(/\//g, "-").replace(/^-+|-+$/g, "");
+    const safeName = `--${encoded}--`;
+    return [
+      join(PATHS.agentLogsDir, safeName),   // ~/.myagent/sessions/
+      join(OLD_AGENT_DIR, "sessions", safeName),  // ~/.pi/agent/sessions/
+    ];
+  }
+
   app.get("/api/sessions/:id/agent-logs", async (req, reply) => {
     const { id } = req.params as { id: string };
     const session = await chatSessionStore.get(id);
     if (!session) return reply.code(404).send({ error: "Session not found" });
-
-    // 找到工作空间路径（从 workspaceId 查）
     const ws = workspaces.get(session.workspaceId);
     if (!ws) return { logs: [] };
 
-    // 编码 cwd → 目录名
-    const encoded = ws.path.replace(/\//g, "-").replace(/^-+|-+$/g, "");
-    const dir = join(PATHS.agentLogsDir, `--${encoded}--`);
-    if (!existsSync(dir)) return { logs: [] };
-
-    try {
-      const files = await readdir(dir);
-      const logs = [];
-      for (const f of files.filter(f => f.endsWith(".jsonl"))) {
-        const s = await stat(join(dir, f));
-        logs.push({ name: f, size: s.size, mtime: s.mtime.toISOString() });
-      }
-      // 按修改时间倒序
-      logs.sort((a, b) => b.mtime.localeCompare(a.mtime));
-      return { logs, dir };
-    } catch {
-      return { logs: [] };
+    const dirs = getLogDirs(ws.path);
+    const logs: { name: string; size: number; mtime: string }[] = [];
+    const seen = new Set<string>();
+    let foundDir: string | null = null;
+    for (const dir of dirs) {
+      if (!existsSync(dir)) continue;
+      foundDir = foundDir ?? dir;
+      try {
+        const files = await readdir(dir);
+        for (const f of files.filter(f => f.endsWith(".jsonl"))) {
+          if (seen.has(f)) continue;
+          seen.add(f);
+          const s = await stat(join(dir, f));
+          logs.push({ name: f, size: s.size, mtime: s.mtime.toISOString() });
+        }
+      } catch {}
     }
+    logs.sort((a, b) => b.mtime.localeCompare(a.mtime));
+    return { logs, dir: foundDir ?? dirs[0] };
   });
 
-  // 下载单个 jsonl 日志文件
   app.get("/api/sessions/:id/agent-logs/:filename", async (req, reply) => {
     const { id, filename } = req.params as { id: string; filename: string };
-    // 安全校验：文件名只能是 .jsonl，不含路径分隔符
     if (!filename.endsWith(".jsonl") || filename.includes("/") || filename.includes("..")) {
       return reply.code(400).send({ error: "Invalid filename" });
     }
@@ -523,14 +530,40 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     const ws = workspaces.get(session.workspaceId);
     if (!ws) return reply.code(404).send({ error: "Workspace not found" });
 
-    const encoded = ws.path.replace(/\//g, "-").replace(/^-+|-+$/g, "");
-    const filepath = join(PATHS.agentLogsDir, `--${encoded}--`, filename);
-    if (!existsSync(filepath)) return reply.code(404).send({ error: "Log file not found" });
+    const dirs = getLogDirs(ws.path);
+    let filepath: string | null = null;
+    for (const dir of dirs) {
+      const p = join(dir, filename);
+      if (existsSync(p)) { filepath = p; break; }
+    }
+    if (!filepath) return reply.code(404).send({ error: "Log file not found" });
 
     const content = await readFile(filepath, "utf-8");
     reply.header("Content-Type", "application/jsonl;charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="${filename}"`);
     return content;
+  });
+
+  // 打开日志所在目录（在 Finder 中 reveal）
+  app.get("/api/sessions/:id/agent-logs-dir", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const session = await chatSessionStore.get(id);
+    if (!session) return reply.code(404).send({ error: "Session not found" });
+    const ws = workspaces.get(session.workspaceId);
+    if (!ws) return reply.code(404).send({ error: "Workspace not found" });
+
+    const dirs = getLogDirs(ws.path);
+    let dir: string | null = null;
+    for (const d of dirs) {
+      if (existsSync(d)) { dir = d; break; }
+    }
+    if (!dir) dir = dirs[0];
+    // 创建目录确保存在（首次打开时）
+    try { await mkdir(dir, { recursive: true }); } catch {}
+
+    const { exec } = await import("child_process");
+    exec(`open "${dir}"`);
+    return { success: true, dir };
   });
 
   // ── Git: 列出分支 ──

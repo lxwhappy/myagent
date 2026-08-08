@@ -23,6 +23,8 @@ import { setupSSEGateway } from "./sse-gateway.js";
 import { setupWorkspaceRoutes } from "./workspace.js";
 import { setupSettingsRoutes } from "./settings-routes.js";
 import { setupAgentRoutes } from "./agent-routes.js";
+import { setupAgentTeamRoutes } from "./agent-team-routes.js";
+import { setupTeamExecutorRoutes } from "./team-executor.js";
 import { setupQuickPromptRoutes } from "./quick-prompt-routes.js";
 import { setupCronRoutes } from "./cron-routes.js";
 import { mcpManager } from "./mcp-manager.js";
@@ -68,6 +70,9 @@ async function main() {
 
   // Agent 配置管理 API（角色预设 CRUD）
   setupAgentRoutes(app);
+  // Agent 团队管理 API（多 Agent 编排）
+  setupAgentTeamRoutes(app);
+  setupTeamExecutorRoutes(app);
   setupQuickPromptRoutes(app);
 
   // 定时任务管理 API

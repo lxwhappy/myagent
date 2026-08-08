@@ -32,6 +32,10 @@ interface WorkspaceState {
   previewWidth: number;
   treeWidth: number;
   searchQuery: string;
+  // 多 tab 模型：openFiles = 所有打开的文件 tab，activeFilePath = 当前激活的 tab
+  openFiles: FileContent[];
+  activeFilePath: string | null;
+  // currentFile 始终等于 openFiles 中 path === activeFilePath 的文件（保持向后兼容）
   currentFile: FileContent | null;
   fileLoading: boolean;
 
@@ -53,6 +57,12 @@ interface WorkspaceState {
   setPreviewWidth: (w: number) => void;
   setTreeWidth: (w: number) => void;
   setSearchQuery: (q: string) => void;
+  // 多 tab 操作
+  openFileInTab: (f: FileContent) => void;
+  closeFileTab: (path: string) => void;
+  setActiveTab: (path: string) => void;
+  closeAllTabs: () => void;
+  // 向后兼容
   setCurrentFile: (f: FileContent | null) => void;
   setFileLoading: (v: boolean) => void;
 }
@@ -69,6 +79,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   previewWidth: 520,
   treeWidth: 220,
   searchQuery: "",
+  openFiles: [],
+  activeFilePath: null,
   currentFile: null,
   fileLoading: false,
 
@@ -121,6 +133,48 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setPreviewWidth: (w) => set({ previewWidth: Math.max(100, Math.min(900, w)) }),
   setTreeWidth: (w) => set({ treeWidth: Math.max(140, Math.min(500, w)) }),
   setSearchQuery: (q) => set({ searchQuery: q }),
-  setCurrentFile: (f) => set({ currentFile: f }),
+
+  // ── 多 Tab 操作 ──
+  openFileInTab: (f) => set((s) => {
+    const exists = s.openFiles.some(t => t.path === f.path);
+    return {
+      openFiles: exists ? s.openFiles.map(t => t.path === f.path ? f : t) : [...s.openFiles, f],
+      activeFilePath: f.path,
+      currentFile: f,
+    };
+  }),
+
+  closeFileTab: (path) => set((s) => {
+    const idx = s.openFiles.findIndex(t => t.path === path);
+    if (idx < 0) return {};
+    const newTabs = s.openFiles.filter(t => t.path !== path);
+    const wasActive = s.activeFilePath === path;
+    let newActive = s.activeFilePath;
+    let newCurrent = s.currentFile;
+    if (wasActive) {
+      if (newTabs.length === 0) {
+        newActive = null;
+        newCurrent = null;
+      } else {
+        const nextIdx = Math.min(idx, newTabs.length - 1);
+        newActive = newTabs[nextIdx].path;
+        newCurrent = newTabs[nextIdx];
+      }
+    }
+    return { openFiles: newTabs, activeFilePath: newActive, currentFile: newCurrent };
+  }),
+
+  setActiveTab: (path) => set((s) => {
+    const file = s.openFiles.find(t => t.path === path);
+    return { activeFilePath: path, currentFile: file ?? null };
+  }),
+
+  closeAllTabs: () => set({ openFiles: [], activeFilePath: null, currentFile: null }),
+
+  // 向后兼容
+  setCurrentFile: (f) => set((s) => {
+    if (!f) return { currentFile: null, activeFilePath: null };
+    return { currentFile: f, activeFilePath: f.path };
+  }),
   setFileLoading: (v) => set({ fileLoading: v }),
 }));

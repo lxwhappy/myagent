@@ -34,6 +34,8 @@ export const PATHS = {
   mcp: join(AGENT_DIR, "mcp.json"),
   /** Agent 预设（角色管理） */
   agents: join(AGENT_DIR, "agents.json"),
+  /** Agent 团队（多 Agent 编排） */
+  agentTeams: join(AGENT_DIR, "agent-teams.json"),
   /** 工作空间列表 */
   workspaces: join(AGENT_DIR, "workspaces.json"),
   /** Todo 列表（按 chatSessionId 隔离） */
