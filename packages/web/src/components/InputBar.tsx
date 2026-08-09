@@ -79,6 +79,9 @@ export function InputBar() {
   // ── Agent 团队 ──
   const teams = useAgentTeamsStore(s => s.teams);
 
+  // ── 自动驾驶（一次性模式）──
+  const [autopilotEnabled, setAutopilotEnabled] = useState(false);
+
   // 当前选中的团队（选中团队后覆盖 Agent 显示）
   const activeTeam = activeTeamId ? teams.find(t => t.id === activeTeamId) : null;
   // 选择器按钮上显示的图标+名称
@@ -200,6 +203,19 @@ export function InputBar() {
     addToHistory(text.trim());
     historyRef.current = loadHistory();
     histIndexRef.current = -1;
+
+    // 自动驾驶模式：走 autopilot 引擎
+    if (autopilotEnabled && activeChatSessionId) {
+      const task = text.trim();
+      useChatStore.getState().addUserMessage(activeChatSessionId, task);
+      useChatStore.getState().setAutopilotState(activeChatSessionId, { phase: "analyze", round: 0, task });
+      sseClient.autopilot(activeChatSessionId, task);
+      setText(""); clearDraft(draftKey); setAutopilotEnabled(false);
+      if (taRef.current) taRef.current.style.height = "auto";
+      return;
+    }
+    historyRef.current = loadHistory();
+    histIndexRef.current = -1;
     // 发送时附带图片
     const images = attachedImages.length > 0
       ? attachedImages.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }))
@@ -234,22 +250,6 @@ export function InputBar() {
     // 引用片段不清空——保留到用户手动删除（点 chip 上的 ✕）
     setSkillPicker({ visible: false, query: "", startIndex: 0, activeIndex: 0 });
     setShowQuickPrompts(false);
-    if (taRef.current) taRef.current.style.height = "auto";
-  };
-
-  // ── 自动驾驶：全自动分析→规划→执行→验证→修复 ──
-  const handleAutopilot = () => {
-    if (!text.trim() || isGenerating || !activeChatSessionId) return;
-    const task = text.trim();
-    addToHistory(task);
-    historyRef.current = loadHistory();
-    histIndexRef.current = -1;
-    useChatStore.getState().addUserMessage(activeChatSessionId, task);
-    useChatStore.getState().setAutopilotState(activeChatSessionId, { phase: "analyze", round: 0, task });
-    sseClient.autopilot(activeChatSessionId, task);
-    setText("");
-    clearDraft(draftKey);
-    setActiveTeamId(null);
     if (taRef.current) taRef.current.style.height = "auto";
   };
 
@@ -638,14 +638,12 @@ export function InputBar() {
             </div>
           )}
 
-          {/* 自动驾驶 */}
+          {/* 自动驾驶 toggle（一次性模式，开启后下次发送走 autopilot） */}
           <button
-            className="btn-input-action"
-            onClick={handleAutopilot}
-            disabled={!canSend}
+            className={`btn-input-action ${autopilotEnabled ? "active" : ""}`}
+            onClick={() => setAutopilotEnabled(!autopilotEnabled)}
             type="button"
-            aria-label="自动驾驶"
-            title="自动驾驶：分析→规划→执行→验证→修复，全自动循环"
+            title={autopilotEnabled ? "自动驾驶已开启（点发送启动）" : "开启自动驾驶：分析→规划→执行→验证→修复"}
           >
             🚀
           </button>
