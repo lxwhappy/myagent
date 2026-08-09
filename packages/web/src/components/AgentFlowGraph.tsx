@@ -15,6 +15,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  useReactFlow,
   type Node,
   type Edge,
   type NodeProps,
@@ -444,29 +445,74 @@ function EditableGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
     markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
   }), []);
 
+  // ── 节点拖拽范围约束 ──
+  const BOUND = { minX: -50, minY: -50, maxX: 800, maxY: 500 };
+  const onNodeDragBound = useCallback((changes: any[]) => {
+    return changes.map(c => {
+      if (c.type === "position" && c.position) {
+        c.position.x = Math.max(BOUND.minX, Math.min(BOUND.maxX, c.position.x));
+        c.position.y = Math.max(BOUND.minY, Math.min(BOUND.maxY, c.position.y));
+      }
+      return c;
+    });
+  }, []);
+
+  // ── 重置布局 ──
+  const { fitView } = useReactFlow();
+  const handleResetLayout = useCallback(() => {
+    const rfNodes: Node[] = nodeDefs.map(n => ({
+      id: n.id,
+      type: "agent",
+      data: {
+        label: n.label, role: n.role, icon: n.icon,
+        status: n.status || "pending",
+        duration: n.duration, retryCount: n.retryCount,
+        isCoordinator: n.isCoordinator,
+        editable: true,
+      },
+      position: { x: 0, y: 0 },
+    }));
+    const rfEdges: Edge[] = edgeDefs.map(e => ({
+      id: e.id, source: e.source, target: e.target,
+      animated: e.animated ?? false,
+      style: {
+        stroke: e.dashed ? "var(--muted)" : "var(--border)",
+        strokeWidth: 1.5,
+        strokeDasharray: e.dashed ? "5 3" : undefined,
+      },
+      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
+    }));
+    const laid = layoutWithDagre(rfNodes, rfEdges, layout);
+    setNodes(laid.nodes);
+    setEdges(laid.edges);
+    setTimeout(() => fitView({ padding: 0.15, maxZoom: 1 }), 50);
+  }, [nodeDefs, edgeDefs, layout, setNodes, setEdges, fitView]);
+
   return (
     <div style={{ width: "100%", height, position: "relative" }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
+        onNodesChange={(changes) => onNodesChange(onNodeDragBound(changes))}
         onEdgesChange={onEdgesChangeInternal}
         onConnect={handleConnect}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
-        fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }}
+        fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
         nodesConnectable
         elementsSelectable
-        panOnDrag={false}
-        zoomOnScroll={false}
+        panOnDrag
+        zoomOnScroll
         zoomOnPinch
+        minZoom={0.3}
+        maxZoom={1.5}
         deleteKeyCode={["Backspace", "Delete"]}
       >
         <Background color="var(--border)" gap={20} size={1} />
-        {showControls && <Controls position="bottom-right" showInteractive={false} />}
+        {showControls && <Controls position="bottom-right" showInteractive={false} showFitView />}
         <MiniMap
           position="bottom-left"
           style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
@@ -476,6 +522,18 @@ function EditableGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
           zoomable
         />
       </ReactFlow>
+      <button
+        onClick={handleResetLayout}
+        title="恢复自动布局"
+        style={{
+          position: "absolute", top: 8, right: 8, zIndex: 10,
+          padding: "4px 10px", fontSize: 11, cursor: "pointer",
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 6, color: "var(--muted)",
+        }}
+      >
+        ↺ 重置布局
+      </button>
     </div>
   );
 }
