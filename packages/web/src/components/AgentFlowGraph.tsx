@@ -58,16 +58,16 @@ function layoutWithDagre(nodes: Node[], edges: Edge[], direction: LayoutDirectio
     edges.some(e2 => e2.source === e.target && e2.target === e.source && e.id !== e2.id));
 
   if (hasBidirectional && nodes.length <= 3) {
-    // loop 模式专用布局：节点上下错开排列
-    // executor 在左上，evaluator 在右上（有 finalizer 则居中下方）
+    // loop 模式专用布局：两个节点垂直错开
+    // executor 在上，evaluator 在下偏右 — 正向边走右上→左下，回环边走左下→右上
+    // 物理隔离：两条边不可能重叠
     const NODE_W = 180, NODE_H = 80;
-    const GAP_X = 280, GAP_Y = 120;
     const layoutNodes = nodes.map((node, i) => {
       let x: number, y: number;
-      if (i === 0) { x = 0; y = 0; }               // executor 左上
-      else if (i === 1) { x = GAP_X; y = 0; }       // evaluator 右上
-      else { x = GAP_X / 2; y = GAP_Y; }             // finalizer 居中下方
-      return { ...node, position: { x, y: y } };
+      if (i === 0) { x = 0; y = 0; }                 // executor 左上
+      else if (i === 1) { x = 200; y = 130; }         // evaluator 右下，错开
+      else { x = 100; y = 260; }                       // finalizer 居中更下方
+      return { ...node, position: { x, y } };
     });
     return { nodes: layoutNodes, edges };
   }
@@ -290,8 +290,6 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       return {
         id: e.id, source: e.source, target: e.target, label: e.label,
         animated: e.animated ?? false,
-        // 回环边用自定义组件，强制向下弯曲
-        ...(isLoopBack ? { type: "loopback" } : {}),
         style: {
           stroke: e.dashed ? "var(--accent)" : "var(--border)",
           strokeWidth: 1.5,
