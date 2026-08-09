@@ -50,6 +50,26 @@ export type LayoutDirection = "LR" | "TB";
 
 // ── Dagre 自动布局 ──
 function layoutWithDagre(nodes: Node[], edges: Edge[], direction: LayoutDirection): { nodes: Node[]; edges: Edge[] } {
+
+  // ── 检测是否有回环边（双向边），有则手动布局不走 dagre ──
+  const hasBidirectional = edges.some(e =>
+    edges.some(e2 => e2.source === e.target && e2.target === e.source && e.id !== e2.id));
+
+  if (hasBidirectional && nodes.length <= 3) {
+    // loop 模式专用布局：节点上下错开排列
+    // executor 在左上，evaluator 在右上（有 finalizer 则居中下方）
+    const NODE_W = 180, NODE_H = 80;
+    const GAP_X = 280, GAP_Y = 120;
+    const layoutNodes = nodes.map((node, i) => {
+      let x: number, y: number;
+      if (i === 0) { x = 0; y = 0; }               // executor 左上
+      else if (i === 1) { x = GAP_X; y = 0; }       // evaluator 右上
+      else { x = GAP_X / 2; y = GAP_Y; }             // finalizer 居中下方
+      return { ...node, position: { x, y: y } };
+    });
+    return { nodes: layoutNodes, edges };
+  }
+
   const g = new dagre.graphlib.Graph();
   g.setGraph({
     rankdir: direction,
@@ -252,16 +272,16 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       return {
         id: e.id, source: e.source, target: e.target, label: e.label,
         animated: e.animated ?? false,
-        // 回环边用贝塞尔曲线从底部弧形绕回，正向边走直线
-        type: isLoopBack ? "default" : undefined,
-        sourceHandle: isLoopBack ? "bottom" : undefined,
-        targetHandle: isLoopBack ? "bottom" : undefined,
+        // 回环边：从 source 底部出发 → target 底部，贝塞尔曲线向下绕回
+        // 正向边：从 source 右侧 → target 左侧，直线
+        ...(isLoopBack ? {
+          sourceHandle: "bottom",
+          targetHandle: "bottom",
+        } : {}),
         style: {
           stroke: e.dashed ? "var(--accent)" : "var(--border)",
           strokeWidth: 1.5,
           strokeDasharray: e.dashed ? "5 3" : undefined,
-          // 回环边控制曲率，让它绕到节点下方
-          ...(isLoopBack ? { curvature: 0.5 } : {}),
         },
         markerEnd: { type: MarkerType.ArrowClosed, color: e.dashed ? "var(--accent)" : "var(--border)", width: 16, height: 16 },
         labelStyle: { fontSize: 10, fill: e.dashed ? "var(--accent)" : "var(--muted)" },
