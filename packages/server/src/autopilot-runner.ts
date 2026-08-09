@@ -17,14 +17,12 @@ import { emit } from "./event-bus.js";
 import { AGENT_DIR } from "./paths.js";
 import { autopilotConfigStore } from "./autopilot-config.js";
 
-const PHASE_TIMEOUT_MS = 120_000; // 默认单阶段超时（可被 config 覆盖）
+const DEFAULT_PHASE_TIMEOUT_MS = 300_000; // 默认单阶段 5 分钟（执行阶段要写代码、调工具）
 
-// 从配置读取最大循环次数（首次调用时缓存）
-let _maxLoops = 3;
-async function getMaxLoops(): Promise<number> {
+// 从配置读取超时和循环次数
+async function getConfig(): Promise<{ maxLoops: number; phaseTimeoutMs: number }> {
   const cfg = await autopilotConfigStore.get();
-  _maxLoops = cfg.maxRepairLoops;
-  return _maxLoops;
+  return { maxLoops: cfg.maxRepairLoops, phaseTimeoutMs: cfg.phaseTimeoutMs || DEFAULT_PHASE_TIMEOUT_MS };
 }
 
 export type AutopilotPhase = "analyze" | "plan" | "execute" | "verify" | "repair" | "done" | "error";
@@ -87,6 +85,7 @@ async function runPhase(
   cwd: string,
   signal: AbortSignal,
   chatSessionId: string,
+  phaseTimeoutMs: number,
 ): Promise<string> {
   const provider = config.defaultProvider;
   const modelId = config.defaultModel;
@@ -130,7 +129,7 @@ async function runPhase(
   try {
     // 超时 + abort 竞速
     const timeoutPromise = new Promise<never>((_, reject) => {
-      const t = setTimeout(() => reject(new Error("phase_timeout")), PHASE_TIMEOUT_MS);
+      const t = setTimeout(() => reject(new Error("phase_timeout")), phaseTimeoutMs);
       t.unref?.();
       signal.addEventListener("abort", () => { clearTimeout(t); reject(new Error("aborted")); });
     });
@@ -192,31 +191,32 @@ export async function runAutopilot(
     // 阶段 1: 分析
     state.phase = "analyze";
     emitPhaseEvent(chatSessionId, state);
-    state.analysis = await runPhase("analyze", state, agentId, cwd, abortController.signal, chatSessionId);
+    const { phaseTimeoutMs: timeout1 } = await getConfig();
+    state.analysis = await runPhase("analyze", state, agentId, cwd, abortController.signal, chatSessionId, timeout1);
     state.blackboard.push(`分析：${state.analysis}`);
     emitPhaseEvent(chatSessionId, state);
 
     // 阶段 2: 规划
     state.phase = "plan";
     emitPhaseEvent(chatSessionId, state);
-    state.plan = await runPhase("plan", state, agentId, cwd, abortController.signal, chatSessionId);
+    state.plan = await runPhase("plan", state, agentId, cwd, abortController.signal, chatSessionId, timeout1);
     state.blackboard.push(`计划：${state.plan}`);
     emitPhaseEvent(chatSessionId, state);
 
     // 阶段 3-4: 执行 → 验证（可能多轮）
-    const maxLoops = await getMaxLoops();
+    const { maxLoops, phaseTimeoutMs } = await getConfig();
     for (state.round = 1; state.round <= maxLoops; state.round++) {
       // 执行
       state.phase = "execute";
       emitPhaseEvent(chatSessionId, state);
-      state.result = await runPhase("execute", state, agentId, cwd, abortController.signal, chatSessionId);
+      state.result = await runPhase("execute", state, agentId, cwd, abortController.signal, chatSessionId, phaseTimeoutMs);
       state.blackboard.push(`第${state.round}轮执行：${state.result.slice(0, 800)}`);
       emitPhaseEvent(chatSessionId, state);
 
       // 验证
       state.phase = "verify";
       emitPhaseEvent(chatSessionId, state);
-      state.verification = await runPhase("verify", state, agentId, cwd, abortController.signal, chatSessionId);
+      state.verification = await runPhase("verify", state, agentId, cwd, abortController.signal, chatSessionId, phaseTimeoutMs);
       emitPhaseEvent(chatSessionId, state);
 
       // 检查验证结果
@@ -244,7 +244,7 @@ export async function runAutopilot(
       if (state.round < maxLoops) {
         state.phase = "repair";
         emitPhaseEvent(chatSessionId, state);
-        const repaired = await runPhase("repair", state, agentId, cwd, abortController.signal, chatSessionId);
+        const repaired = await runPhase("repair", state, agentId, cwd, abortController.signal, chatSessionId, phaseTimeoutMs);
         state.result = repaired;
         state.blackboard.push(`第${state.round}轮修复：${repaired.slice(0, 800)}`);
         emitPhaseEvent(chatSessionId, state);

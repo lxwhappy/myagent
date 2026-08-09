@@ -40,7 +40,7 @@ export interface AutopilotConfig {
 /** 默认配置（首次启动时写入文件） */
 const DEFAULT_CONFIG: AutopilotConfig = {
   maxRepairLoops: 3,
-  phaseTimeoutMs: 120_000,
+  phaseTimeoutMs: 300_000,
   phases: [
     {
       phase: "analyze",
