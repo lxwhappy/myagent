@@ -22,6 +22,7 @@ import { createAnalyzeImageTool, pushPendingImages } from "./tools/image-tool.js
 import { webSearchTool, webFetchTool } from "./tools/web-tool.js";
 import { createCronTool } from "./tools/cron-tool.js";
 import { createAskUserTool } from "./tools/ask-tool.js";
+import { createBlackboardTools, clearBlackboard } from "./tools/blackboard-tool.js";
 import { setFireFn } from "./tools/cron-store.js";
 import { runSubagent, abortSubagents } from "./subagent-runner.js";
 import { agentConfigStore } from "./agent-configs.js";
@@ -133,7 +134,9 @@ export async function createAgent(
   const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
   const cronTool = createCronTool(chatSessionId);
   const askUserTool = createAskUserTool(chatSessionId);
-  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, cronTool, askUserTool, ...mcpTools];
+  // 黑板工具：团队协作时多 Agent 间共享信息
+  const blackboardTools = createBlackboardTools(chatSessionId);
+  const allCustomTools = [...customTools, todoTool, delegateTool, analyzeImageTool, webSearchTool, webFetchTool, cronTool, askUserTool, ...blackboardTools, ...mcpTools];
 
   // 合并 excludeTools：基础排除 + per-agent 禁用工具
   const excludeTools = ["find", "ls", ...(agentCfg?.disabledTools ?? [])];
@@ -391,6 +394,8 @@ export function destroyAgent(chatSessionId: string): void {
   if (!entry) return;
   // 连带终止该会话下所有活跃的子 agent
   abortSubagents(chatSessionId);
+  // 清理共享黑板
+  clearBlackboard(chatSessionId);
   entry.unsubscribe();
   try { entry.agent.abort(); } catch {}
   registry.delete(chatSessionId);

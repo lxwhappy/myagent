@@ -27,8 +27,9 @@ export const BUILTIN_MODES: OrchestrationMode[] = [
 
 执行规则：
 - 每一步必须等上一步完成后再开始
-- 每步的 delegate_task 的 context 参数应包含上一步的输出摘要
-- goal 参数开头必须包含 [team:step-N] 标记（N 从 0 开始）
+- 每步完成后，用 write_blackboard 写入关键产出（author 填角色名，content 填产出摘要）
+- 下一步开始前，用 read_blackboard 读取前序步骤的产出，作为 delegate_task 的 context 参数
+- 每步的 delegate_task 的 goal 参数开头必须包含 [team:step-N] 标记（N 从 0 开始）
 - 最后一步完成后，汇总所有步骤的结果
 
 用户请求：{{user_message}}`,
