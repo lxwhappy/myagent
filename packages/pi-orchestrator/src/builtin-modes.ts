@@ -260,6 +260,8 @@ export const BUILTIN_MODES: OrchestrationMode[] = [
     ],
     promptTemplate: `[团队任务 · 循环迭代模式] 执行 → 评估 → 不达标重试，直到通过或达到上限。
 
+⚠️ 关键约束：所有 delegate_task 调用必须严格串行！必须等上一个 delegate_task 完全返回后才能调用下一个。绝不能同时发起多个 delegate_task。
+
 角色分配：
 - [executor] {{member_0_icon}} {{member_0_name}}（{{member_0_role}}）— 负责执行任务
 - [evaluator] {{member_1_icon}} {{member_1_name}}（{{member_1_role}}）— 负责评估质量
@@ -268,19 +270,25 @@ export const BUILTIN_MODES: OrchestrationMode[] = [
 
 第 1 轮：
 1. 调用 delegate_task（goal 开头包含 [team:executor]），让 {{member_0_name}} 完成用户请求
-2. 调用 delegate_task（goal 开头包含 [team:evaluator]），让 {{member_1_name}} 评估执行结果
+   ⚠️ 必须等这个 delegate_task 返回结果后，才能继续下一步
+2. 拿到 executor 的返回结果后，调用 delegate_task（goal 开头包含 [team:evaluator]），让 {{member_1_name}} 评估执行结果
+   ⚠️ 必须等这个 delegate_task 返回结果后，才能继续下一步
    - 评估输出格式必须为：
      - PASS — 如果质量达标，附简要说明
      - FAIL — 如果不达标，列出具体问题
-3. 如果 PASS → 输出最终结果，结束
-4. 如果 FAIL → 进入第 2 轮
+3. 根据 evaluator 的返回结果判断：
+   - 如果 PASS → 输出最终结果，结束
+   - 如果 FAIL → 进入第 2 轮（只进入一轮，不要预排多轮）
 
-第 2+ 轮（修复迭代）：
+第 2+ 轮（修复迭代，每轮只做以下步骤，做完再决定是否需要下一轮）：
 1. 调用 delegate_task（goal 开头包含 [team:executor]），让 {{member_0_name}} 根据评估反馈修复
    - context 参数必须包含上一轮评估者的具体问题列表
-2. 再次调用 {{member_1_name}} 评估（同第 1 轮步骤 2）
-3. 如果 PASS → 输出最终结果，结束
-4. 如果 FAIL 且未达上限 → 继续下一轮
+   ⚠️ 必须等返回后才能继续
+2. 拿到结果后，调用 delegate_task（goal 开头包含 [team:evaluator]）再次评估
+   ⚠️ 必须等返回后才能继续
+3. 根据 evaluator 返回结果判断：
+   - 如果 PASS → 输出最终结果，结束
+   - 如果 FAIL 且未达上限 → 继续下一轮
 
 如果达到 {{max_retries}} 次仍未通过：
 - 输出当前最佳结果
@@ -288,6 +296,7 @@ export const BUILTIN_MODES: OrchestrationMode[] = [
 - 不要说"已完成"，要明确标注未完成的项
 
 关键规则：
+- 一次只能有一个 delegate_task 在执行，绝不并行
 - 每轮 executor 的 context 必须包含评估者的反馈
 - 评估者必须给出明确的 PASS/FAIL 判断，不能模棱两可
 - executor 修复时必须针对评估者提出的问题逐条修复
