@@ -640,7 +640,7 @@ export function InputBar() {
 
           {/* 自动驾驶 toggle（一次性模式，开启后下次发送走 autopilot） */}
           <button
-            className={`btn-input-action ${autopilotEnabled ? "active" : ""}`}
+            className={`input-thinking ${autopilotEnabled ? "active" : ""}`}
             onClick={() => setAutopilotEnabled(!autopilotEnabled)}
             type="button"
             title={autopilotEnabled ? "自动驾驶已开启（点发送启动）" : "开启自动驾驶：分析→规划→执行→验证→修复"}
@@ -650,7 +650,7 @@ export function InputBar() {
 
           {/* 思考模式切换 */}
           <button
-            className={`btn-input-action ${thinkingEnabled ? "active" : ""}`}
+            className={`input-thinking ${thinkingEnabled ? "active" : ""}`}
             onClick={toggleThinking}
             type="button"
             title={thinkingEnabled ? "思考已开启（点击关闭）" : "思考已关闭（点击开启，模型会先思考再回答）"}
