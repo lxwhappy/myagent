@@ -163,7 +163,7 @@ export function setupSSEGateway(app: FastifyInstance) {
       // session.prompt() 在 API 429（余额不足）等场景下可能卡死
       // （既不 resolve 也不 reject），.catch() 永远等不到。
       // 用一个临时订阅者追踪活动，长时间无事件就 abort + emit error 解锁前端。
-      const IDLE_TIMEOUT_MS = 180_000; // 3 分钟无任何事件判定卡死
+      const IDLE_TIMEOUT_MS = 300_000; // 5 分钟无任何事件判定卡死（团队模式下子 agent 执行可能很久）
       let lastActivity = Date.now();
       const idleUnsub = agent.subscribe?.(() => { lastActivity = Date.now(); });
       // 同时监听 event-bus：ask_user 工具的心跳（ask_heartbeat）能重置 idle 计时

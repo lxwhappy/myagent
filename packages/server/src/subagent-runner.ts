@@ -25,7 +25,7 @@ import type {
   SubagentProgressEvent,
 } from "@myagent/pi-subagent-extension";
 
-const DEFAULT_TIMEOUT_MS = 180_000; // 3 分钟兜底
+const DEFAULT_TIMEOUT_MS = 300_000; // 5 分钟兜底（编码任务需要更多时间）
 
 // ── 活跃子 agent 追踪表 ──
 // 按 parentSessionId 记录所有正在运行的子 agent 的 AbortController，
@@ -87,8 +87,9 @@ export const runSubagent: SubagentSpawnFn = async (
   let abortController: AbortController | undefined;
   let controllers: Set<AbortController> | undefined;
 
-  const IDLE_TIMEOUT_MS = 90_000;  // 90 秒无任何活动 → 判定卡死，提前 abort
-  const HARD_TIMEOUT_MS = Math.max(timeoutMs, 600_000); // 硬上限 10 分钟
+  const IDLE_TIMEOUT_MS = 180_000;  // 180 秒无任何活动 → 判定卡死，提前 abort
+  // 子 agent 执行编码任务时，LLM 单轮推理可能要 60-120s，90s 太激进
+  const HARD_TIMEOUT_MS = Math.max(timeoutMs, 900_000); // 硬上限 15 分钟
 
   try {
     // ── 创建子 agent ──
