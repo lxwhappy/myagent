@@ -132,7 +132,7 @@ function AgentNode({ data }: NodeProps) {
   return (
     <div style={cardStyle}>
       <Handle type="target" position={Position.Left} style={hStyle} />
-      <Handle type="target" position={Position.Top} style={hStyle} />
+      <Handle type="target" position={Position.Bottom} id="bottom" style={hStyle} />
 
       {/* 状态指示点 */}
       <div style={{
@@ -185,7 +185,7 @@ function AgentNode({ data }: NodeProps) {
       )}
 
       <Handle type="source" position={Position.Right} style={hStyle} />
-      <Handle type="source" position={Position.Bottom} style={hStyle} />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={hStyle} />
     </div>
   );
 }
@@ -246,18 +246,27 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       position: { x: 0, y: 0 },
     }));
 
-    const rfEdges: Edge[] = edgeDefs.map(e => ({
-      id: e.id, source: e.source, target: e.target, label: e.label,
-      animated: e.animated ?? false,
-      style: {
-        stroke: e.dashed ? "var(--muted)" : "var(--border)",
-        strokeWidth: 1.5,
-        strokeDasharray: e.dashed ? "5 3" : undefined,
-      },
-      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
-      labelStyle: { fontSize: 10, fill: "var(--muted)" },
-      labelBgStyle: { fill: "var(--surface)" },
-    }));
+    const rfEdges: Edge[] = edgeDefs.map(e => {
+      const isLoopBack = e.source !== e.target && edgeDefs.some(e2 =>
+        e2.source === e.target && e2.target === e.source);
+      return {
+        id: e.id, source: e.source, target: e.target, label: e.label,
+        animated: e.animated ?? false,
+        // 回环边从底部出发绕回，避免和正向边重叠
+        type: isLoopBack ? "step" : undefined,
+        sourceHandle: isLoopBack ? "bottom" : undefined,
+        targetHandle: isLoopBack ? "bottom" : undefined,
+        pathOptions: isLoopBack ? { borderRadius: 20 } : undefined,
+        style: {
+          stroke: e.dashed ? "var(--accent)" : "var(--border)",
+          strokeWidth: 1.5,
+          strokeDasharray: e.dashed ? "5 3" : undefined,
+        },
+        markerEnd: { type: MarkerType.ArrowClosed, color: e.dashed ? "var(--accent)" : "var(--border)", width: 16, height: 16 },
+        labelStyle: { fontSize: 10, fill: e.dashed ? "var(--accent)" : "var(--muted)" },
+        labelBgStyle: { fill: "var(--surface)" },
+      };
+    });
 
     return layoutWithDagre(rfNodes, rfEdges, layout);
   }, [nodeDefs, edgeDefs, layout]);
