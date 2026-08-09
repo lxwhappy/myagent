@@ -512,14 +512,14 @@ function TeamFlowPreview({ editing, mode, agentIcon, agentName, onDagEdgesChange
 
   if (nodes.length === 0) return null;
 
-  // custom 模式：editable 编辑器
-  const isCustom = mode.topology === "dag";
+  // custom 和 loop 模式：editable 编辑器（可拖拽节点）
+  const isEditable = mode.topology === "dag" || mode.topology === "loop";
 
-  if (isCustom) {
+  if (isEditable) {
     return (
       <div className="team-flow-preview team-flow-editable">
         <div className="team-flow-edit-hint">
-          <span>💡 拖拽节点调整位置 · 从右侧连接点拖到下一个节点创建依赖 · 选中连线后按 Delete 删除</span>
+          <span>💡 拖拽节点调整位置{mode.topology === "dag" ? " · 从右侧连接点拖到下一个节点创建依赖 · 选中连线后按 Delete 删除" : " · 连线自动生成"}</span>
         </div>
         <AgentFlowGraph
           nodes={nodes}
@@ -528,21 +528,20 @@ function TeamFlowPreview({ editing, mode, agentIcon, agentName, onDagEdgesChange
           height={280}
           showControls={true}
           editable
-          onEdgesChange={(newEdges) => {
-            // 将边 ID（node-N → node-M）转换回成员索引
+          onEdgesChange={mode.topology === "dag" ? (newEdges) => {
             const dagEdges = newEdges.map(e => {
               const sourceIdx = parseInt(e.source.replace("node-", "")) || 0;
               const targetIdx = parseInt(e.target.replace("node-", "")) || 0;
               return { source: sourceIdx, target: targetIdx };
             }).filter(e => e.source !== e.target);
             onDagEdgesChange?.(dagEdges);
-          }}
+          } : undefined}
         />
       </div>
     );
   }
 
-  // 非 custom 模式：只读
+  // 非 custom/loop 模式：只读
   return (
     <div className="team-flow-preview">
       <AgentFlowGraph nodes={nodes} edges={edges} layout={mode.layout} height={220} showControls={false} />
