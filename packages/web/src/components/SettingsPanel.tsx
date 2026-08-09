@@ -348,6 +348,16 @@ function AutopilotTab() {
             onChange={(e) => setConfig({ ...config, maxRepairLoops: parseInt(e.target.value) || 3 })}
           />
         </label>
+        <label className="agent-edit-field">
+          <span>单阶段超时（秒）</span>
+          <input
+            type="number" min={30} max={900}
+            className="settings-input"
+            style={{ width: 80 }}
+            value={Math.round((config.phaseTimeoutMs || 300000) / 1000)}
+            onChange={(e) => setConfig({ ...config, phaseTimeoutMs: (parseInt(e.target.value) || 300) * 1000 })}
+          />
+        </label>
       </div>
 
       {/* 阶段提示词编辑 */}
