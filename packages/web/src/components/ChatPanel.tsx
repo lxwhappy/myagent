@@ -169,7 +169,7 @@ const PHASE_LABELS: Record<string, string> = {
   error: "出错",
 };
 
-function AutopilotProgress({ state }: { state: { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string } }) {
+function AutopilotProgress({ state }: { state: { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string; stream?: string } }) {
   const phases = ["analyze", "plan", "execute", "verify"];
   const currentIdx = phases.indexOf(state.phase);
   const isDone = state.phase === "done" || state.phase === "error";
@@ -189,11 +189,8 @@ function AutopilotProgress({ state }: { state: { phase: string; round: number; t
           </span>
         ))}
       </div>
-      {state.phase === "execute" && state.result && (
-        <div className="autopilot-detail">{state.result.slice(0, 200)}...</div>
-      )}
-      {state.phase === "verify" && state.verification && (
-        <div className="autopilot-detail">{state.verification.slice(0, 200)}</div>
+      {(state.stream || state.result) && !isDone && (
+        <div className="autopilot-detail">{state.stream || state.result?.slice(0, 200)}</div>
       )}
     </div>
   );

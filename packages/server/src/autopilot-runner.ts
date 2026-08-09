@@ -86,6 +86,7 @@ async function runPhase(
   agentId: string | undefined,
   cwd: string,
   signal: AbortSignal,
+  chatSessionId: string,
 ): Promise<string> {
   const provider = config.defaultProvider;
   const modelId = config.defaultModel;
@@ -103,13 +104,22 @@ async function runPhase(
     customTools: [],
   });
 
-  // 累积输出
+  // 累积输出 + 实时流式通知前端
   let output = "";
   const unsub = session.subscribe((event: any) => {
     if (event.type === "message_update") {
       const ae = event.assistantMessageEvent;
       if (ae?.type === "text_delta" && typeof ae.delta === "string") {
         output += ae.delta;
+        // 实时流式发给前端（节流：每 50 字符发一次）
+        if (output.length % 50 < ae.delta.length) {
+          emit({
+            type: "autopilot_stream",
+            chatSessionId,
+            payload: { phase, snippet: output.slice(-200) },
+            ts: Date.now(),
+          });
+        }
       }
     }
   });
@@ -182,14 +192,14 @@ export async function runAutopilot(
     // 阶段 1: 分析
     state.phase = "analyze";
     emitPhaseEvent(chatSessionId, state);
-    state.analysis = await runPhase("analyze", state, agentId, cwd, abortController.signal);
+    state.analysis = await runPhase("analyze", state, agentId, cwd, abortController.signal, chatSessionId);
     state.blackboard.push(`分析：${state.analysis}`);
     emitPhaseEvent(chatSessionId, state);
 
     // 阶段 2: 规划
     state.phase = "plan";
     emitPhaseEvent(chatSessionId, state);
-    state.plan = await runPhase("plan", state, agentId, cwd, abortController.signal);
+    state.plan = await runPhase("plan", state, agentId, cwd, abortController.signal, chatSessionId);
     state.blackboard.push(`计划：${state.plan}`);
     emitPhaseEvent(chatSessionId, state);
 
@@ -199,14 +209,14 @@ export async function runAutopilot(
       // 执行
       state.phase = "execute";
       emitPhaseEvent(chatSessionId, state);
-      state.result = await runPhase("execute", state, agentId, cwd, abortController.signal);
+      state.result = await runPhase("execute", state, agentId, cwd, abortController.signal, chatSessionId);
       state.blackboard.push(`第${state.round}轮执行：${state.result.slice(0, 800)}`);
       emitPhaseEvent(chatSessionId, state);
 
       // 验证
       state.phase = "verify";
       emitPhaseEvent(chatSessionId, state);
-      state.verification = await runPhase("verify", state, agentId, cwd, abortController.signal);
+      state.verification = await runPhase("verify", state, agentId, cwd, abortController.signal, chatSessionId);
       emitPhaseEvent(chatSessionId, state);
 
       // 检查验证结果
@@ -234,7 +244,7 @@ export async function runAutopilot(
       if (state.round < maxLoops) {
         state.phase = "repair";
         emitPhaseEvent(chatSessionId, state);
-        const repaired = await runPhase("repair", state, agentId, cwd, abortController.signal);
+        const repaired = await runPhase("repair", state, agentId, cwd, abortController.signal, chatSessionId);
         state.result = repaired;
         state.blackboard.push(`第${state.round}轮修复：${repaired.slice(0, 800)}`);
         emitPhaseEvent(chatSessionId, state);

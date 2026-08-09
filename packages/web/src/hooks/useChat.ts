@@ -379,6 +379,13 @@ export function useChat() {
           }
           break;
         }
+        case "autopilot_stream": {
+          if (sid && msg.payload) {
+            const p = msg.payload as { phase: string; snippet: string };
+            chat.setAutopilotStream(sid, p.phase, p.snippet);
+          }
+          break;
+        }
 
         case "error":
           console.error("[agent error]", msg.payload);

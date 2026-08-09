@@ -224,6 +224,7 @@ interface ChatStore {
   addSkillUsed: (id: string, skill: SkillUsage) => void;
   setRetryStatus: (id: string, status: { attempt: number; maxAttempts: number; delayMs: number; errorMessage: string } | null) => void;
   setAutopilotState: (id: string, state: { phase: string; round: number; task: string; analysis?: string; plan?: string; result?: string; verification?: string; issues?: string[]; error?: string }) => void;
+  setAutopilotStream: (id: string, phase: string, snippet: string) => void;
   finishAutopilot: (id: string, summary: string) => void;
   addDebugLLM: (id: string, evt: DebugLLMEvent) => void;
   /** 删除最后一条 assistant 消息（用于重新生成） */
@@ -430,6 +431,11 @@ export const useChatStore = create<ChatStore>((set) => ({
   setAutopilotState: (id, state) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, autopilot: state, isGenerating: true } } };
+  }),
+
+  setAutopilotStream: (id, phase, snippet) => set((s) => {
+    const sess = s.sessions[id]; if (!sess || !sess.autopilot) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, autopilot: { ...sess.autopilot, phase, stream: snippet } } } };
   }),
 
   finishAutopilot: (id, summary) => set((s) => {
