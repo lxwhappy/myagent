@@ -68,7 +68,7 @@ export function InputBar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 当前 Agent：优先用会话绑定的，否则用全局选中的
-  const currentAgent = agent || agentsList.find(a => a.id === activeAgentId) || agentsList[0];
+  const currentAgent = agent || agentsList.find(a => a.id === activeAgentId) || agentsList.at(0);
 
   // ── Agent 选择器 ──
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
@@ -158,7 +158,7 @@ export function InputBar() {
   }, []);
 
   // ── 粘贴图片 ──
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(e.clipboardData.files);
     if (files.length > 0) {
       e.preventDefault();
@@ -170,14 +170,14 @@ export function InputBar() {
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     if (!e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
     dragCounterRef.current++;
     setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     dragCounterRef.current--;
     if (dragCounterRef.current <= 0) {
@@ -186,11 +186,11 @@ export function InputBar() {
     }
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     dragCounterRef.current = 0;
     setIsDragging(false);
@@ -205,11 +205,35 @@ export function InputBar() {
     histIndexRef.current = -1;
 
     // 自动驾驶模式：走 autopilot 引擎
-    if (autopilotEnabled && activeChatSessionId) {
+    if (autopilotEnabled) {
+      // 确保有会话（和正常发送一样的兜底逻辑）
+      let sid = activeChatSessionId;
+      if (!sid) {
+        const wsStore = (window as any).__wsStore;
+        const workspaces = wsStore?.getState?.()?.workspaces || wsStore?.workspaces || [];
+        const activeId = wsStore?.getState?.()?.activeId ?? wsStore?.activeId;
+        const targetWs = (activeId ? workspaces.find((w: any) => w.id === activeId) : null) || workspaces[0];
+        if (!targetWs) { alert("请先添加一个工作空间"); return; }
+        try {
+          const res = await fetch(`/api/workspaces/${targetWs.id}/sessions`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+          });
+          const sessionData = await res.json();
+          if (!res.ok) { alert("创建会话失败: " + sessionData.error); return; }
+          const ws = wsStore?.getState?.() ?? wsStore;
+          ws.setActive?.(targetWs.id);
+          ws.addSession?.(targetWs.id, sessionData);
+          ws.setActiveSession?.(sessionData.id);
+          useChatStore.getState().ensureSession(sessionData.id);
+          useChatStore.getState().setActiveChatSession(sessionData.id);
+          sseClient.createAgent(sessionData.id, { cwd: targetWs.path });
+          sid = sessionData.id;
+        } catch (e: any) { alert("创建会话失败: " + e.message); return; }
+      }
       const task = text.trim();
-      useChatStore.getState().addUserMessage(activeChatSessionId, task);
-      useChatStore.getState().setAutopilotState(activeChatSessionId, { phase: "analyze", round: 0, task });
-      sseClient.autopilot(activeChatSessionId, task);
+      useChatStore.getState().addUserMessage(sid!, task);
+      useChatStore.getState().setAutopilotState(sid!, { phase: "analyze", round: 0, task });
+      sseClient.autopilot(sid!, task);
       setText(""); clearDraft(draftKey); setAutopilotEnabled(false);
       if (taRef.current) taRef.current.style.height = "auto";
       return;

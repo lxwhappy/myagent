@@ -243,13 +243,19 @@ export function setupSSEGateway(app: FastifyInstance) {
   // ── Autopilot 全自动执行 ──
   app.post("/api/agent/:id/autopilot", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { task?: string; agentId?: string } | null;
+    const body = req.body as { task?: string; agentId?: string; cwd?: string } | null;
     const task = body?.task?.trim();
     if (!task) {
       reply.status(400).send({ error: "task is required" });
       return;
     }
-    const cwd = getAgentCwd(id) ?? config.workDir;
+    // 确保 agent session 存在（和 prompt 端点一样的兜底逻辑）
+    let agent = getAgent(id);
+    if (!agent) {
+      await createAgent(id, { cwd: body?.cwd });
+      agent = getAgent(id);
+    }
+    const cwd = getAgentCwd(id) ?? body?.cwd ?? config.workDir;
     // 异步启动，不等完成
     runAutopilot(id, task, cwd, body?.agentId);
     reply.send({ success: true, message: "autopilot started" });
