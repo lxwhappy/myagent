@@ -26,6 +26,8 @@ import {
   useNodesState,
   useEdgesState,
   addEdge,
+  BaseEdge,
+  getSmoothStepPath,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "@dagrejs/dagre";
@@ -120,6 +122,22 @@ const STATUS_BG: Record<AgentNodeStatus, string> = {
 
 // ── Handle 样式（editable 模式下可见可拖） ──
 const handleStyleHidden: CSSProperties = { opacity: 0 };
+
+// ── 自定义回环边：强制向下弯曲的 SmoothStep 路径 ──
+function LoopBackEdge({ source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style }: any) {
+  // 强制从底部出、底部入，加偏移量让线绕到节点下方
+  const offsetY = 60;
+  const [edgePath] = getSmoothStepPath({
+    sourceX, sourceY: sourceY + offsetY,
+    targetX, targetY: targetY + offsetY,
+    sourcePosition: Position.Bottom,
+    targetPosition: Position.Bottom,
+    borderRadius: 16,
+  });
+  return <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />;
+}
+
+const loopEdgeTypes = { loopback: LoopBackEdge };
 const handleStyleVisible: CSSProperties = {
   width: 10, height: 10,
   background: "var(--accent)",
@@ -272,12 +290,8 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       return {
         id: e.id, source: e.source, target: e.target, label: e.label,
         animated: e.animated ?? false,
-        // 回环边：从 source 底部出发 → target 底部，贝塞尔曲线向下绕回
-        // 正向边：从 source 右侧 → target 左侧，直线
-        ...(isLoopBack ? {
-          sourceHandle: "bottom",
-          targetHandle: "bottom",
-        } : {}),
+        // 回环边用自定义组件，强制向下弯曲
+        ...(isLoopBack ? { type: "loopback" } : {}),
         style: {
           stroke: e.dashed ? "var(--accent)" : "var(--border)",
           strokeWidth: 1.5,
@@ -302,6 +316,7 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={loopEdgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }}
