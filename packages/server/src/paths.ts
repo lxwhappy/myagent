@@ -44,6 +44,8 @@ export const PATHS = {
   todos: join(AGENT_DIR, "todos.json"),
   /** 快捷指令（用户可增删改） */
   quickPrompts: join(AGENT_DIR, "quick-prompts.json"),
+  /** Autopilot 配置（各阶段提示词模板） */
+  autopilotConfig: join(AGENT_DIR, "autopilot-config.json"),
 
   // ── 定时任务 ──
   cronJobs: join(AGENT_DIR, "cron-jobs.json"),

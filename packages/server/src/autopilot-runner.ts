@@ -15,9 +15,17 @@ import { getModel } from "@earendil-works/pi-ai/compat";
 import { config } from "./config.js";
 import { emit } from "./event-bus.js";
 import { AGENT_DIR } from "./paths.js";
+import { autopilotConfigStore } from "./autopilot-config.js";
 
-const PHASE_TIMEOUT_MS = 120_000; // 单阶段 2 分钟超时
-const MAX_REPAIR_LOOPS = 3; // 修复循环最大轮数（命名兼容）
+const PHASE_TIMEOUT_MS = 120_000; // 默认单阶段超时（可被 config 覆盖）
+
+// 从配置读取最大循环次数（首次调用时缓存）
+let _maxLoops = 3;
+async function getMaxLoops(): Promise<number> {
+  const cfg = await autopilotConfigStore.get();
+  _maxLoops = cfg.maxRepairLoops;
+  return _maxLoops;
+}
 
 export type AutopilotPhase = "analyze" | "plan" | "execute" | "verify" | "repair" | "done" | "error";
 
@@ -47,85 +55,28 @@ export function abortAutopilot(chatSessionId: string) {
   }
 }
 
-/** 阶段提示词模板 */
-function buildPhasePrompt(phase: AutopilotPhase, state: AutopilotState): string {
+/** 从配置模板插值生成阶段提示词 */
+async function buildPhasePrompt(phase: AutopilotPhase, state: AutopilotState): Promise<string> {
+  const cfg = await autopilotConfigStore.get();
+  const phaseCfg = cfg.phases.find(p => p.phase === phase);
+  if (!phaseCfg) return "";
+
   const blackboardCtx = state.blackboard.length > 0
     ? `\n\n--- 前序阶段产出 ---\n${state.blackboard.map((b, i) => `[阶段${i + 1}] ${b}`).join("\n\n")}`
     : "";
 
-  switch (phase) {
-    case "analyze":
-      return `[Autopilot · 分析阶段] 你是一个技术分析师。
-分析以下任务，输出：
-1. 任务理解：这个任务要做什么
-2. 技术约束：涉及哪些技术栈、有哪些限制
-3. 风险点：可能的坑和注意事项
+  const issuesText = state.issues && state.issues.length > 0
+    ? `上一轮验证发现的问题（必须修复）：\n${state.issues.map((iss, i) => `${i + 1}. ${iss}`).join("\n")}`
+    : "";
 
-任务：${state.task}${blackboardCtx}
-
-输出简洁，不要写代码。`;
-
-    case "plan":
-      return `[Autopilot · 规划阶段] 你是一个技术架构师。
-基于分析结果，制定执行计划：
-1. 拆分为 2-5 个具体的执行步骤
-2. 每个步骤说明做什么、预期产出
-3. 标注步骤间的依赖关系
-
-${state.analysis ? `分析结果：\n${state.analysis}` : ""}
-
-任务：${state.task}${blackboardCtx}
-
-输出步骤化计划，不要写代码。`;
-
-    case "execute":
-      return `[Autopilot · 执行阶段] 你是一个资深工程师。
-按照计划执行任务，直接写代码/做修改。
-
-${state.plan ? `执行计划：\n${state.plan}` : ""}
-
-${state.issues && state.issues.length > 0 ? `上一轮验证发现的问题（必须修复）：\n${state.issues.map((iss, i) => `${i + 1}. ${iss}`).join("\n")}` : ""}
-
-任务：${state.task}${blackboardCtx}
-
-直接执行，给出完整的代码和修改。`;
-
-    case "verify":
-      return `[Autopilot · 验证阶段] 你是一个严格的 QA 工程师。
-审查执行结果，判断是否达标。
-
-审查标准：
-1. 功能完整性：是否完成了所有要求
-2. 正确性：逻辑是否正确
-3. 代码质量：是否有明显问题
-
-执行结果：
-${state.result || "(无)"}
-
-任务：${state.task}
-
-输出格式：
-- 判定：PASS 或 FAIL
-- 如果 FAIL，列出具体问题（每条一行，以 "问题:" 开头）
-- 如果 PASS，简要说明通过的理由`;
-
-    case "repair":
-      return `[Autopilot · 修复阶段] 你是一个资深工程师。
-针对验证发现的问题逐条修复。
-
-问题列表：
-${state.issues?.map((iss, i) => `${i + 1}. ${iss}`).join("\n") || "(无具体问题)"}
-
-当前结果：
-${state.result || "(无)"}
-
-任务：${state.task}${blackboardCtx}
-
-逐条修复，给出完整的修复代码。`;
-
-    default:
-      return "";
-  }
+  let result = phaseCfg.promptTemplate;
+  result = result.replaceAll("{{task}}", state.task);
+  result = result.replaceAll("{{blackboard}}", blackboardCtx);
+  result = result.replaceAll("{{analysis}}", state.analysis ? `分析结果：\n${state.analysis}` : "");
+  result = result.replaceAll("{{plan}}", state.plan ? `执行计划：\n${state.plan}` : "");
+  result = result.replaceAll("{{result}}", state.result || "(无)");
+  result = result.replaceAll("{{issues}}", issuesText);
+  return result;
 }
 
 /** 运行单个阶段（创建临时子 Agent，跑完即销毁） */
@@ -163,7 +114,7 @@ async function runPhase(
     }
   });
 
-  const prompt = buildPhasePrompt(phase, state);
+  const prompt = await buildPhasePrompt(phase, state);
   console.log(`[autopilot] ${phase} 开始 (${prompt.length} 字符)`);
 
   try {
@@ -243,7 +194,8 @@ export async function runAutopilot(
     emitPhaseEvent(chatSessionId, state);
 
     // 阶段 3-4: 执行 → 验证（可能多轮）
-    for (state.round = 1; state.round <= MAX_REPAIR_LOOPS; state.round++) {
+    const maxLoops = await getMaxLoops();
+    for (state.round = 1; state.round <= maxLoops; state.round++) {
       // 执行
       state.phase = "execute";
       emitPhaseEvent(chatSessionId, state);
@@ -279,7 +231,7 @@ export async function runAutopilot(
       }
 
       // 如果还有修复轮次，进入修复阶段
-      if (state.round < MAX_REPAIR_LOOPS) {
+      if (state.round < maxLoops) {
         state.phase = "repair";
         emitPhaseEvent(chatSessionId, state);
         const repaired = await runPhase("repair", state, agentId, cwd, abortController.signal);
@@ -292,7 +244,7 @@ export async function runAutopilot(
     // 达到上限仍未通过
     state.phase = "done";
     emitPhaseEvent(chatSessionId, state);
-    console.log(`[autopilot] 达到修复上限(${MAX_REPAIR_LOOPS})，输出当前结果`);
+    console.log(`[autopilot] 达到修复上限(${maxLoops})，输出当前结果`);
     return state;
 
   } catch (err: any) {

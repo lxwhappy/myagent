@@ -16,6 +16,7 @@ import { pushPendingImages } from "./tools/image-tool.js";
 import { resolveAsk, abortAsks } from "./tools/ask-tool.js";
 import { todoStore } from "./tools/index.js";
 import { runAutopilot, abortAutopilot } from "./autopilot-runner.js";
+import { autopilotConfigStore } from "./autopilot-config.js";
 import { config } from "./config.js";
 
 export function setupSSEGateway(app: FastifyInstance) {
@@ -252,6 +253,17 @@ export function setupSSEGateway(app: FastifyInstance) {
     // 异步启动，不等完成
     runAutopilot(id, task, cwd, body?.agentId);
     reply.send({ success: true, message: "autopilot started" });
+  });
+
+  // ── Autopilot 配置 ──
+  app.get("/api/autopilot/config", async () => {
+    return await autopilotConfigStore.get();
+  });
+
+  app.put("/api/autopilot/config", async (req, reply) => {
+    const body = req.body as Partial<{ maxRepairLoops: number; phaseTimeoutMs: number; phases: any[] }> | null;
+    const cfg = await autopilotConfigStore.update(body || {});
+    reply.send({ config: cfg });
   });
 
   // ── 中止 Autopilot ──

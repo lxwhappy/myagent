@@ -63,6 +63,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace, onSw
         { key: "agents", icon: "🤖", label: "Agent 管理" },
         { key: "teams", icon: "👥", label: "团队管理" },
         { key: "models", icon: "⚡", label: "模型" },
+        { key: "autopilot", icon: "🚀", label: "自动驾驶" },
       ],
     },
     {
@@ -120,6 +121,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace, onSw
           {tab === "agents" && <AgentManagerSection onSwitchActive={onSwitchAgent} />}
           {tab === "teams" && <AgentTeamManagerSection />}
           {tab === "models" && <ModelsTab />}
+          {tab === "autopilot" && <AutopilotTab />}
           {tab === "appearance" && <AppearanceTab />}
           {tab === "skills" && <SkillsTab />}
           {tab === "extensions" && <ExtensionsTab />}
@@ -273,6 +275,115 @@ function ModelsTab() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── 自动驾驶 Tab ──
+interface AutopilotPhaseConfigFE {
+  phase: string;
+  label: string;
+  icon: string;
+  description: string;
+  promptTemplate: string;
+}
+
+function AutopilotTab() {
+  const [config, setConfig] = useState<{ maxRepairLoops: number; phaseTimeoutMs: number; phases: AutopilotPhaseConfigFE[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    fetch("/api/autopilot/config").then(r => r.json()).then(d => {
+      setConfig(d);
+      setExpandedPhase(d.phases?.[0]?.phase ?? null);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleSave = async () => {
+    if (!config) return;
+    setSaving(true);
+    await fetch("/api/autopilot/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    setSaving(false);
+  };
+
+  const updatePhase = (phase: string, patch: Partial<AutopilotPhaseConfigFE>) => {
+    if (!config) return;
+    setConfig({
+      ...config,
+      phases: config.phases.map(p => p.phase === phase ? { ...p, ...patch } : p),
+    });
+  };
+
+  if (loading) return <div className="settings-loading">加载配置…</div>;
+  if (!config) return <div className="settings-error">加载失败</div>;
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-title">自动驾驶配置</div>
+      <p className="settings-desc">
+        自动驾驶按以下阶段循环执行：分析 → 规划 → 执行 → 验证。验证不通过自动进入修复阶段，直到通过或达到最大循环次数。
+        每个阶段的提示词模板支持变量插值，运行时自动替换。
+      </p>
+
+      {/* 全局参数 */}
+      <div className="autopilot-global-config">
+        <label className="agent-edit-field">
+          <span>最大循环次数</span>
+          <input
+            type="number" min={1} max={10}
+            className="settings-input"
+            style={{ width: 80 }}
+            value={config.maxRepairLoops}
+            onChange={(e) => setConfig({ ...config, maxRepairLoops: parseInt(e.target.value) || 3 })}
+          />
+        </label>
+      </div>
+
+      {/* 阶段提示词编辑 */}
+      <div className="autopilot-phases">
+        {config.phases.map(p => (
+          <div key={p.phase} className="autopilot-phase-card">
+            <div
+              className="autopilot-phase-header"
+              onClick={() => setExpandedPhase(expandedPhase === p.phase ? null : p.phase)}
+            >
+              <span className="autopilot-phase-icon">{p.icon}</span>
+              <span className="autopilot-phase-label">{p.label}</span>
+              <span className="autopilot-phase-desc">{p.description}</span>
+              <span className="autopilot-phase-chevron">{expandedPhase === p.phase ? "▾" : "▸"}</span>
+            </div>
+            {expandedPhase === p.phase && (
+              <div className="autopilot-phase-body">
+                <textarea
+                  className="agent-edit-prompt team-prompt-editor"
+                  value={p.promptTemplate}
+                  onChange={(e) => updatePhase(p.phase, { promptTemplate: e.target.value })}
+                  rows={12}
+                />
+                <div className="agent-edit-hint">
+                  可用变量：<code>{"{{task}}"}</code> <code>{"{{analysis}}"}</code> <code>{"{{plan}}"}</code> <code>{"{{result}}"}</code> <code>{"{{issues}}"}</code> <code>{"{{blackboard}}"}</code>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="agent-edit-actions">
+        <button className="settings-save-btn" onClick={handleSave} disabled={saving}>
+          {saving ? "保存中…" : "保存配置"}
+        </button>
       </div>
     </div>
   );

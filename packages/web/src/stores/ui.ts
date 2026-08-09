@@ -9,7 +9,7 @@ import { create } from "zustand";
 export type SettingsSection =
   | "models" | "agents" | "teams" | "appearance"
   | "skills" | "extensions" | "mcp" | "cron"
-  | "workspace" | "debug";
+  | "workspace" | "debug" | "autopilot";
 
 interface UIState {
   /** 侧栏切换到文件 tab（App 层订阅，触发 setSidebarTab("files")） */
