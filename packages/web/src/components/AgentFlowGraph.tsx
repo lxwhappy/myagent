@@ -53,8 +53,8 @@ function layoutWithDagre(nodes: Node[], edges: Edge[], direction: LayoutDirectio
   const g = new dagre.graphlib.Graph();
   g.setGraph({
     rankdir: direction,
-    nodesep: 40,
-    ranksep: direction === "LR" ? 80 : 60,
+    nodesep: 60,
+    ranksep: direction === "LR" ? 120 : 80,
   });
   g.setDefaultEdgeLabel(() => ({}));
 
@@ -252,15 +252,16 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       return {
         id: e.id, source: e.source, target: e.target, label: e.label,
         animated: e.animated ?? false,
-        // 回环边从底部出发绕回，避免和正向边重叠
-        type: isLoopBack ? "step" : undefined,
+        // 回环边用贝塞尔曲线从底部弧形绕回，正向边走直线
+        type: isLoopBack ? "default" : undefined,
         sourceHandle: isLoopBack ? "bottom" : undefined,
         targetHandle: isLoopBack ? "bottom" : undefined,
-        pathOptions: isLoopBack ? { borderRadius: 20 } : undefined,
         style: {
           stroke: e.dashed ? "var(--accent)" : "var(--border)",
           strokeWidth: 1.5,
           strokeDasharray: e.dashed ? "5 3" : undefined,
+          // 回环边控制曲率，让它绕到节点下方
+          ...(isLoopBack ? { curvature: 0.5 } : {}),
         },
         markerEnd: { type: MarkerType.ArrowClosed, color: e.dashed ? "var(--accent)" : "var(--border)", width: 16, height: 16 },
         labelStyle: { fontSize: 10, fill: e.dashed ? "var(--accent)" : "var(--muted)" },
