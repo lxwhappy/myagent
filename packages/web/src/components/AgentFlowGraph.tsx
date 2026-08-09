@@ -59,15 +59,12 @@ function layoutWithDagre(nodes: Node[], edges: Edge[], direction: LayoutDirectio
     edges.some(e2 => e2.source === e.target && e2.target === e.source && e.id !== e2.id));
 
   if (hasBidirectional && nodes.length <= 3) {
-    // loop 模式专用布局：两个节点垂直错开
-    // executor 在上，evaluator 在下偏右 — 正向边走右上→左下，回环边走左下→右上
-    // 物理隔离：两条边不可能重叠
-    const NODE_W = 180, NODE_H = 80;
+    // loop 模式专用布局：水平排列，正向边走中间，回环边走上方
     const layoutNodes = nodes.map((node, i) => {
       let x: number, y: number;
-      if (i === 0) { x = 0; y = 0; }                 // executor 左上
-      else if (i === 1) { x = 200; y = 130; }         // evaluator 右下，错开
-      else { x = 100; y = 260; }                       // finalizer 居中更下方
+      if (i === 0) { x = 0; y = 0; }
+      else if (i === 1) { x = 280; y = 0; }
+      else { x = 140; y = 140; }
       return { ...node, position: { x, y } };
     });
     return { nodes: layoutNodes, edges };
@@ -124,15 +121,15 @@ const STATUS_BG: Record<AgentNodeStatus, string> = {
 // ── Handle 样式（editable 模式下可见可拖） ──
 const handleStyleHidden: CSSProperties = { opacity: 0 };
 
-// ── 自定义回环边：强制向下弯曲的 SmoothStep 路径 ──
-function LoopBackEdge({ source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style }: any) {
-  // 强制从底部出、底部入，加偏移量让线绕到节点下方
-  const offsetY = 60;
+// ── 自定义回环边：强制向上弯曲的 SmoothStep 路径（走节点上方） ──
+function LoopBackEdge({ sourceX, sourceY, targetX, targetY, markerEnd, style }: any) {
+  // 从节点顶部出发，向上弯曲，再连回另一个节点的顶部
+  const offsetY = -50;
   const [edgePath] = getSmoothStepPath({
     sourceX, sourceY: sourceY + offsetY,
     targetX, targetY: targetY + offsetY,
-    sourcePosition: Position.Bottom,
-    targetPosition: Position.Bottom,
+    sourcePosition: Position.Top,
+    targetPosition: Position.Top,
     borderRadius: 16,
   });
   return <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />;
@@ -171,6 +168,7 @@ function AgentNode({ data }: NodeProps) {
   return (
     <div style={cardStyle}>
       <Handle type="target" position={Position.Left} style={hStyle} />
+      <Handle type="target" position={Position.Top} id="top" style={hStyle} />
       <Handle type="target" position={Position.Bottom} id="bottom" style={hStyle} />
 
       {/* 状态指示点 */}
@@ -224,6 +222,7 @@ function AgentNode({ data }: NodeProps) {
       )}
 
       <Handle type="source" position={Position.Right} style={hStyle} />
+      <Handle type="source" position={Position.Top} id="top" style={hStyle} />
       <Handle type="source" position={Position.Bottom} id="bottom" style={hStyle} />
     </div>
   );
@@ -285,12 +284,18 @@ function ReadonlyGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       position: { x: 0, y: 0 },
     }));
 
-    const rfEdges: Edge[] = edgeDefs.map(e => {
-      const isLoopBack = e.source !== e.target && edgeDefs.some(e2 =>
-        e2.source === e.target && e2.target === e.source);
+    const rfEdges: Edge[] = edgeDefs.map((e, idx) => {
+      const isLoopBack = idx > 0 && e.source !== e.target && edgeDefs.some((e2, idx2) =>
+        idx2 < idx && e2.source === e.target && e2.target === e.source);
       return {
         id: e.id, source: e.source, target: e.target, label: e.label,
         animated: e.animated ?? false,
+        // 回环边强制走上方(top→top)用自定义组件，正向边走中间
+        ...(isLoopBack ? {
+          sourceHandle: "top",
+          targetHandle: "top",
+          type: "loopback",
+        } : {}),
         style: {
           stroke: e.dashed ? "var(--accent)" : "var(--border)",
           strokeWidth: 1.5,
@@ -362,16 +367,27 @@ function EditableGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
       },
       position: { x: 0, y: 0 },
     }));
-    const rfEdges: Edge[] = edgeDefs.map(e => ({
-      id: e.id, source: e.source, target: e.target,
-      animated: e.animated ?? false,
-      style: {
-        stroke: e.dashed ? "var(--muted)" : "var(--border)",
-        strokeWidth: 1.5,
-        strokeDasharray: e.dashed ? "5 3" : undefined,
-      },
-      markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)", width: 16, height: 16 },
-    }));
+    const rfEdges: Edge[] = edgeDefs.map((e, idx) => {
+      // 只把后定义的回环边标记为 loopback（evaluator→executor）
+      // 前向边（executor→evaluator）走默认路径
+      const isLoopBack = idx > 0 && e.source !== e.target && edgeDefs.some((e2, idx2) =>
+        idx2 < idx && e2.source === e.target && e2.target === e.source);
+      return {
+        id: e.id, source: e.source, target: e.target,
+        animated: e.animated ?? false,
+        ...(isLoopBack ? {
+          sourceHandle: "top",
+          targetHandle: "top",
+          type: "loopback",
+        } : {}),
+        style: {
+          stroke: e.dashed ? "var(--accent)" : "var(--border)",
+          strokeWidth: 1.5,
+          strokeDasharray: e.dashed ? "5 3" : undefined,
+        },
+        markerEnd: { type: MarkerType.ArrowClosed, color: e.dashed ? "var(--accent)" : "var(--border)", width: 16, height: 16 },
+      };
+    });
     const laid = layoutWithDagre(rfNodes, rfEdges, layout);
     setNodes(laid.nodes);
     setEdges(laid.edges);
@@ -494,6 +510,7 @@ function EditableGraph({ nodes: nodeDefs, edges: edgeDefs, layout = "LR", height
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={loopEdgeTypes}
         onNodesChange={(changes) => onNodesChange(onNodeDragBound(changes))}
         onEdgesChange={onEdgesChangeInternal}
         onConnect={handleConnect}
