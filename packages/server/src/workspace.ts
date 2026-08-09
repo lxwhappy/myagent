@@ -138,6 +138,9 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
   app.delete("/api/workspaces/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!workspaces.has(id)) return reply.code(404).send({ error: "Not found" });
+    // 清理关联的聊天会话
+    const removed = await chatSessionStore.removeByWorkspace(id);
+    if (removed > 0) console.log(`[workspace] cleaned ${removed} session(s) for ${id}`);
     workspaces.delete(id);
     await persistWorkspaces();
     console.log(`[workspace] removed: ${id}`);
@@ -770,9 +773,11 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
       }).trim();
       console.log(`[git] ${ws.name}: worktree remove ${body.path}`);
 
-      // 如果被删除的 worktree 注册为了工作空间，一并移除
+      // 如果被删除的 worktree 注册为了工作空间，一并移除（含关联会话）
       for (const [wsId, w] of workspaces) {
         if (w.path === body.path) {
+          const removed = await chatSessionStore.removeByWorkspace(wsId);
+          if (removed > 0) console.log(`[workspace] cleaned ${removed} session(s) for worktree ${wsId}`);
           workspaces.delete(wsId);
           await persistWorkspaces();
           break;

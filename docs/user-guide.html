@@ -174,6 +174,8 @@
     <li><a href="#session">会话管理</a></li>
     <li><a href="#chat">智能对话</a></li>
     <li><a href="#agent">Agent 角色管理</a></li>
+    <li><a href="#team">Agent 团队编排</a></li>
+    <li><a href="#autopilot">Autopilot 自动驾驶</a></li>
     <li><a href="#input">输入框与工具栏</a></li>
   </ul>
   <h2>代码与文件</h2>
@@ -203,6 +205,7 @@
   <h2>参考</h2>
   <ul>
     <li><a href="#shortcuts">快捷键速查</a></li>
+    <li><a href="#dev">开发与部署</a></li>
     <li><a href="#faq">常见问题</a></li>
   </ul>
 </nav>
@@ -217,10 +220,10 @@
 
   <div class="screenshot-annotated">
     <img class="screenshot" src="screenshots/main-interface.png" alt="MyAgent 主界面" style="margin:0;border:none;">
-    <div class="anno-box" style="top:0%;left:0%;width:20.5%;height:7.6%"><span class="anno-label">工作空间切换器</span></div>
-    <div class="anno-box" style="top:14.7%;left:0%;width:20.5%;height:69.7%"><span class="anno-label">会话列表</span></div>
-    <div class="anno-box" style="top:0%;left:20.6%;width:79.4%;height:9.6%"><span class="anno-label">标题栏（项目名 + 分支）</span></div>
-    <div class="anno-box" style="top:76.9%;left:28.3%;width:64.1%;height:16.6%"><span class="anno-label">输入框 + 工具栏</span></div>
+    <div class="anno-box" style="top:0%;left:0%;width:18.3%;height:5.3%"><span class="anno-label">工作空间切换器</span></div>
+    <div class="anno-box" style="top:10.3%;left:0%;width:18.3%;height:78.7%"><span class="anno-label">会话列表</span></div>
+    <div class="anno-box" style="top:0%;left:18.3%;width:81.7%;height:6.8%"><span class="anno-label">标题栏（项目名 + 分支）</span></div>
+    <div class="anno-box" style="top:82.3%;left:18.3%;width:81.7%;height:17.7%"><span class="anno-label">输入框 + 工具栏</span></div>
   </div>
   <div class="screenshot-caption">▲ MyAgent 主界面：左侧会话列表，右侧对话区 + 输入框</div>
 
@@ -233,7 +236,9 @@
     <li><span class="badge badge-new">Git</span> <strong>Worktree</strong>：创建 Git Worktree 实现多分支并行开发</li>
     <li><span class="badge badge-new">交互</span> <strong>智能提问</strong>：Agent 遇到歧义时主动向你提问（单选/多选）</li>
     <li><span class="badge badge-new">技能</span> <strong>Skills 系统</strong>：/ 触发技能选择器，加载领域知识</li>
-    <li><strong>子 Agent</strong>：委派子任务给独立的 AI Agent 并行处理</li>
+    <li><span class="badge badge-new">团队</span> <strong>Agent 团队编排</strong>：多 Agent 协作（流水线、并行、循环迭代等 9 种模式）</li>
+    <li><span class="badge badge-new">自动</span> <strong>Autopilot 自动驾驶</strong>：分析→规划→执行→验证全自动循环</li>
+    <li><strong>子 Agent</strong>：委派子任务给独立的 AI Agent 处理，支持串行执行和中止</li>
     <li><strong>定时任务</strong>：Cron 语法定时触发 Agent 执行</li>
   </ul>
 </section>
@@ -241,6 +246,12 @@
 <!-- ────────────── 快速开始 ────────────── -->
 <section id="quick-start">
   <h2>快速开始</h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/quick-start.png" alt="MyAgent 欢迎界面" style="margin:0;border:none;">
+    <div class="anno-box" style="top:82.3%;left:18.3%;width:81.7%;height:17.7%"><span class="anno-label">输入框 + 工具栏</span></div>
+  </div>
+  <div class="screenshot-caption">▲ MyAgent 启动后的欢迎界面：快捷提问按钮和底部输入框</div>
 
   <h3>1. 启动应用</h3>
   <p>在项目根目录执行：</p>
@@ -264,6 +275,12 @@
   <h2>工作空间管理</h2>
 
   <h3>添加项目</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/workspace-switcher.png" alt="工作空间切换器" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.9%;left:0.1%;width:18.1%;height:29.3%"><span class="anno-label">项目列表</span></div>
+    <div class="anno-box" style="top:35%;left:0.1%;width:18.1%;height:9%"><span class="anno-label">添加 / 打开工作空间</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 工作空间切换器下拉菜单：列出所有已添加项目，底部可打开新工作空间</div>
   <p>点击左上角「M」品牌图标 → 弹出工作空间下拉菜单 → 点击「添加项目」→ 在文件浏览器中选择目录。</p>
 
   <h3>切换项目</h3>
@@ -282,6 +299,18 @@
 <!-- ────────────── 会话管理 ────────────── -->
 <section id="session">
   <h2>会话管理</h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/session-list-hover.png" alt="会话列表" style="margin:0;border:none;">
+    <div class="anno-box" style="top:0.9%;left:70.8%;width:12.1%;height:3.6%"><span class="anno-label">新建会话 +</span></div>
+    <div class="anno-box" style="top:5.8%;left:4.5%;width:68.5%;height:4%"><span class="anno-label">会话 / 文件 Tab</span></div>
+    <div class="anno-box" style="top:6%;left:83%;width:12.1%;height:3.6%"><span class="anno-label">搜索 ⌘K</span></div>
+    <div class="anno-box" style="top:11.2%;left:3%;width:93.6%;height:2.9%"><span class="anno-label">日期分组（今天/昨天/7天内）</span></div>
+    <div class="anno-box" style="top:17.8%;left:3%;width:93.6%;height:3.7%"><span class="anno-label">会话条目（hover 显示操作按钮）</span></div>
+    <div class="anno-box" style="top:18.2%;left:73.1%;width:9.1%;height:2.8%"><span class="anno-label">置顶</span></div>
+    <div class="anno-box" style="top:18.4%;left:85.2%;width:8.3%;height:2.4%"><span class="anno-label">删除</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 侧栏会话管理：顶部 + 新建、Tab 切换、搜索入口；列表按今天/昨天/7天内分组，hover 会话显示 📍 置顶和删除按钮</div>
 
   <h3>新建会话</h3>
   <p>点击侧栏左上角 <kbd>+</kbd> 按钮或按快捷键 <kbd>⌘</kbd> <kbd>N</kbd> 创建新会话。每个会话有独立的上下文和消息历史。</p>
@@ -307,6 +336,11 @@
 <!-- ────────────── 智能对话 ────────────── -->
 <section id="chat">
   <h2>智能对话</h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/input-toolbar.png" alt="对话输入区" style="margin:0;border:none;">
+  </div>
+  <div class="screenshot-caption">▲ 对话输入区：支持文本/图片输入，🧠 思考模式和 🚀 Autopilot 开关</div>
 
   <h3>发送消息</h3>
   <p>在输入框输入文本，<kbd>Enter</kbd> 发送，<kbd>Shift</kbd> + <kbd>Enter</kbd> 换行。支持 Markdown 格式渲染。</p>
@@ -350,7 +384,7 @@
 
   <div class="screenshot-annotated">
     <img class="screenshot" src="screenshots/agent-selector.png" alt="Agent 选择器" style="margin:0;border:none;">
-    <div class="anno-box" style="top:53.7%;left:29.3%;width:18.8%;height:23.7%"><span class="anno-label">Agent 下拉菜单</span></div>
+    <div class="anno-box" style="top:44%;left:31%;width:18%;height:43%"><span class="anno-label">Agent 下拉菜单</span></div>
   </div>
   <div class="screenshot-caption">▲ Agent 选择器下拉菜单</div>
 
@@ -376,9 +410,147 @@
   </div>
 </section>
 
+<!-- ────────────── Agent 团队编排 ────────────── -->
+<section id="team">
+  <h2>Agent 团队编排 <span class="badge badge-new">新增</span></h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/team-selector.png" alt="Agent 选择器：团队列表" style="margin:0;border:none;">
+    <div class="anno-box" style="top:39%;left:30%;width:18%;height:44%"><span class="anno-label">Agent/团队选择器</span></div>
+    <div class="anno-box" style="top:88%;left:83%;width:7%;height:4%"><span class="anno-label">Autopilot</span></div>
+  </div>
+  <div class="screenshot-caption">▲ Agent 选择器下拉菜单：上半部为普通 Agent，下半部滚动可见团队列表</div>
+
+  <p>Agent 团队是多 Agent 协作的高级模式。选择一个团队后，主 Agent 变为<strong>团队协调者</strong>，通过 <code>delegate_task</code> 工具把任务委派给团队成员（子 Agent）执行。每个成员有独立的上下文和专业角色，产出通过<strong>共享黑板</strong>传递。</p>
+
+  <div class="callout tip">
+    <div class="callout-title">团队 vs 单 Agent</div>
+    单 Agent 模式下，Agent 自己处理所有任务。团队模式下，主 Agent 只负责协调和分配，实际工作由各专业成员完成。每个成员有隔离的上下文窗口，避免信息过载。
+  </div>
+
+  <h3>选择团队</h3>
+  <p>点击输入框工具栏最左侧的 Agent 选择器，在下拉菜单的<strong>团队区域</strong>选择一个团队。选择后：</p>
+  <ul>
+    <li>当前会话绑定该团队（session 级持久化，切换会话自然恢复）</li>
+    <li>编排指令注入 Agent 的系统提示（不是拼到消息里，后续每轮对话自动带上）</li>
+    <li>Agent 选择器显示团队名称和图标，稳定不跳变</li>
+  </ul>
+
+  <h3>9 种编排模式</h3>
+  <table>
+    <tr><th>模式</th><th>图标</th><th>说明</th><th>典型场景</th></tr>
+    <tr><td>流水线 (Pipeline)</td><td>➡️</td><td>按顺序依次执行，前一步的产出传给下一步</td><td>开发 → 审查 → 测试</td></tr>
+    <tr><td>主控调度 (Supervisor)</td><td>🎯</td><td>主控 Agent 智能分解任务，按需调度专家</td><td>复杂项目分解</td></tr>
+    <tr><td>评估迭代 (Evaluator)</td><td>⚖️</td><td>执行后评估，不通过则带反馈重试</td><td>代码质量打磨</td></tr>
+    <tr><td>并行 (Parallel)</td><td>⚡</td><td>所有专家同时处理同一任务，汇总结果</td><td>多角度分析</td></tr>
+    <tr><td>辩论 (Debate)</td><td>🗣️</td><td>多轮辩论，最终达成共识</td><td>技术方案决策</td></tr>
+    <tr><td>路由 (Router)</td><td>🔀</td><td>第一个成员分析请求并分派给最佳专家</td><td>智能客服分流</td></tr>
+    <tr><td>分治聚合 (MapReduce)</td><td>🧩</td><td>大任务拆分为子任务，并行处理后汇总</td><td>大规模重构</td></tr>
+    <tr><td>自定义流程 (Custom DAG)</td><td>📐</td><td>用户自定义节点依赖关系</td><td>复杂工作流</td></tr>
+    <tr><td>循环迭代 (Loop)</td><td>🔄</td><td>执行 → 评估 → 不达标重试，死磕到底</td><td>反复打磨质量</td></tr>
+  </table>
+
+  <h3>团队执行可视化</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/team-flow.png" alt="团队执行流程图" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5%;left:2%;width:20%;height:25%"><span class="anno-label">模式标题</span></div>
+    <div class="anno-box" style="top:35%;left:15%;width:30%;height:50%"><span class="anno-label">后端工程师节点</span></div>
+    <div class="anno-box" style="top:35%;left:55%;width:30%;height:50%"><span class="anno-label">代码审查员节点</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 团队执行流程图：后端工程师 → 代码审查员，节点状态实时联动</div>
+  <p>团队任务执行时，对话区顶部显示<strong>流程图</strong>（DAG 节点图），实时展示每个成员的状态：</p>
+  <ul>
+    <li><strong>灰色</strong>：等待中（pending）</li>
+    <li><strong>蓝色/绿色（动态）</strong>：正在执行（running）</li>
+    <li><strong>绿色 ✓</strong>：已完成（done）</li>
+    <li><strong>红色 ✕</strong>：出错（error）</li>
+  </ul>
+  <p>每个节点显示成员角色和耗时。切换会话时流程图自动清除。</p>
+
+  <h3>共享黑板</h3>
+  <p>团队成员通过共享黑板传递信息。每个成员完成后用 <code>write_blackboard</code> 写入关键产出，后续成员用 <code>read_blackboard</code> 读取前序步骤的结果作为上下文。</p>
+
+  <h3>子 Agent 钻入查看</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/team-execution.png" alt="子 Agent 执行过程" style="margin:0;border:none;">
+    <div class="anno-box" style="top:16.8%;left:7.5%;width:70.6%;height:11.8%"><span class="anno-label">流程图节点（3 个成员的状态 + 耗时）</span></div>
+    <div class="anno-box" style="top:38.5%;left:4.4%;width:80.6%;height:43.8%"><span class="anno-label">delegate_task 卡片 + 工具调用时间线</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 团队执行详情：顶部流程图节点 + 下方 delegate_task 卡片和工具调用时间线</div>
+  <p>每个 delegate_task 工具调用显示为可点击的卡片。点击进入子 Agent 的<strong>独立详情视图</strong>，可以看到：</p>
+  <ul>
+    <li>子 Agent 的完整对话过程（思考、工具调用、输出）</li>
+    <li>实时执行状态（正在运行 / 已完成 / 出错）</li>
+    <li>Token 消耗和耗时统计</li>
+  </ul>
+  <p>点击「← 返回主会话」回到主视图。每个 delegate_task 卡片正确对应其子 Agent，不会串台。</p>
+
+  <h3>退出团队模式</h3>
+  <p>在 Agent 选择器中选择任意普通 Agent（非团队），自动退出团队模式，重建为普通 Agent 会话。</p>
+
+  <div class="callout case">
+    <div class="callout-title">💡 案例：流水线开发 Spring Boot 功能</div>
+    选择「开发流水线」团队（后端工程师 → 代码审查员 → 测试工程师），输入"帮我新增用户注册功能"。主 Agent 按流水线依次委派：<br>
+    1. 后端工程师实现功能代码（写入黑板）<br>
+    2. 代码审查员读取黑板审查代码（输出审查报告）<br>
+    3. 测试工程师编写并运行测试<br>
+    全程串行执行，每个成员完成后下一个才开始。
+  </div>
+
+  <div class="callout case">
+    <div class="callout-title">💡 案例：循环迭代打磨质量</div>
+    选择「代码精炼」团队（Loop 模式，后端工程师 + 代码审查员），输入"优化这个模块的代码质量"。后端工程师优化 → 审查员评估，如果不达标就带反馈重试，直到通过或达到最大循环次数。
+  </div>
+
+  <div class="callout warn">
+    <div class="callout-title">注意</div>
+    团队模式下，每一轮对话都会走完整的团队流程。简单追问（如"刚才那个改一下"）也会触发完整的委派流程。如果需要简单对话，请切换回普通 Agent。
+  </div>
+</section>
+
+<!-- ────────────── Autopilot 自动驾驶 ────────────── -->
+<section id="autopilot">
+  <h2>Autopilot 自动驾驶 <span class="badge badge-new">新增</span></h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-autopilot.png" alt="Autopilot 配置" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">超时参数 + 提示词编辑</span></div>
+  </div>
+  <div class="screenshot-caption">▲ Autopilot 配置页：设置最大循环次数和各阶段超时时间</div>
+
+  <p>Autopilot 是全自动任务执行模式。开启后，Agent 自动完成<strong>分析→规划→执行→验证</strong>四个阶段的循环，无需人工干预，直到任务完成。</p>
+
+  <h3>开启 Autopilot</h3>
+  <p>点击输入框工具栏右侧的 🚀 按钮开启/关闭 Autopilot。开启后发送消息，Agent 进入自动驾驶模式。</p>
+
+  <h3>四个阶段</h3>
+  <table>
+    <tr><th>阶段</th><th>说明</th><th>产出</th></tr>
+    <tr><td>1. 分析 (Analysis)</td><td>理解任务需求，分析现有代码</td><td>需求分析和约束条件</td></tr>
+    <tr><td>2. 规划 (Planning)</td><td>制定执行计划，拆分步骤</td><td>具体执行方案</td></tr>
+    <tr><td>3. 执行 (Execution)</td><td>按计划写代码、修改文件</td><td>代码变更</td></tr>
+    <tr><td>4. 验证 (Verification)</td><td>运行测试、检查结果</td><td>通过/不通过 + 问题列表</td></tr>
+  </table>
+  <p>如果验证不通过，自动回到规划阶段修正方案，循环执行直到通过。</p>
+
+  <h3>实时进度</h3>
+  <p>对话区实时显示 Autopilot 的当前阶段、轮次和每个阶段的输出摘要。你可以在任何时候点击停止按钮中止。</p>
+
+  <div class="callout tip">
+    <div class="callout-title">Autopilot 超时配置</div>
+    Autopilot 每个阶段有独立的超时限制（默认 300 秒），可在设置页面调整。超时后会自动中止并提示。
+  </div>
+</section>
+
 <!-- ────────────── 输入框与工具栏 ────────────── -->
 <section id="input">
   <h2>输入框与工具栏</h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/input-toolbar.png" alt="输入框工具栏" style="margin:0;border:none;">
+  </div>
+  <div class="screenshot-caption">▲ 输入框工具栏：Agent 选择器、附件、快捷指令、思考模式、Autopilot、发送</div>
 
   <p>输入框上方有一排工具栏，从左到右：</p>
 
@@ -388,10 +560,16 @@
     <tr><td>📎 附件</td><td>添加图片</td><td>支持拖拽和点击两种方式</td></tr>
     <tr><td>⚡ 快捷指令</td><td>插入预设指令</td><td>可在管理面板中自定义常用指令</td></tr>
     <tr><td>🧠 思考开关</td><td>开启/关闭思考模式</td><td>开启后模型先推理再回答</td></tr>
-    <tr><td>📤 发送/停止</td><td>发送消息或停止生成</td><td>生成中变为红色停止按钮</td></tr>
+    <tr><td>🚀 Autopilot <span class="badge badge-new">新增</span></td><td>开启/关闭自动驾驶</td><td>全自动分析→规划→执行→验证循环</td></tr>
+    <tr><td>📤 发送/停止</td><td>发送消息或停止生成</td><td>生成中变为红色停止按钮，停止时连带终止所有子 Agent</td></tr>
   </table>
 
   <h3>快捷指令</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/quick-prompt.png" alt="快捷指令面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:44%;left:40%;width:15%;height:41%"><span class="anno-label">快捷指令面板</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 快捷指令面板：内置分析项目、调试代码、联网搜索、代码审查等常用指令模板</div>
   <p>点击 ⚡ 按钮弹出快捷指令面板。你可以添加常用指令模板（如 "解释这段代码"、"帮我写单元测试"），点击即插入到输入框。</p>
 
   <h3>输入历史</h3>
@@ -403,10 +581,12 @@
   <h2>文件树与预览</h2>
 
   <div class="screenshot-annotated">
-    <img class="screenshot" src="screenshots/file-tree.png" alt="文件树" style="margin:0;border:none;">
-    <div class="anno-box" style="top:14.7%;left:0%;width:20.5%;height:69.7%"><span class="anno-label">文件目录树</span></div>
+    <img class="screenshot" src="screenshots/file-tree.png" alt="文件树与预览" style="margin:0;border:none;">
+    <div class="anno-box" style="top:15%;left:1%;width:12%;height:75%"><span class="anno-label">文件目录树</span></div>
+    <div class="anno-box" style="top:15%;left:13%;width:43%;height:75%"><span class="anno-label">对话区</span></div>
+    <div class="anno-box" style="top:15%;left:56.5%;width:43%;height:75%"><span class="anno-label">HTML 实时预览</span></div>
   </div>
-  <div class="screenshot-caption">▲ 左侧文件树，支持搜索、目录展开折叠</div>
+  <div class="screenshot-caption">▲ 文件树 + 对话 + 预览三栏布局：点击文件在右侧打开预览，HTML 文件实时渲染效果</div>
 
   <h3>浏览文件</h3>
   <p>点击侧栏「文件」Tab 切换到文件树视图。点击文件夹展开/折叠，点击文件在右侧预览面板打开。</p>
@@ -432,6 +612,14 @@
   <h2>添加文件到上下文 <span class="badge badge-new">新增</span></h2>
 
   <h3>整文件添加</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/file-context-chip.png" alt="文件树、代码编辑与上下文引用" style="margin:0;border:none;">
+    <div class="anno-box" style="top:3%;left:1%;width:13%;height:78%"><span class="anno-label">文件目录树</span></div>
+    <div class="anno-box" style="top:5%;left:15%;width:54%;height:25%"><span class="anno-label">任务清单 + 内部过程</span></div>
+    <div class="anno-box" style="top:7%;left:70%;width:29%;height:73%"><span class="anno-label">代码编辑器（点击文件打开预览）</span></div>
+    <div class="anno-box" style="top:85%;left:19%;width:10%;height:4%"><span class="anno-label">📄 文件引用 chip</span></div>
+  </div>
+  <div class="screenshot-caption">▲ hover 文件树中的文件点击 +，输入框上方出现文件引用 chip；右侧代码编辑器同步展示文件内容</div>
   <p>在文件树中，鼠标 hover 到任意文件上，右侧会出现一个 <kbd>+</kbd> 按钮。点击后：</p>
   <ol>
     <li>自动读取文件内容（超过 300 行自动截断）</li>
@@ -457,6 +645,16 @@
 <section id="code-ref">
   <h2>代码片段引用</h2>
 
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/code-ref.png" alt="代码片段引用" style="margin:0;border:none;">
+    <div class="anno-box" style="top:3%;left:1%;width:13%;height:78%"><span class="anno-label">文件目录树</span></div>
+    <div class="anno-box" style="top:13%;left:15%;width:54%;height:25%"><span class="anno-label">任务清单</span></div>
+    <div class="anno-box" style="top:7%;left:70%;width:29%;height:73%"><span class="anno-label">代码编辑器（选中代码片段）</span></div>
+    <div class="anno-box" style="top:69%;left:71%;width:28%;height:7%"><span class="anno-label">选中高亮区</span></div>
+    <div class="anno-box" style="top:86%;left:19%;width:11%;height:5%"><span class="anno-label">{ } 代码片段引用 chip</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 在代码编辑器中选中代码行 → 出现引用操作条 → 输入框上方显示代码片段 chip（含行号范围）</div>
+
   <h3>选中代码引用</h3>
   <p>在右侧文件预览面板中，用鼠标选中若干行代码。选中后会出现一个操作条：</p>
   <ul>
@@ -478,6 +676,11 @@
   <h2>变更追踪</h2>
 
   <h3>变更面板</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/changes-panel.png" alt="变更追踪面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:10.3%;left:0%;width:18.3%;height:78.7%"><span class="anno-label">变更 Tab：文件列表 + 统计</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 变更追踪面板：点击「变更」子标签查看本次会话的文件修改记录</div>
   <p>点击侧栏「文件」Tab 下的「变更」子标签，查看当前会话中 Agent 修改过的所有文件。</p>
   <ul>
     <li>统计信息：修改了几个文件、几次编辑、执行了几条命令</li>
@@ -495,7 +698,7 @@
 
   <div class="screenshot-annotated">
     <img class="screenshot" src="screenshots/branch-selector.png" alt="分支选择器" style="margin:0;border:none;">
-    <div class="anno-box" style="top:7.3%;left:34.9%;width:15.6%;height:20.9%"><span class="anno-label">分支列表 + Worktree 入口</span></div>
+    <div class="anno-box" style="top:5.1%;left:25.4%;width:13.9%;height:20.7%"><span class="anno-label">分支列表 + Worktree 入口</span></div>
   </div>
   <div class="screenshot-caption">▲ 分支选择器下拉菜单，底部有 Worktree 创建入口</div>
 
@@ -522,6 +725,11 @@
   <p>Git Worktree 允许你把不同分支检出到独立目录，共享同一个 Git 仓库。这样你可以同时操作多个分支，互不影响。</p>
 
   <h3>创建 Worktree</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/worktree-dialog.png" alt="Worktree 创建对话框" style="margin:0;border:none;">
+    <div class="anno-box" style="top:30.9%;left:36.1%;width:27.8%;height:38.1%"><span class="anno-label">Worktree 创建对话框</span></div>
+  </div>
+  <div class="screenshot-caption">▲ Worktree 创建对话框：输入新分支名、选择基分支、预览目标路径</div>
   <p>点击标题栏分支名 → 底部「在新 Worktree 中打开…」→ 弹出创建对话框：</p>
   <ul>
     <li><strong>新分支模式</strong>：输入新分支名 + 选择基于哪个分支创建</li>
@@ -548,6 +756,23 @@
 <!-- ────────────── 内置工具 ────────────── -->
 <section id="builtin-tools">
   <h2>内置工具</h2>
+
+  <div class="screenshot-annotated" style="background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;font-size:13px;">
+      <span style="display:inline-block;padding:6px 14px;background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-weight:500;">🔍 search</span>
+      <span style="color:var(--muted);">→ 找到匹配</span>
+      <span style="color:var(--accent);font-size:16px;">→</span>
+      <span style="display:inline-block;padding:6px 14px;background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-weight:500;">📖 read</span>
+      <span style="color:var(--muted);">→ 确认上下文</span>
+      <span style="color:var(--accent);font-size:16px;">→</span>
+      <span style="display:inline-block;padding:6px 14px;background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-weight:500;">✏️ edit</span>
+      <span style="color:var(--muted);">→ 修改代码</span>
+      <span style="color:var(--accent);font-size:16px;">→</span>
+      <span style="display:inline-block;padding:6px 14px;background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-weight:500;">⚙️ bash</span>
+      <span style="color:var(--muted);">→ 验证结果</span>
+    </div>
+  </div>
+  <div class="screenshot-caption">▲ Agent 工具链示例：搜索 → 读取 → 编辑 → 执行命令，自动组合完成复杂任务</div>
 
   <p>MyAgent 内置了一套完整的编程工具集，由 Pi Coding Agent SDK 提供。Agent 会根据任务自动选择合适的工具。</p>
 
@@ -577,6 +802,7 @@
     <tr><td><code>web_fetch</code></td><td>抓取网页内容转纯文本</td><td>阅读文章、获取 API 文档</td></tr>
     <tr><td><code>cron</code></td><td>管理定时任务（创建/暂停/删除）</td><td>设置定期执行的任务</td></tr>
     <tr><td><code>ask_user</code> <span class="badge badge-new">新增</span></td><td>向用户提问（单选/多选）</td><td>需求澄清、确认选项</td></tr>
+    <tr><td><code>write_blackboard</code> / <code>read_blackboard</code> <span class="badge badge-new">新增</span></td><td>共享黑板读写（团队协作用）</td><td>团队成员间传递产出</td></tr>
   </table>
 
   <div class="callout case">
@@ -599,6 +825,13 @@
 <!-- ────────────── 扩展系统 ────────────── -->
 <section id="extensions">
   <h2>扩展系统</h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-extensions.png" alt="扩展管理面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">扩展列表 + 安装</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 扩展管理面板：查看已安装扩展，底部输入框可安装新扩展（npm 包 / Git 仓库）</div>
 
   <p>MyAgent 支持通过扩展包（Extension Packages）增强 Agent 的能力。扩展可以来自 npm 包或 Git 仓库，安装后自动注册为 Agent 可用的工具。</p>
 
@@ -643,6 +876,12 @@
   <p>Model Context Protocol (MCP) 是一种标准化的外部工具接入协议。通过 MCP 服务器，Agent 可以连接外部服务（数据库、API、本地工具等）获得额外能力。</p>
 
   <h3>管理 MCP 服务器</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-mcp.png" alt="MCP 管理面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">MCP 服务器列表 + 状态</span></div>
+  </div>
+  <div class="screenshot-caption">▲ MCP 管理面板：查看已配置服务器的连接状态和工具数量，支持启用/禁用</div>
   <p>打开设置面板 → 切换到「MCP」Tab：</p>
   <ul>
     <li>查看已配置的 MCP 服务器列表</li>
@@ -672,6 +911,13 @@
 <section id="skills">
   <h2>Skills 技能系统</h2>
 
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-skills.png" alt="Skills 管理面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">已加载 Skills 列表</span></div>
+  </div>
+  <div class="screenshot-caption">▲ Skills 管理面板：查看已加载的技能列表及其描述</div>
+
   <h3>什么是 Skills</h3>
   <p>Skills 是预置的领域知识包，包含特定任务的指令和工具用法。加载 Skill 后，Agent 会按照其中的规范执行任务。</p>
 
@@ -690,6 +936,32 @@
 <!-- ────────────── 交互式提问 ────────────── -->
 <section id="ask-user">
   <h2>交互式提问（ask_user） <span class="badge badge-new">新增</span></h2>
+
+  <div class="screenshot-annotated" style="background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);">
+    <div style="padding:16px 20px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">🤖 Agent 提问 · 单选</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:12px;">使用哪个框架？</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span style="display:inline-block;padding:6px 16px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1.5px solid var(--accent);border-radius:6px;font-size:13px;font-weight:500;">✓ React</span>
+        <span style="display:inline-block;padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--fg);">Vue</span>
+        <span style="display:inline-block;padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--fg);">Svelte</span>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding:16px 20px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">🤖 Agent 提问 · <span class="badge badge-core" style="margin-left:4px;">多选</span></div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:12px;">需要包含哪些页面？</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span style="display:inline-block;padding:6px 16px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1.5px solid var(--accent);border-radius:6px;font-size:13px;">☑ 首页</span>
+        <span style="display:inline-block;padding:6px 16px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1.5px solid var(--accent);border-radius:6px;font-size:13px;">☑ 购物车</span>
+        <span style="display:inline-block;padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--fg);">☐ 商品列表</span>
+        <span style="display:inline-block;padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--fg);">☐ 用户中心</span>
+      </div>
+      <div style="margin-top:12px;text-align:right;">
+        <span style="display:inline-block;padding:5px 18px;background:var(--accent);color:#fff;border-radius:6px;font-size:13px;font-weight:500;">确认</span>
+      </div>
+    </div>
+  </div>
+  <div class="screenshot-caption">▲ ask_user 交互卡片：单选直接点击提交，多选勾选后确认</div>
 
   <h3>功能说明</h3>
   <p>当 Agent 遇到歧义或需要你做决定时，会调用 ask_user 工具向你提问。问题以交互卡片的形式直接显示在对话流中，你只需点击选项即可回答，无需手动输入。</p>
@@ -718,8 +990,31 @@
 <section id="subagent">
   <h2>子 Agent 委派</h2>
 
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/team-execution.png" alt="子 Agent 委派执行" style="margin:0;border:none;">
+    <div class="anno-box" style="top:38.5%;left:4.4%;width:80.6%;height:43.8%"><span class="anno-label">delegate_task 卡片（点击钻入查看详情）</span></div>
+  </div>
+  <div class="screenshot-caption">▲ delegate_task 卡片：每个子 Agent 委派显示为可点击卡片，展示执行时间线</div>
+
   <h3>功能说明</h3>
-  <p>对于复杂任务，Agent 可以委派子任务给独立的子 Agent 处理。子 Agent 在隔离的上下文中运行，完成后返回摘要。你可以在对话中点击子 Agent 卡片查看其详细的执行过程。</p>
+  <p>对于复杂任务，Agent 可以通过 <code>delegate_task</code> 工具委派子任务给独立的子 Agent 处理。子 Agent 在隔离的上下文中运行，完成后返回摘要。你可以在对话中点击子 Agent 卡片查看其详细的执行过程。</p>
+
+  <h3>串行执行 <span class="badge badge-new">改进</span></h3>
+  <p>同一会话中的多个 <code>delegate_task</code> 调用强制<strong>串行执行</strong>。即使 LLM 在一个回合里同时发起多个委派，也会自动排队——前一个子 Agent 完全结束后，下一个才开始。这确保了团队协作模式中步骤的严格顺序性。</p>
+
+  <h3>中止连锁 <span class="badge badge-new">改进</span></h3>
+  <p>当你点击停止按钮中止主 Agent 时，所有正在运行的子 Agent 也会被<strong>立即连锁终止</strong>。之前中止只影响主 Agent，子 Agent 会继续跑到超时。现在 abort 信号会传递给每个活跃的子 Agent，立即停止。</p>
+
+  <h3>子 Agent 超时保护</h3>
+  <p>每个子 Agent 有三层超时保护：</p>
+  <ul>
+    <li><strong>空闲超时</strong>（180s）：长时间无任何产出活动则判定卡死</li>
+    <li><strong>硬超时</strong>（15 分钟）：绝对上限</li>
+    <li><strong>外部中止</strong>：主 Agent 停止时连锁触发</li>
+  </ul>
+
+  <h3>阻塞命令指导</h3>
+  <p>子 Agent 的系统提示包含对阻塞命令的指导：遇到需要启动长时间运行的服务（如 web server），必须用后台方式（<code>command &amp;</code> 或 <code>nohup</code>）运行，然后通过 curl 验证，避免直接阻塞。</p>
 
   <div class="callout case">
     <div class="callout-title">💡 案例：并行研究 + 实现</div>
@@ -735,6 +1030,12 @@
   <p>支持 Cron 语法定时触发 Agent 执行任务。任务触发后会创建一个新会话并在其中执行。</p>
 
   <h3>创建定时任务</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-cron.png" alt="定时任务管理面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">定时任务列表 + Cron 表达式</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 定时任务面板：创建/暂停/删除 Cron 任务，每个任务绑定工作空间和 Agent</div>
   <p>在设置面板的「定时任务」标签中创建，需要指定：</p>
   <ul>
     <li>任务名称</li>
@@ -754,6 +1055,12 @@
   <h2>Debug 调试面板</h2>
 
   <h3>开启 Debug</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-debug.png" alt="Debug 设置面板" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">Debug 开关 + 说明</span></div>
+  </div>
+  <div class="screenshot-caption">▲ Debug 设置：在设置面板开启后，每条 AI 回复会显示完整调试时间线</div>
   <p>在设置面板的「Debug」标签中开启。开启后，每条 AI 回复下方会出现「内部过程」折叠面板。</p>
 
   <h3>Debug 时间线</h3>
@@ -781,27 +1088,111 @@
 
   <div class="screenshot-annotated">
     <img class="screenshot" src="screenshots/settings.png" alt="设置面板" style="margin:0;border:none;">
-    <div class="anno-box" style="top:17.3%;left:20.8%;width:12%;height:74.9%"><span class="anno-label">设置导航</span></div>
-    <div class="anno-box" style="top:17.3%;left:32.8%;width:46.5%;height:74.9%"><span class="anno-label">配置列表区</span></div>
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航（3 组 11 项）</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">配置列表区</span></div>
   </div>
-  <div class="screenshot-caption">▲ 设置面板：模型选择、MCP 服务器、扩展等</div>
+  <div class="screenshot-caption">▲ 设置面板：左侧导航分 3 组（Agent / 偏好 / 系统），右侧为当前选中项的配置</div>
 
-  <h3>模型配置</h3>
-  <p>在设置面板顶部选择模型。MyAgent 支持多种 Provider（智谱 ZAI、Anthropic、OpenAI 等），选择后自动应用。</p>
+  <p>设置面板分为三组导航：</p>
 
-  <h3>MCP 服务器</h3>
-  <p>Model Context Protocol (MCP) 服务器提供额外的工具能力。在设置中可以启用/禁用各个 MCP 服务器。</p>
+  <h3>Agent 组</h3>
+  <table>
+    <tr><th>设置项</th><th>功能</th></tr>
+    <tr><td>🤖 Agent 管理</td><td>创建、编辑、删除 Agent 预设（角色名称、图标、系统提示词、禁用工具）。内置 11 个预设角色（后端工程师、代码审查员、测试工程师等）</td></tr>
+    <tr><td>👥 团队管理 <span class="badge badge-new">新增</span></td><td>创建、编辑、删除 Agent 团队。配置团队成员、编排模式（9 种）、最大循环次数、自定义编排指令、DAG 自定义边</td></tr>
+    <tr><td>⚡ 模型</td><td>选择 Provider 和模型。支持智谱 ZAI（glm-5.2/glm-4.7/glm-4-flash）、Anthropic、OpenAI 等。切换后全局生效</td></tr>
+    <tr><td>🚀 自动驾驶 <span class="badge badge-new">新增</span></td><td>配置 Autopilot 各阶段超时时间（分析/规划/执行/验证，默认各 300 秒）。可根据任务复杂度调整</td></tr>
+  </table>
 
-  <h3>主题切换</h3>
-  <p>点击侧栏右下角的 ☀️/🌙 按钮切换浅色/深色主题，支持跟随系统。</p>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-teams.png" alt="设置：团队管理" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">团队列表（编辑/删除）</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 团队管理：创建和配置 Agent 团队（成员、编排模式、循环次数）</div>
 
-  <h3>快捷指令管理</h3>
-  <p>在设置中管理快捷指令：添加、编辑、删除预设指令模板。</p>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-autopilot.png" alt="设置：自动驾驶配置" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">超时参数 + 提示词编辑</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 自动驾驶配置：最大循环次数 + 单阶段超时（秒），下方可编辑各阶段提示词</div>
+
+  <h3>偏好组</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-appearance.png" alt="外观设置" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">主题切换（浅色/深色/跟随系统）</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 外观设置：浅色 / 深色 / 跟随系统三种主题</div>
+  <table>
+    <tr><th>设置项</th><th>功能</th></tr>
+    <tr><td>🎨 外观</td><td>主题切换：浅色 / 深色 / 跟随系统。也可通过侧栏右下角的 ☀️/🌙 按钮快速切换</td></tr>
+    <tr><td>📖 Skills</td><td>查看已加载的技能列表。Skills 从 <code>~/.myagent/skills/</code> 加载，每个 Skill 包含 SKILL.md 指令文件</td></tr>
+    <tr><td>📦 扩展</td><td>管理扩展包（npm/Git 来源）。查看已安装扩展提供的工具，安装新扩展</td></tr>
+    <tr><td>🔌 MCP</td><td>Model Context Protocol 服务器管理。配置 MCP 服务器 JSON、启用/禁用、查看提供的工具。在 Agent 预设中可按需启用特定 MCP 服务器</td></tr>
+  </table>
+
+  <h3>系统组</h3>
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/settings-workspace.png" alt="工作空间管理" style="margin:0;border:none;">
+    <div class="anno-box" style="top:5.8%;left:18.3%;width:13.9%;height:94.2%"><span class="anno-label">设置导航</span></div>
+    <div class="anno-box" style="top:5.8%;left:32.2%;width:67.8%;height:94.2%"><span class="anno-label">工作空间列表（添加/删除/切换）</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 工作空间管理：添加/删除项目目录，每个工作空间有独立的会话列表</div>
+  <table>
+    <tr><th>设置项</th><th>功能</th></tr>
+    <tr><td>🕐 定时任务</td><td>创建、暂停、删除 Cron 定时任务。每个任务绑定工作空间和 Agent，到时间自动创建新会话执行</td></tr>
+    <tr><td>📁 工作空间</td><td>管理工作空间列表。添加/删除项目目录，每个工作空间有独立的会话列表和文件树</td></tr>
+    <tr><td>🔧 Debug</td><td>开启/关闭 Debug 模式。开启后每条 AI 回复显示完整时间线（LLM 调用明细、Token/费用、原始请求/响应、思考过程）</td></tr>
+  </table>
+
+  <div class="callout tip">
+    <div class="callout-title">快捷指令管理</div>
+    快捷指令在输入框工具栏的 ⚡ 按钮中管理，不在设置面板中。可在弹出的面板中添加、编辑、删除预设指令模板。
+  </div>
+
+  <div class="callout case">
+    <div class="callout-title">💡 案例：为 Agent 配置 MCP 工具</div>
+    1. 设置 → MCP → 添加 MCP 服务器配置（如文件系统、数据库）<br>
+    2. 设置 → Agent 管理 → 选择目标 Agent → 在「MCP 服务器」中勾选需要启用的服务器<br>
+    3. 切换到该 Agent 后，它就能使用对应 MCP 工具
+  </div>
 </section>
 
 <!-- ────────────── 快捷键 ────────────── -->
 <section id="shortcuts">
   <h2>快捷键速查</h2>
+
+  <div class="screenshot-annotated" style="background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;">
+      <div style="text-align:center;">
+        <div style="margin-bottom:6px;"><kbd style="font-size:14px;padding:4px 12px;">⌘</kbd> <kbd style="font-size:14px;padding:4px 12px;">N</kbd></div>
+        <div style="font-size:12px;color:var(--muted);">新建会话</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="margin-bottom:6px;"><kbd style="font-size:14px;padding:4px 12px;">⌘</kbd> <kbd style="font-size:14px;padding:4px 12px;">K</kbd></div>
+        <div style="font-size:12px;color:var(--muted);">搜索会话</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="margin-bottom:6px;"><kbd style="font-size:14px;padding:4px 12px;">⌘</kbd> <kbd style="font-size:14px;padding:4px 12px;">B</kbd></div>
+        <div style="font-size:12px;color:var(--muted);">收起侧栏</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="margin-bottom:6px;"><kbd style="font-size:14px;padding:4px 12px;">⌘</kbd> <kbd style="font-size:14px;padding:4px 12px;">,</kbd></div>
+        <div style="font-size:12px;color:var(--muted);">打开设置</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="margin-bottom:6px;"><kbd style="font-size:14px;padding:4px 12px;">Enter</kbd></div>
+        <div style="font-size:12px;color:var(--muted);">发送消息</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="margin-bottom:6px;"><kbd style="font-size:14px;padding:4px 12px;">/</kbd></div>
+        <div style="font-size:12px;color:var(--muted);">触发 Skill</div>
+      </div>
+    </div>
+  </div>
+  <div class="screenshot-caption">▲ 常用快捷键一览：会话管理 + 消息发送 + Skill 触发</div>
 
   <table>
     <tr><th>快捷键</th><th>功能</th></tr>
@@ -815,12 +1206,143 @@
   </table>
 </section>
 
+<!-- ────────────── 开发与部署 ────────────── -->
+<section id="dev">
+  <h2>开发与部署</h2>
+
+  <div class="screenshot-annotated">
+    <img class="screenshot" src="screenshots/file-tree-view.png" alt="项目结构" style="margin:0;border:none;">
+    <div class="anno-box" style="top:10.3%;left:0%;width:18.3%;height:78.7%"><span class="anno-label">packages/ 工作空间目录结构</span></div>
+  </div>
+  <div class="screenshot-caption">▲ 项目文件结构：packages/ 下按功能拆分为 server、web、orchestrator 等子包</div>
+
+  <h3>环境要求</h3>
+  <ul>
+    <li>Node.js ≥ 18（推荐 20+）</li>
+    <li>pnpm（包管理器）</li>
+    <li>macOS / Linux / Windows（WSL）</li>
+  </ul>
+
+  <h3>项目结构</h3>
+  <pre><code>myagent/
+├── packages/
+│   ├── server/          ← 后端（Fastify + Pi Agent SDK，tsx 热重载）
+│   ├── web/             ← 前端（React + Vite，HMR 热更新）
+│   ├── pi-orchestrator/ ← 团队编排模式引擎（9 种拓扑 + 模板插值）
+│   ├── pi-subagent-extension/ ← delegate_task 工具（子 Agent 委派）
+│   └── pi-todo-extension/     ← todo 工具（任务清单）
+├── scripts/
+│   └── build-release.mjs ← 一键打包发布脚本
+├── AGENTS.md             ← Agent 系统提示（Pi SDK 自动加载）
+└── pnpm-workspace.yaml</code></pre>
+
+  <h3>开发模式</h3>
+  <p>前后端同时启动，支持热重载（前端 HMR + 后端 tsx watch）：</p>
+  <pre><code>pnpm dev</code></pre>
+  <p>也可以单独启动：</p>
+  <pre><code>pnpm dev:server   # 仅后端（tsx watch，端口 3000）
+pnpm dev:web      # 仅前端（Vite，端口 5173）</code></pre>
+  <p>开发模式下前端通过 Vite dev server 代理 API 请求到后端，修改代码自动刷新。</p>
+
+  <div class="callout tip">
+    <div class="callout-title">端口说明</div>
+    开发模式：前端 <code>http://localhost:5173</code>（Vite），后端 <code>http://localhost:3000</code>（Fastify）。<br>
+    生产模式：统一 <code>http://localhost:3000</code>（后端托管前端静态文件）。
+  </div>
+
+  <h3>构建</h3>
+  <p>构建所有 workspace 包（TypeScript 编译）：</p>
+  <pre><code>pnpm build</code></pre>
+  <p>各包的构建产物：</p>
+  <table>
+    <tr><th>包</th><th>构建命令</th><th>产物</th></tr>
+    <tr><td>pi-orchestrator</td><td><code>tsc</code></td><td><code>dist/</code>（供 server/web import）</td></tr>
+    <tr><td>pi-subagent-extension</td><td><code>tsc</code></td><td><code>dist/</code>（类型声明）</td></tr>
+    <tr><td>pi-todo-extension</td><td><code>tsc</code></td><td><code>dist/</code>（类型声明）</td></tr>
+    <tr><td>server</td><td><code>tsc</code></td><td><code>dist/</code>（生产构建）</td></tr>
+    <tr><td>web</td><td><code>tsc &amp;&amp; vite build</code></td><td><code>dist/</code>（静态文件）</td></tr>
+  </table>
+
+  <h3>一键打包发布</h3>
+  <p>将前后端打包为可独立运行的 npm 包（<code>.tgz</code>），安装后通过 <code>myagent</code> 命令启动：</p>
+  <pre><code>pnpm pack:release</code></pre>
+  <p>构建流程（<code>scripts/build-release.mjs</code>）：</p>
+  <ol>
+    <li><strong>Vite build</strong>：构建前端 → <code>packages/web/dist</code></li>
+    <li><strong>拷贝前端</strong>：移动到 <code>dist-release/public/</code></li>
+    <li><strong>esbuild bundle</strong>：后端 + workspace 扩展包打包为单文件 → <code>dist-release/server/index.js</code></li>
+    <li><strong>生成入口</strong>：创建 <code>bin/myagent.js</code>（CLI 入口）</li>
+    <li><strong>生成 package.json</strong>：声明外部依赖（fastify、Pi SDK 等）</li>
+  </ol>
+
+  <p>产物结构：</p>
+  <pre><code>dist-release/
+├── bin/myagent.js       ← CLI 入口（node bin，可直接执行）
+├── server/index.js      ← 后端 bundle（含扩展包，不含 node_modules）
+├── public/              ← 前端静态文件（HTML/JS/CSS）
+└── package.json         ← 外部依赖声明</code></pre>
+
+  <h3>安装与运行</h3>
+  <pre><code># 本地安装
+cd dist-release && npm pack           # 生成 myagent-0.1.0.tgz
+npm install -g ./myagent-0.1.0.tgz    # 全局安装
+
+# 启动
+myagent                                # → http://localhost:3000
+myagent --port=8080                    # 指定端口</code></pre>
+
+  <div class="callout tip">
+    <div class="callout-title">esbuild bundle 的作用</div>
+    开发模式下后端用 tsx 直接运行 TypeScript，workspace 扩展包（orchestrator/subagent/todo）通过符号链接 import。打包时 esbuild 把后端代码和所有 workspace 包 bundle 为单个 <code>server/index.js</code>，无需保留 workspace 结构。运行时只需安装外部依赖（fastify、Pi SDK 等）。
+  </div>
+
+  <h3>数据目录</h3>
+  <p>所有持久化数据存放在 <code>~/.myagent/</code>，与 Pi SDK 默认的 <code>~/.pi/agent/</code> 完全隔离：</p>
+  <table>
+    <tr><th>文件/目录</th><th>用途</th></tr>
+    <tr><td><code>settings.json</code></td><td>模型/Provider 设置</td></tr>
+    <tr><td><code>agents.json</code></td><td>Agent 预设配置</td></tr>
+    <tr><td><code>agent-teams.json</code></td><td>Agent 团队配置</td></tr>
+    <tr><td><code>chat-sessions/</code></td><td>聊天会话持久化（每会话独立文件）</td></tr>
+    <tr><td><code>sessions/</code></td><td>Pi SDK 原生 jsonl 日志</td></tr>
+    <tr><td><code>skills/</code></td><td>Skills 技能文件</td></tr>
+    <tr><td><code>mcp.json</code></td><td>MCP 服务器配置</td></tr>
+    <tr><td><code>todos.json</code></td><td>Todo 列表存储</td></tr>
+    <tr><td><code>cron-jobs.json</code></td><td>定时任务</td></tr>
+    <tr><td><code>autopilot-config.json</code></td><td>Autopilot 配置</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <div class="callout-title">注意</div>
+    <code>pi-orchestrator</code> 包的 <code>tsc</code> 构建可能报 <code>allowImportingTsExtensions</code> 错误，这不影响运行——开发模式用 tsx 直接执行 <code>.ts</code> 源码，打包用 esbuild bundle，都不依赖 <code>dist/</code>。
+  </div>
+</section>
+
 <!-- ────────────── FAQ ────────────── -->
 <section id="faq">
   <h2>常见问题</h2>
 
+  <div class="screenshot-annotated" style="background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;font-size:13px;">
+      <span style="display:inline-block;padding:6px 14px;background:color-mix(in srgb,#eab308 10%,transparent);border:1px solid #eab308;border-radius:6px;color:#eab308;">⚠️ 遇到问题</span>
+      <span style="color:var(--accent);font-size:16px;">→</span>
+      <span style="display:inline-block;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">查看对话区错误提示</span>
+      <span style="color:var(--accent);font-size:16px;">→</span>
+      <span style="display:inline-block;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">开启 Debug 面板</span>
+      <span style="color:var(--accent);font-size:16px;">→</span>
+      <span style="display:inline-block;padding:6px 14px;background:color-mix(in srgb,#22c55e 10%,transparent);border:1px solid #22c55e;border-radius:6px;color:#22c55e;">✓ 定位原因</span>
+    </div>
+  </div>
+  <div class="screenshot-caption">▲ 排查流程：错误提示 → Debug 时间线 → 定位根因</div>
+
   <h3>Q: 对话报错 "余额不足" 怎么办？</h3>
-  <p>当前使用的模型（如 glm-4.7）是付费模型，账户余额用完会报 HTTP 429 错误。可以在设置中切换到免费模型 glm-4-flash，或充值账户。</p>
+  <p>当前使用的模型（如 glm-4.7）是付费模型，账户余额用完会报 HTTP 429 错误。<strong>MyAgent 会直接在对话区显示具体的错误信息</strong>（如"模型调用失败: xxx"），不会再出现空白气泡或卡死等待。可以在设置中切换到免费模型 glm-4-flash，或充值账户。</p>
+
+  <h3>Q: Agent 回复是空白气泡或"模型调用失败"？</h3>
+  <p>这表示 LLM API 调用出错。常见原因：API Key 过期、账户余额不足、模型限流（429）、网络超时。MyAgent 会在对话区直接显示错误原因。如果错误信息不明确，打开 Debug 面板查看原始 API 请求和响应。</p>
+
+  <h3>Q: 子 Agent 执行很久后"被中止"？</h3>
+  <p>子 Agent 有三层超时保护。如果 180 秒无任何产出活动（空闲超时）或超过 15 分钟（硬超时），会自动中止。常见原因是子 Agent 在等待一个阻塞命令（如 <code>mvn spring-boot:run</code>）的输出。子 Agent 的系统提示已包含阻塞命令的指导，但 LLM 不一定遵守。</p>
 
   <h3>Q: Skills 列表为空？</h3>
   <p>Skills 从 <code>~/.myagent/skills/</code> 加载。确保该目录存在且有 SKILL.md 文件。可以建一个 symlink：<code>ln -s ~/.hermes/skills ~/.myagent/skills</code></p>

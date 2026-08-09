@@ -34,6 +34,7 @@ export default function App() {
   // Worktree 创建对话框
   const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
   const [worktreeCreating, setWorktreeCreating] = useState(false);
+  const [worktreeDeleting, setWorktreeDeleting] = useState(false);
   const themeResolved = useThemeStore(s => s.resolved);
 
   // 订阅 UI store：TaskSummaryCard 点击文件 → 切换到侧栏文件 tab
@@ -385,6 +386,106 @@ export default function App() {
     }
   };
 
+  // 删除工作空间（worktree 会同时删 git worktree + 目录）
+  const handleRemoveWorkspace = async (e: React.MouseEvent, wsId: string) => {
+    e.stopPropagation();
+    const curWsStore = useWorkspaceStore.getState();
+    const target = curWsStore.workspaces.find(w => w.id === wsId);
+    if (!target) return;
+
+    const isWorktree = target.name.includes(":");
+    const msg = isWorktree
+      ? `确定删除工作空间「${target.name}」？\n\n将同时删除 Git Worktree 目录和分支关联，此操作不可撤销。`
+      : `确定从列表中移除「${target.name}」？\n\n（不会删除磁盘上的项目文件）`;
+    if (!confirm(msg)) return;
+
+    try {
+      if (isWorktree) {
+        // 找到主仓库 workspace（name 不含 ":" 且 path 是 target path 的上级或同级）
+        const parent = curWsStore.workspaces.find(
+          w => !w.name.includes(":") && target.path.startsWith(w.path.split("/").slice(0, -1).join("/"))
+        );
+        if (parent) {
+          await fetch(`/api/workspace/${parent.id}/git/worktree`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: target.path }),
+          });
+        } else {
+          // 找不到父仓库，退回普通删除
+          await fetch(`/api/workspaces/${wsId}`, { method: "DELETE" });
+        }
+      } else {
+        await fetch(`/api/workspaces/${wsId}`, { method: "DELETE" });
+      }
+
+      // 刷新工作空间列表
+      const wsRes = await fetch("/api/workspaces");
+      const wsData = await wsRes.json();
+      curWsStore.setWorkspaces(wsData.workspaces || []);
+
+      // 如果删除的是当前活跃工作空间，切到第一个可用的
+      if (wsId === curWsStore.activeId) {
+        const first = wsData.workspaces?.[0];
+        if (first) {
+          await selectWorkspace(first.id);
+        } else {
+          curWsStore.setActive(null);
+          setWsDropdownOpen(false);
+          setShowDirBrowser(true);
+        }
+      }
+    } catch (e: any) {
+      alert(`删除失败：${e.message}`);
+    }
+  };
+
+  // 删除当前 Worktree（从分支选择器入口调用）
+  const handleDeleteCurrentWorktree = async () => {
+    if (!activeWs || worktreeDeleting) return;
+    const isWorktree = activeWs.name.includes(":");
+    if (!isWorktree) return;
+
+    if (!confirm(`确定删除当前 Worktree「${activeWs.name}」？\n\n将同时删除 Git Worktree 目录和分支关联，此操作不可撤销。`)) return;
+
+    setWorktreeDeleting(true);
+    setBranchDropdownOpen(false);
+    try {
+      const curWsStore = useWorkspaceStore.getState();
+      const parent = curWsStore.workspaces.find(
+        w => !w.name.includes(":") && activeWs.path.startsWith(w.path.split("/").slice(0, -1).join("/"))
+      );
+      if (parent) {
+        await fetch(`/api/workspace/${parent.id}/git/worktree`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: activeWs.path }),
+        });
+      } else {
+        await fetch(`/api/workspaces/${activeWs.id}`, { method: "DELETE" });
+      }
+
+      // 刷新工作空间列表
+      const wsRes = await fetch("/api/workspaces");
+      const wsData = await wsRes.json();
+      curWsStore.setWorkspaces(wsData.workspaces || []);
+
+      // 切到第一个可用的工作空间（通常是主仓库）
+      const first = wsData.workspaces?.[0];
+      if (first) {
+        await selectWorkspace(first.id);
+      } else {
+        curWsStore.setActive(null);
+        setWsDropdownOpen(false);
+        setShowDirBrowser(true);
+      }
+    } catch (e: any) {
+      alert(`删除 Worktree 失败：${e.message}`);
+    } finally {
+      setWorktreeDeleting(false);
+    }
+  };
+
   // 分支下拉点击外部关闭
   useEffect(() => {
     if (!branchDropdownOpen) return;
@@ -428,6 +529,13 @@ export default function App() {
                   <Icon name="i-folder" size={16} className="ws-dropdown-icon" />
                   <span className="ws-dropdown-name">{w.name}</span>
                   {w.id === wsStore.activeId && <Icon name="i-check" size={14} className="ws-dropdown-check" />}
+                  <button
+                    className="ws-dropdown-remove"
+                    title={w.name.includes(":") ? "删除 Worktree" : "从列表移除"}
+                    onClick={(e) => handleRemoveWorkspace(e, w.id)}
+                  >
+                    <Icon name="i-trash" size={14} />
+                  </button>
                 </div>
               ))}
               <div className="ws-dropdown-divider" />
@@ -615,6 +723,17 @@ export default function App() {
                       <Icon name="i-git-branch" size={13} />
                       <span>在新 Worktree 中打开…</span>
                     </button>
+                    {activeWs?.name.includes(":") && (
+                      <button
+                        className="branch-dropdown-action danger"
+                        onClick={handleDeleteCurrentWorktree}
+                        type="button"
+                        disabled={worktreeDeleting}
+                      >
+                        <Icon name="i-trash" size={13} />
+                        <span>{worktreeDeleting ? "删除中…" : "删除当前 Worktree"}</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

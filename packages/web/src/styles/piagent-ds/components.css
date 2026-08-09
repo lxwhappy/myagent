@@ -594,6 +594,9 @@ textarea { resize: none; }
   transition: background 0.12s;
 }
 .branch-dropdown-action:hover { background: var(--accent-tint); }
+.branch-dropdown-action.danger { color: #e53e3e; }
+.branch-dropdown-action.danger:hover { background: rgba(229,62,62,0.08); }
+.branch-dropdown-action:disabled { opacity: 0.5; cursor: default; }
 
 /* ── Worktree 创建对话框 ── */
 .wt-dialog-overlay {

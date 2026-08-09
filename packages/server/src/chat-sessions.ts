@@ -329,6 +329,22 @@ export const chatSessionStore = {
     } catch {}
   },
 
+  async removeByWorkspace(workspaceId: string) {
+    await ensureLoaded();
+    const ids = Object.values(index)
+      .filter((m) => m.workspaceId === workspaceId)
+      .map((m) => m.id);
+    for (const id of ids) {
+      delete index[id];
+      cache.delete(id);
+      try {
+        await rm(sessionFile(id), { force: true });
+      } catch {}
+    }
+    if (ids.length > 0) await persistIndex();
+    return ids.length;
+  },
+
   async togglePin(id: string): Promise<boolean> {
     await ensureLoaded();
     const m = index[id];
