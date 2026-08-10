@@ -56,9 +56,14 @@ export function setupSSEGateway(app: FastifyInstance) {
   // ── 创建 Agent ──
   app.post("/api/agent/:id/create", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { cwd?: string; provider?: string; model?: string; agentId?: string } | null;
+    const body = req.body as { cwd?: string; provider?: string; model?: string; agentId?: string; teamId?: string } | null;
     try {
-      await createAgent(id, { cwd: body?.cwd, provider: body?.provider, model: body?.model, agentId: body?.agentId });
+      await createAgent(id, { cwd: body?.cwd, provider: body?.provider, model: body?.model, agentId: body?.agentId, teamId: body?.teamId });
+      // 团队模式：发送可视化开始事件
+      if (body?.teamId) {
+        const { emitTeamFlowStart } = await import("./team-executor.js");
+        emitTeamFlowStart(body.teamId, id).catch(() => {});
+      }
       reply.send({ success: true });
     } catch (err: any) {
       reply.status(500).send({ error: err?.message ?? "Unknown" });

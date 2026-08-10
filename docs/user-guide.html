@@ -300,15 +300,8 @@
 <section id="session">
   <h2>会话管理</h2>
 
-  <div class="screenshot-annotated">
+  <div class="screenshot-annotated" style="position:relative;display:inline-block;width:100%;">
     <img class="screenshot" src="screenshots/session-list-hover.png" alt="会话列表" style="margin:0;border:none;">
-    <div class="anno-box" style="top:0.9%;left:70.8%;width:12.1%;height:3.6%"><span class="anno-label">新建会话 +</span></div>
-    <div class="anno-box" style="top:5.8%;left:4.5%;width:68.5%;height:4%"><span class="anno-label">会话 / 文件 Tab</span></div>
-    <div class="anno-box" style="top:6%;left:83%;width:12.1%;height:3.6%"><span class="anno-label">搜索 ⌘K</span></div>
-    <div class="anno-box" style="top:11.2%;left:3%;width:93.6%;height:2.9%"><span class="anno-label">日期分组（今天/昨天/7天内）</span></div>
-    <div class="anno-box" style="top:17.8%;left:3%;width:93.6%;height:3.7%"><span class="anno-label">会话条目（hover 显示操作按钮）</span></div>
-    <div class="anno-box" style="top:18.2%;left:73.1%;width:9.1%;height:2.8%"><span class="anno-label">置顶</span></div>
-    <div class="anno-box" style="top:18.4%;left:85.2%;width:8.3%;height:2.4%"><span class="anno-label">删除</span></div>
   </div>
   <div class="screenshot-caption">▲ 侧栏会话管理：顶部 + 新建、Tab 切换、搜索入口；列表按今天/昨天/7天内分组，hover 会话显示 📍 置顶和删除按钮</div>
 
@@ -678,9 +671,10 @@
   <h3>变更面板</h3>
   <div class="screenshot-annotated">
     <img class="screenshot" src="screenshots/changes-panel.png" alt="变更追踪面板" style="margin:0;border:none;">
-    <div class="anno-box" style="top:10.3%;left:0%;width:18.3%;height:78.7%"><span class="anno-label">变更 Tab：文件列表 + 统计</span></div>
+    <div class="anno-box" style="top:11%;left:1%;width:13%;height:70%"><span class="anno-label">变更 Tab（文件列表 + 统计）</span></div>
+    <div class="anno-box" style="top:7%;left:72%;width:27%;height:73%"><span class="anno-label">变更预览（Diff 视图）</span></div>
   </div>
-  <div class="screenshot-caption">▲ 变更追踪面板：点击「变更」子标签查看本次会话的文件修改记录</div>
+  <div class="screenshot-caption">▲ 变更追踪：左侧变更 Tab 展示文件修改统计，右侧预览面板显示选中文件的 Diff</div>
   <p>点击侧栏「文件」Tab 下的「变更」子标签，查看当前会话中 Agent 修改过的所有文件。</p>
   <ul>
     <li>统计信息：修改了几个文件、几次编辑、执行了几条命令</li>
@@ -698,9 +692,9 @@
 
   <div class="screenshot-annotated">
     <img class="screenshot" src="screenshots/branch-selector.png" alt="分支选择器" style="margin:0;border:none;">
-    <div class="anno-box" style="top:5.1%;left:25.4%;width:13.9%;height:20.7%"><span class="anno-label">分支列表 + Worktree 入口</span></div>
+    <div class="anno-box" style="top:15%;left:19%;width:13%;height:10%"><span class="anno-label">分支列表 + Worktree 入口</span></div>
   </div>
-  <div class="screenshot-caption">▲ 分支选择器下拉菜单，底部有 Worktree 创建入口</div>
+  <div class="screenshot-caption">▲ 分支选择器下拉菜单：分支列表 + 底部 Worktree 创建入口</div>
 
   <h3>查看当前分支</h3>
   <p>标题栏项目名右侧显示当前 Git 分支名（带分支图标）。如果不是 Git 仓库则不显示。</p>

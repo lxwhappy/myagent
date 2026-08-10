@@ -160,6 +160,7 @@ interface SessionChatState {
   subagents: SubagentState[];   // 活跃/刚完成的子 agent（delegate_task）
   agentId?: string;            // 该会话使用的 Agent 预设 id
   agent?: AgentInfo;           // 该会话使用的 Agent 显示信息
+  teamId?: string;             // 该会话绑定的 Agent 团队 id（团队模式：编排指令注入系统提示）
   availableTools: string[];    // 该会话实际可用的工具名列表
   toolsWithSource: { name: string; source: string; pkg?: string }[]; // 带来源分类的工具列表
   disabledTools: string[];     // 该会话被禁用的工具名列表
@@ -199,6 +200,7 @@ interface ChatStore {
   ensureSession: (id: string) => void;
   setAgentCreated: (id: string, skills?: SkillInfo[], modelInfo?: ModelInfo, agent?: AgentInfo, tools?: string[], disabledTools?: string[], toolsWithSource?: { name: string; source: string; pkg?: string }[]) => void;
   setSessionAgent: (id: string, agentId: string, agent: AgentInfo) => void;
+  setSessionTeam: (id: string, teamId: string | undefined) => void;
   removeSession: (id: string) => void;
   loadMessages: (id: string, messages: Message[]) => void;
   clearSession: (id: string) => void;
@@ -261,6 +263,11 @@ export const useChatStore = create<ChatStore>((set) => ({
   setSessionAgent: (id, agentId, agent) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, agentId, agent } } };
+  }),
+
+  setSessionTeam: (id, teamId) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, teamId } } };
   }),
 
   removeSession: (id) => set((s) => { const n = { ...s.sessions }; delete n[id]; return { sessions: n }; }),
@@ -488,6 +495,8 @@ export const useChatStore = create<ChatStore>((set) => ({
   // ── 子 agent（delegate_task）状态 ──
   addSubagent: (id, sub) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
+    // 去重：同一 subId 不重复添加（SSE 重连可能重放事件）
+    if (sess.subagents.some(sa => sa.subId === sub.subId)) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, subagents: [...sess.subagents, sub] } } };
   }),
   updateSubagentProgress: (id, subId, tool) => set((s) => {
@@ -505,6 +514,10 @@ export const useChatStore = create<ChatStore>((set) => ({
     const subagents = sess.subagents.map(sa => {
       if (sa.subId !== subId) return sa;
       touched = true;
+      // 调试日志：追踪事件路由（排查子 agent messages 串台问题）
+      if (event.type === "agent_start" || event.type === "agent_end") {
+        console.log(`[subagent-event] ${subId.slice(-8)} ${event.type} | msgs before: ${(sa.messages||[]).length}`);
+      }
       const msgs = [...(sa.messages || [])];
       let subMsgCounter = msgs.length;
       switch (event.type) {
@@ -540,10 +553,9 @@ export const useChatStore = create<ChatStore>((set) => ({
         case "agent_end": {
           const last = msgs[msgs.length - 1];
           if (last?.role === "assistant" && last.isStreaming) {
-            // 正文空但 thinking 有内容时，把 thinking 当正文（同主会话逻辑）
-            const patch: any = { isStreaming: false };
-            if (!last.content && last.thinking && last.thinking.trim()) { patch.content = last.thinking.trim(); patch.thinking = ""; }
-            msgs[msgs.length - 1] = { ...last, ...patch };
+            // 子 agent 结束：只关闭 streaming 状态，不把 thinking 提升为 content。
+            // 子 agent 的 thinking 是内部推理（执行计划、方案分析），不是给用户看的正文。
+            msgs[msgs.length - 1] = { ...last, isStreaming: false };
           }
           break;
         }

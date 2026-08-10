@@ -358,7 +358,7 @@ export function useChat() {
 
         // ── 团队执行可视化事件 ──
         case "team_flow_start": {
-          if (msg.payload) useTeamFlowStore.getState().onStart(msg.payload);
+          if (msg.payload) useTeamFlowStore.getState().onStart(msg.payload, sid ?? undefined);
           break;
         }
         case "team_flow_end": {
@@ -413,6 +413,9 @@ export function useChat() {
   const createChatSession = useCallback((chatSessionId: string, cwd?: string) => {
     useChatStore.getState().ensureSession(chatSessionId);
     useChatStore.getState().setActiveChatSession(chatSessionId);
+    useTeamFlowStore.getState().checkSession(chatSessionId);
+    // 新建会话默认不带团队（确保新会话是普通模式）
+    useChatStore.getState().setSessionTeam(chatSessionId, undefined);
     // 用当前选中的 Agent 预设创建（默认 agent 不附加 systemPrompt）
     const agentId = useAgentsStore.getState().activeAgentId;
     if (agentId && agentId !== "default") {
@@ -424,6 +427,7 @@ export function useChat() {
 
   const switchToSession = useCallback((chatSessionId: string) => {
     useChatStore.getState().setActiveChatSession(chatSessionId);
+    useTeamFlowStore.getState().checkSession(chatSessionId);
   }, []);
 
   const sendMessage = useCallback(async (text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>, codeRefs?: CodeRef[]) => {
@@ -559,6 +563,23 @@ export function useChat() {
     sseClient.createAgent(sid, { cwd: activeWs?.path, agentId });
   }, []);
 
+  /** 切换到团队模式（销毁旧 agent，用 teamId 重建，编排指令注入系统提示） */
+  const switchTeam = useCallback(async (teamId: string | undefined) => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid) return;
+    useChatStore.getState().setSessionTeam(sid, teamId);
+    // 清除团队可视化残留
+    useTeamFlowStore.getState().checkSession(sid);
+    // 销毁旧 agent，用新 teamId 重建
+    await sseClient.destroyAgent(sid);
+    useChatStore.getState().forceResetGenerating(sid);
+    useChatStore.getState().setAgentCreated(sid, []);
+    const ws = useWorkspaceStore.getState();
+    const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
+    const sess = useChatStore.getState().sessions[sid];
+    sseClient.createAgent(sid, { cwd: activeWs?.path, agentId: sess?.agentId, teamId });
+  }, []);
+
   const loadSession = useCallback(async (chatSessionId: string, appSessionId: string, forceCwd?: string) => {
     try {
       // 正在生成的会话：内存中的状态比服务端更新，直接切换不重载
@@ -675,6 +696,7 @@ export function useChat() {
     subStatus: activeSub?.status ?? null,
     connected: store.connected,
     activeChatSessionId: activeId,
+    teamId: activeSession?.teamId,
     createChatSession,
     switchToSession,
     sendMessage,
@@ -682,6 +704,7 @@ export function useChat() {
     regenerate,
     loadSession,
     switchAgent,
+    switchTeam,
   };
 }
 

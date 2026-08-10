@@ -423,7 +423,13 @@ function ProcessSection({ msg, subagents, onOpenSub }: { msg: Message; subagents
               if (at.tool !== "ask_user") {
                 const skillName = detectSkillRead(at);
                 if (at.tool === "delegate_task") {
-                  const sub = subagents?.[subagents.length - 1];
+                  // 按顺序匹配 subagent：第 N 个 delegate_task 对应第 N 个 subagent
+                  // （不能取最后一个，否则多个 delegate_task 都指向同一个 subagent）
+                  let delegateIndex = -1;
+                  for (let k = 0; k <= i; k++) {
+                    if (allTools[k].tool === "delegate_task") delegateIndex++;
+                  }
+                  const sub = subagents?.[delegateIndex];
                   rows.push(sub
                     ? <SubagentBlock key={at.toolCallId} tool={at} sub={sub} onOpen={() => onOpenSub?.(sub.subId)} />
                     : <ToolBlock key={at.toolCallId} tool={at} />);

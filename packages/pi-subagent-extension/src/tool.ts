@@ -25,6 +25,7 @@ export function createDelegateTool(opts: CreateDelegateToolOptions): ToolDefinit
   return {
     name: "delegate_task",
     label: "SUB",
+    executionMode: "sequential" as const,
     description:
       "把独立子任务委派给隔离的子 agent 执行。子 agent 有自己的上下文和编码工具，" +
       "跑完后只返回结果摘要。适合：需要读大量文件的问题、可独立验证的调研/重构。" +

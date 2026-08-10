@@ -529,13 +529,6 @@ export default function App() {
                   <Icon name="i-folder" size={16} className="ws-dropdown-icon" />
                   <span className="ws-dropdown-name">{w.name}</span>
                   {w.id === wsStore.activeId && <Icon name="i-check" size={14} className="ws-dropdown-check" />}
-                  <button
-                    className="ws-dropdown-remove"
-                    title={w.name.includes(":") ? "删除 Worktree" : "从列表移除"}
-                    onClick={(e) => handleRemoveWorkspace(e, w.id)}
-                  >
-                    <Icon name="i-trash" size={14} />
-                  </button>
                 </div>
               ))}
               <div className="ws-dropdown-divider" />

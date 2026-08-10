@@ -44,6 +44,7 @@ interface TeamFlowState {
     layout: string;
     nodes: TeamFlowNode[];
     edges: TeamFlowEdge[];
+    chatSessionId?: string;  // 归属的会话 id（切换会话时据此清空）
   } | null;
 
   /** team_flow_start 事件 → 初始化 */
@@ -56,7 +57,10 @@ interface TeamFlowState {
     layout: string;
     nodes: Array<{ id: string; label: string; role: string; icon: string; status: string }>;
     edges: Array<{ id: string; source: string; target: string; label?: string; dashed?: boolean }>;
-  }) => void;
+  }, chatSessionId?: string) => void;
+
+  /** 切换会话时检查：如果当前 flow 不属于该会话则清空 */
+  checkSession: (chatSessionId: string) => void;
 
   /** 节点状态更新（由 subagent_start/end 事件驱动） */
   updateNode: (nodeId: string, patch: Partial<TeamFlowNode>) => void;
@@ -80,7 +84,7 @@ function parseNodeTag(goal: string): string | null {
 export const useTeamFlowStore = create<TeamFlowState>((set, get) => ({
   active: null,
 
-  onStart: (payload) => set({
+  onStart: (payload, chatSessionId?) => set({
     active: {
       teamId: payload.teamId,
       teamName: payload.teamName,
@@ -90,8 +94,16 @@ export const useTeamFlowStore = create<TeamFlowState>((set, get) => ({
       layout: payload.layout,
       nodes: payload.nodes.map(n => ({ ...n, status: n.status as NodeStatus })),
       edges: payload.edges,
+      chatSessionId,
     },
   }),
+
+  checkSession: (chatSessionId) => {
+    const cur = get().active;
+    if (cur && cur.chatSessionId && cur.chatSessionId !== chatSessionId) {
+      set({ active: null });
+    }
+  },
 
   updateNode: (nodeId, patch) => set(s => {
     if (!s.active) return s;

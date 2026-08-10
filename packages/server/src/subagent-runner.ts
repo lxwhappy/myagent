@@ -27,6 +27,31 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 300_000; // 5 分钟兜底（编码任务需要更多时间）
 
+// ── Per-session 串行锁 ──
+// LLM 可能在单个回合里同时发起多个 delegate_task（并行工具调用），
+// 但团队/loop 模式要求严格串行。用 Promise 链实现异步互斥锁。
+// 放在 subagent-runner.ts（server 自己的源码）而非 tool.ts（workspace 符号链接包），
+// 确保 tsx watch 一定能监视到。
+const sessionLocks = new Map<string, Promise<void>>();
+
+async function withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = sessionLocks.get(sessionId);
+  if (prev) {
+    console.log(`[subagent] ${sessionId.slice(0, 8)} 检测到并行 delegate_task，排队等待串行执行`);
+  }
+  const prevP = prev ?? Promise.resolve();
+  let release!: () => void;
+  const done = new Promise<void>((r) => { release = r; });
+  sessionLocks.set(sessionId, done);
+  await prevP;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (sessionLocks.get(sessionId) === done) sessionLocks.delete(sessionId);
+  }
+}
+
 // ── 活跃子 agent 追踪表 ──
 // 按 parentSessionId 记录所有正在运行的子 agent 的 AbortController，
 // 主 agent abort/destroy 时通过 abortSubagents() 连带终止。
@@ -54,6 +79,19 @@ export const runSubagent: SubagentSpawnFn = async (
   opts,
   onProgress,
 ) => {
+  // 强制串行：同一 session 内的 delegate_task 必须排队执行，
+  // 防止 LLM 并行发起多个子 agent（团队/loop 模式要求严格串行）
+  return withSessionLock(parentSessionId, () => runSubagentInner(parentSessionId, goal, context, opts, onProgress));
+};
+
+/** 实际的子 agent 执行逻辑（被串行锁包裹） */
+async function runSubagentInner(
+  parentSessionId: string,
+  goal: string,
+  context: string | undefined,
+  opts: any,
+  onProgress: (e: SubagentProgressEvent) => void,
+): Promise<SubagentResult> {
   const subId = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const startedAt = Date.now();
   const timeoutMs = opts.maxTurns ? opts.maxTurns * 60_000 : DEFAULT_TIMEOUT_MS;
@@ -120,10 +158,13 @@ export const runSubagent: SubagentSpawnFn = async (
     unsub = session.subscribe((event: any) => {
       // 只对"真正有产出"的事件更新 lastActivity：
       // text_delta / thinking_delta / tool_execution_start / tool_execution_end
+      // / tool_execution_update（bash 流式输出，长时间命令需要算活动避免误杀）
       // 不含 auto_retry_*（否则 API 重试会不断喂活空闲检测器，导致卡死检测失效）
       const isProductive =
         event.type === "tool_execution_start" ||
         event.type === "tool_execution_end" ||
+        event.type === "tool_execution_update" ||
+        event.type === "bash_execution_update" ||
         (event.type === "message_update" && event.assistantMessageEvent);
       if (isProductive) lastActivity = Date.now();
 
@@ -165,7 +206,10 @@ export const runSubagent: SubagentSpawnFn = async (
     // ── 拼 prompt：引导子 agent 专注 + 简洁汇报 ──
     const sysHint =
       "[你是被委派的子 agent，独立执行一个子任务。专注完成目标，" +
-      "完成后给出简洁、结构化的结果摘要。不需要客套。]";
+      "完成后给出简洁、结构化的结果摘要。不需要客套。\n\n" +
+      "重要：如果你需要启动长时间运行的服务（如 web server、mvn spring-boot:run、npm start 等），" +
+      "必须用后台方式运行（如 `command &` 或 `nohup command &`），然后通过 curl 或日志确认服务是否启动成功。" +
+      "绝不能直接阻塞运行会一直不退出的命令。]";
     const fullPrompt = context
       ? `${sysHint}\n\n任务：${goal}\n\n背景：${context}`
       : `${sysHint}\n\n任务：${goal}`;
@@ -183,6 +227,15 @@ export const runSubagent: SubagentSpawnFn = async (
     controllers = activeSubagents.get(parentSessionId);
     if (!controllers) { controllers = new Set(); activeSubagents.set(parentSessionId, controllers); }
     controllers.add(abortController);
+
+    // ── abort signal → session.abort() ──
+    // abortSubagents() 调 ctrl.abort()，但之前没人在听这个 signal。
+    // 这里桥接：signal abort 时立即中止子 agent 的 prompt。
+    const onExternalAbort = () => {
+      console.log(`[subagent] ${subId.slice(-4)} 收到外部 abort signal，终止子 agent`);
+      session.abort().catch(() => {});
+    };
+    abortController.signal.addEventListener("abort", onExternalAbort);
 
     // ── 硬超时：独立 Promise 直接参与 race，不依赖 abort 事件链 ──
     // （abort 事件监听器在某些场景下可能不可靠，用 setTimeout + Promise 最稳）
@@ -207,16 +260,32 @@ export const runSubagent: SubagentSpawnFn = async (
       checker.unref?.();
     });
 
-    try {
-      // 三方竞速：prompt 完成 vs 硬超时 vs 空闲超时
-      const promptDone = session.prompt(fullPrompt).then(() => "done" as const);
-      const winner = await Promise.race([promptDone, hardTimeoutPromise, idleTimeoutPromise]);
+    // ── 外部 abort 检测：abortSubagents() 触发时立即结束 race ──
+    const abortPromise = new Promise<"aborted">((resolve) => {
+      if (abortController!.signal.aborted) { resolve("aborted"); return; }
+      abortController!.signal.addEventListener("abort", () => resolve("aborted"), { once: true });
+    });
 
-      // 清理定时器
-      if (winner !== "hard") hardTimeoutPromise; // Promise 自行 GC
-      // 终止子 agent（无论是否超时，prompt 可能还在后台跑）
+    try {
+      // 四方竞速：prompt 完成 vs 硬超时 vs 空闲超时 vs 外部 abort
+      const promptDone = session.prompt(fullPrompt).then(() => "done" as const);
+      const winner = await Promise.race([promptDone, hardTimeoutPromise, idleTimeoutPromise, abortPromise]);
+
+      // 终止子 agent（无论是否超时/abort，prompt 可能还在后台跑）
       if (winner !== "done") {
         try { await session.abort(); } catch {}
+      }
+
+      if (winner === "aborted") {
+        console.log(`[subagent] ${subId.slice(-4)} 被外部中止（主 agent abort/destroy）`);
+        const result: SubagentResult = {
+          summary: textBuf.trim() || "(已中止)",
+          error: "子 agent 被主 agent 中止",
+          toolCalls,
+          durationMs: Date.now() - startedAt,
+        };
+        emit({ type: "subagent_end", chatSessionId: parentSessionId, payload: { subId, ...result }, ts: Date.now() });
+        return result;
       }
 
       if (winner !== "done") {
@@ -239,7 +308,8 @@ export const runSubagent: SubagentSpawnFn = async (
     } catch (err: any) {
       throw err;
     } finally {
-      abortController.abort(); // 确保追踪表清理
+      abortController.abort(); // 确保追踪表清理 + 触发 abort 事件链
+      abortController.signal.removeEventListener("abort", onExternalAbort);
     }
 
     // ── 成功：收集结果 ──

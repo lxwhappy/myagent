@@ -6,8 +6,8 @@ import { useChat } from "../hooks/useChat";
 import { useChatStore, type SkillInfo } from "../stores/chat";
 import { useAgentsStore } from "../stores/agents";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
-import { useCodeRefStore, formatCodeRefs, type CodeRef } from "../stores/code-refs";
-import { useQuickPromptStore, type QuickPrompt } from "../stores/quick-prompts";
+import { useCodeRefStore } from "../stores/code-refs";
+import { useQuickPromptStore } from "../stores/quick-prompts";
 import { Icon } from "./Icon";
 import { useAgentTeamsStore } from "../stores/agent-teams";
 import { useUIStore } from "../stores/ui";
@@ -58,7 +58,7 @@ function imageToBase64(file: File): Promise<AttachedImage> {
 }
 
 export function InputBar() {
-  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId, agent, switchAgent } = useChat();
+  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId, agent, switchAgent, teamId, switchTeam } = useChat();
   const thinkingEnabled = useChatStore(s => s.thinkingEnabled);
   const toggleThinking = useChatStore(s => s.toggleThinking);
   const agentsList = useAgentsStore(s => s.agents);
@@ -72,7 +72,6 @@ export function InputBar() {
 
   // ── Agent 选择器 ──
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
-  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
   const openSettings = useUIStore(s => s.openSettings);
 
@@ -82,8 +81,8 @@ export function InputBar() {
   // ── 自动驾驶（一次性模式）──
   const [autopilotEnabled, setAutopilotEnabled] = useState(false);
 
-  // 当前选中的团队（选中团队后覆盖 Agent 显示）
-  const activeTeam = activeTeamId ? teams.find(t => t.id === activeTeamId) : null;
+  // 当前选中的团队（从 session state 读取，切换会话自然恢复）
+  const activeTeam = teamId ? teams.find(t => t.id === teamId) : null;
   // 选择器按钮上显示的图标+名称
   const selectorIcon = activeTeam?.icon ?? currentAgent?.icon ?? "🤖";
   const selectorName = activeTeam?.name ?? currentAgent?.name ?? "MyAgent";
@@ -245,30 +244,11 @@ export function InputBar() {
       ? attachedImages.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }))
       : undefined;
 
-    // 团队模式：后端从团队配置（customPrompt 或模式默认模板）生成编排指令
-    let sendText = text;
-    const teamId = activeTeamId;
-    if (teamId) {
-      try {
-        const res = await fetch(`/api/agent-teams/${teamId}/preview`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text.trim() }),
-        });
-        const data = await res.json();
-        if (data.prompt) {
-          sendText = data.prompt;
-        }
-      } catch {
-        // 后端失败时回退：直接发送用户原文
-      }
-    }
-
-    sendMessage(sendText, images, codeRefs.length > 0 ? codeRefs : undefined);
+    // 团队模式：编排指令已在 agent 创建时注入系统提示，直接发送用户原文
+    sendMessage(text, images, codeRefs.length > 0 ? codeRefs : undefined);
     // 清理
     setText("");
     clearDraft(draftKey);
-    setActiveTeamId(null); // 发送后回到普通 Agent 模式
     attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); });
     setAttachedImages([]);
     // 引用片段不清空——保留到用户手动删除（点 chip 上的 ✕）
@@ -427,17 +407,18 @@ export function InputBar() {
 
   const handleSelectAgent = (id: string) => {
     setAgentDropdownOpen(false);
-    setActiveTeamId(null); // 切回普通 Agent，清除团队选中
+    // 选普通 Agent 时退出团队模式
+    if (teamId) switchTeam(undefined);
     if (id !== currentAgent?.id) switchAgent(id);
   };
 
   // ── 执行 Agent 团队 ──
-  // 选中团队即标记激活状态，编排指令由后端从团队配置自动生成
-  const handleRunTeam = (teamId: string) => {
-    const team = teams.find(t => t.id === teamId);
+  // 选中团队 → 销毁旧 agent，用 teamId 重建（编排指令注入系统提示）
+  const handleRunTeam = (tid: string) => {
+    const team = teams.find(t => t.id === tid);
     if (!team || team.members.length === 0) return;
     setAgentDropdownOpen(false);
-    setActiveTeamId(teamId);
+    switchTeam(tid);
     taRef.current?.focus();
   };
 
@@ -500,7 +481,7 @@ export function InputBar() {
                     {teams.map(t => (
                       <button
                         key={t.id}
-                        className={`agent-selector-item ${activeTeamId === t.id ? "active" : ""}`}
+                        className={`agent-selector-item ${teamId === t.id ? "active" : ""}`}
                         onClick={() => handleRunTeam(t.id)}
                         type="button"
                         title={t.description}
@@ -512,7 +493,7 @@ export function InputBar() {
                             {t.members.map(m => m.role).join(" → ")}
                           </span>
                         </span>
-                        {activeTeamId === t.id && <Icon name="i-check" size={14} className="agent-selector-item-check" />}
+                        {teamId === t.id && <Icon name="i-check" size={14} className="agent-selector-item-check" />}
                       </button>
                     ))}
                     <div className="agent-selector-divider" />

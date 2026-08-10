@@ -35,7 +35,9 @@ async function getMemberInfo(member: TeamMember): Promise<MemberInfo> {
   };
 }
 
-/** 主入口：根据团队 ID 和用户消息，生成编排指令 */
+/** 主入口：根据团队 ID 和用户消息，生成编排指令。
+ *  userMessage 为空时返回纯模板（用于注入系统提示，实际用户消息后续由 prompt 路由传入）。
+ */
 export async function buildTeamPrompt(teamId: string, userMessage: string): Promise<string | null> {
   const team = await agentTeamStore.get(teamId);
   if (!team || team.members.length === 0) return null;
@@ -57,17 +59,29 @@ export async function buildTeamPrompt(teamId: string, userMessage: string): Prom
   }
 
   // 构建 prompt：优先使用团队自定义指令
+  // userMessage 为空时用占位符，LLM 看到后知道等待用户消息
   const prompt = team.customPrompt?.trim()
     ? team.customPrompt
-    : buildPrompt({ mode, members, userMessage, optionValues });
+    : buildPrompt({ mode, members, userMessage: userMessage || "(等待用户输入任务)", optionValues });
 
-  // 发送团队执行开始事件（携带 graph 结构，驱动前端可视化）
+  return prompt;
+}
+
+/** 发送 team_flow_start 事件（前端可视化用） */
+export async function emitTeamFlowStart(teamId: string, chatSessionId: string): Promise<void> {
+  const team = await agentTeamStore.get(teamId);
+  if (!team || team.members.length === 0) return;
+
+  const mode = getMode(team.mode);
+  if (!mode) return;
+
+  const members: MemberInfo[] = await Promise.all(team.members.map(getMemberInfo));
   const membersWithIds = assignNodeIds(members, mode.topology);
   const graph = buildGraph(membersWithIds, mode.topology, undefined, team.dagEdges);
 
   emit({
     type: "team_flow_start",
-    chatSessionId: "_global",
+    chatSessionId,
     payload: {
       teamId: team.id,
       teamName: team.name,
@@ -80,8 +94,6 @@ export async function buildTeamPrompt(teamId: string, userMessage: string): Prom
     },
     ts: Date.now(),
   });
-
-  return prompt;
 }
 
 /**

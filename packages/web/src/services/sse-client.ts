@@ -65,13 +65,13 @@ class SSEClient {
 
   // ── REST API 命令 ──
 
-  async createAgent(chatSessionId: string, opts?: { cwd?: string; agentId?: string }) {
+  async createAgent(chatSessionId: string, opts?: { cwd?: string; agentId?: string; teamId?: string }) {
     this.knownAgents.set(chatSessionId, { cwd: opts?.cwd, agentId: opts?.agentId });
     try {
       await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: opts?.cwd, agentId: opts?.agentId }),
+        body: JSON.stringify({ cwd: opts?.cwd, agentId: opts?.agentId, teamId: opts?.teamId }),
       });
     } catch (err) {
       console.error("[sse] createAgent failed:", err);

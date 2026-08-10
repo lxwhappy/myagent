@@ -88,7 +88,7 @@ const registry = new Map<string, AgentEntry>();
 
 export async function createAgent(
   chatSessionId: string,
-  opts?: { cwd?: string; provider?: string; model?: string; agentId?: string },
+  opts?: { cwd?: string; provider?: string; model?: string; agentId?: string; teamId?: string },
 ): Promise<string> {
   // 如果该 chatSessionId 已有 agent，先销毁
   destroyAgent(chatSessionId);
@@ -99,15 +99,24 @@ export async function createAgent(
   // 读取 Agent 配置（角色预设），把 systemPrompt 追加到 AGENTS.md 之后
   const agentCfg = opts?.agentId ? await agentConfigStore.get(opts.agentId) : undefined;
   const extraPrompt = agentCfg?.systemPrompt?.trim();
+
+  // 读取团队编排指令（注入系统提示，后续每轮对话自动带上，不需要每次拼到消息里）
+  let teamPrompt: string | undefined;
+  if (opts?.teamId) {
+    const { buildTeamPrompt } = await import("./team-executor.js");
+    teamPrompt = (await buildTeamPrompt(opts.teamId, "")) ?? undefined;
+  }
+
   const sysInfo = getSystemInfo();
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir,
-    // 始终注入：系统信息 + 角色指令
+    // 始终注入：系统信息 + 角色指令 + 团队编排指令
     appendSystemPromptOverride: (base: string[]) => [
       ...base,
       sysInfo,
       ...(extraPrompt ? [extraPrompt] : []),
+      ...(teamPrompt ? [teamPrompt] : []),
     ],
   });
   await loader.reload();

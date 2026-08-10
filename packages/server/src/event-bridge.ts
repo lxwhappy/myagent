@@ -41,10 +41,29 @@ export class EventBridge {
     const llmTimings = new Map<string, { startTs: number; firstTokenTs?: number }>();
     const toolTimings = new Map<string, number>();
 
+    // ── LLM 错误追踪 ──
+    // 当 LLM API 报错（429/500/余额不足等），SDK 的 prompt() 正常 resolve（不 reject），
+    // 错误信息只存在于 message_end 事件的 stopReason="error" + errorMessage 字段里。
+    // 追踪最后一次错误，在 agent_end（最终轮，非 willRetry）时转发为 error 事件，
+    // 让前端能显示 "模型调用失败: xxx" 而不是一个空白气泡。
+    let pendingError: string | undefined;
+
     const handler = async (event: AgentSessionEvent) => {
       switch (event.type) {
         case "agent_start": send("agent_start"); break;
-        case "agent_end": send("agent_end"); sendUsage(); break;
+        case "agent_end": {
+          // willRetry=true 表示 SDK 会自动重试（进入下一轮），错误暂不暴露
+          const willRetry = (event as any).willRetry;
+          if (!willRetry) {
+            // 最终轮：如果有未恢复的 LLM 错误，转发给前端显示
+            if (pendingError) {
+              console.error(`[llm-error] ${chatSessionId.slice(0, 8)} 模型调用失败: ${pendingError.slice(0, 120)}`);
+              send("error", { message: `模型调用失败: ${pendingError}` });
+              pendingError = undefined;
+            }
+          }
+          send("agent_end"); sendUsage(); break;
+        }
         case "message_start": {
           // 记录 LLM 调用开始时间（用服务器本地时间，和 message_end 的 Date.now() 一致）
           llmTimings.set("current", { startTs: Date.now() });
@@ -76,6 +95,13 @@ export class EventBridge {
             llmDurationMs: now - t.startTs,
             firstTokenMs: t.firstTokenTs ? t.firstTokenTs - t.startTs : undefined,
           } : undefined;
+          // 追踪 LLM 错误：stopReason="error" 时记录 errorMessage
+          // （SDK 的 prompt() 不会 reject，错误只在 message_end 里）
+          if (msg?.stopReason === "error" && msg?.errorMessage) {
+            pendingError = msg.errorMessage;
+          } else {
+            pendingError = undefined;  // 成功响应，清除之前的错误
+          }
           if (msg?.usage) {
             send("message_end", { usage: msg.usage, model: msg.model, debug });
           } else {
@@ -92,7 +118,8 @@ export class EventBridge {
                 (u.reasoning ? ` 💭${u.reasoning}` : "") +
                 (u.cost?.total ? ` $${u.cost.total.toFixed(4)}` : "")
               : "(无 usage)";
-            console.log(`[llm] ${chatSessionId.slice(0, 8)} ${msg?.model || "?"} · ${durStr} · ${tokStr}`);
+            const errTag = msg?.stopReason === "error" ? " ❌" : "";
+            console.log(`[llm] ${chatSessionId.slice(0, 8)} ${msg?.model || "?"} · ${durStr} · ${tokStr}${errTag}`);
           }
           llmTimings.delete("current");
           sendUsage();  // 每条消息结束就更新累计用量

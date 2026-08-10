@@ -90,7 +90,17 @@ export function buildPrompt(ctx: PromptBuildContext): string {
   // 清理未匹配的变量（避免 {{xxx}} 残留在 prompt 中）
   result = result.replace(/\{\{[^}]+\}\}/g, "");
 
-  return result;
+  // ── 团队协调者强制声明 ──
+  // 注入系统提示时，这段文字可能和用户消息分离（系统提示里是占位符，
+  // 实际用户消息后续才到）。加一个明确的前置声明，确保 LLM 知道：
+  // 它是团队协调者，必须通过 delegate_task 委派任务，不能自己干活。
+  const enforcePrefix = [
+    `【重要：你是团队协调者。以下用户的每一次请求，你都必须通过 delegate_task 工具委派给团队成员执行，绝不能自己直接动手（不调用 delegate_task 就直接写代码/读文件是严重错误）。】`,
+    ``,
+    result,
+  ].join("\n");
+
+  return enforcePrefix;
 }
 
 /**
