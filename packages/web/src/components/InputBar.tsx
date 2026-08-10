@@ -3,7 +3,7 @@
 
 import { useRef, useState, useEffect, useMemo, useCallback, type KeyboardEvent } from "react";
 import { useChat } from "../hooks/useChat";
-import { useChatStore, type SkillInfo } from "../stores/chat";
+import { useChatStore, type SkillInfo, type ThinkingLevel, THINKING_LEVELS } from "../stores/chat";
 import { useAgentsStore } from "../stores/agents";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
 import { useCodeRefStore } from "../stores/code-refs";
@@ -17,6 +17,9 @@ import { QuickPromptManager } from "./QuickPromptManager";
 const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
 const MAX_HISTORY = 50;
+
+// 稳定的空数组引用，避免 selector 返回新数组导致 Zustand 无限渲染
+const EMPTY_ARRAY: readonly never[] = Object.freeze([]);
 
 export interface AttachedImage {
   data: string;    // base64 (no prefix)
@@ -58,9 +61,8 @@ function imageToBase64(file: File): Promise<AttachedImage> {
 }
 
 export function InputBar() {
-  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId, agent, switchAgent, teamId, switchTeam } = useChat();
-  const thinkingEnabled = useChatStore(s => s.thinkingEnabled);
-  const toggleThinking = useChatStore(s => s.toggleThinking);
+  const { sendMessage, abort, isGenerating, connected, skills, activeChatSessionId, agent, switchAgent, teamId, switchTeam, sendSteer, sendFollowUp, clearQueue, changeThinkingLevel } = useChat();
+  const thinkingLevel = useChatStore(s => s.thinkingLevel);
   const agentsList = useAgentsStore(s => s.agents);
   const activeAgentId = useAgentsStore(s => s.activeAgentId);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -80,6 +82,21 @@ export function InputBar() {
 
   // ── 自动驾驶（一次性模式）──
   const [autopilotEnabled, setAutopilotEnabled] = useState(false);
+
+  // ── Steering 消息模式（Agent 执行中可用）──
+  // normal: 普通发送（需等 Agent 空闲）
+  // steer: 🎯 当前工具调用后立即投递（实时干预）
+  // followUp: ⏳ Agent 完全空闲后投递（追加任务）
+  const [steerMode, setSteerMode] = useState<"normal" | "steer" | "followUp">("normal");
+
+  // ── 思考级别选择器弹出层 ──
+  const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
+  const thinkingDropdownRef = useRef<HTMLDivElement>(null);
+
+  // 当前会话的 steering/followUp 队列
+  // 直接从 session 对象取数组引用（不创建新数组），避免 Zustand 无限渲染
+  const steeringQueue = useChatStore(s => s.sessions[activeChatSessionId ?? ""]?.steeringQueue) ?? EMPTY_ARRAY;
+  const followUpQueue = useChatStore(s => s.sessions[activeChatSessionId ?? ""]?.followUpQueue) ?? EMPTY_ARRAY;
 
   // 当前选中的团队（从 session state 读取，切换会话自然恢复）
   const activeTeam = teamId ? teams.find(t => t.id === teamId) : null;
@@ -198,7 +215,22 @@ export function InputBar() {
   }, [processImageFiles]);
 
   const handleSend = async () => {
-    if ((!text.trim() && attachedImages.length === 0 && codeRefs.length === 0) || isGenerating) return;
+    if ((!text.trim() && attachedImages.length === 0 && codeRefs.length === 0)) return;
+
+    // ── Steering 模式：Agent 执行中排队消息 ──
+    if (isGenerating && steerMode !== "normal" && text.trim()) {
+      if (steerMode === "steer") {
+        await sendSteer(text);
+      } else {
+        await sendFollowUp(text);
+      }
+      setText(""); clearDraft(draftKey);
+      setSteerMode("normal"); // 发送后恢复默认模式
+      if (taRef.current) taRef.current.style.height = "auto";
+      return;
+    }
+
+    if (isGenerating) return; // 非 steering 模式下不允许发送
     addToHistory(text.trim());
     historyRef.current = loadHistory();
     histIndexRef.current = -1;
@@ -405,6 +437,18 @@ export function InputBar() {
     return () => document.removeEventListener("mousedown", handler);
   }, [agentDropdownOpen]);
 
+  // 思考级别选择器：点击外部关闭
+  useEffect(() => {
+    if (!thinkingDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
+        setThinkingDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [thinkingDropdownOpen]);
+
   const handleSelectAgent = (id: string) => {
     setAgentDropdownOpen(false);
     // 选普通 Agent 时退出团队模式
@@ -431,7 +475,8 @@ export function InputBar() {
     return () => { attachedImages.forEach(img => { if (img.previewUrl.startsWith("blob:")) URL.revokeObjectURL(img.previewUrl); }); };
   }, []);
 
-  const canSend = (text.trim().length > 0 || attachedImages.length > 0 || codeRefs.length > 0) && connected && !isGenerating;
+  // steering 模式下允许在生成中发送
+  const canSend = (text.trim().length > 0 || attachedImages.length > 0 || codeRefs.length > 0) && connected && (!isGenerating || steerMode !== "normal");
 
   return (
     <div className="input-bar">
@@ -623,6 +668,32 @@ export function InputBar() {
           </>
         )}
 
+        {/* ── Steering 队列显示（Agent 执行中排队的消息）── */}
+        {isGenerating && (steeringQueue.length > 0 || followUpQueue.length > 0) && (
+          <div className="steering-queue-display">
+            {steeringQueue.map((msg, i) => (
+              <div key={`s${i}`} className="steering-queue-chip steer" title="Steering 消息：当前工具调用后立即投递">
+                <span className="steering-queue-icon">🎯</span>
+                <span className="steering-queue-text">{msg}</span>
+              </div>
+            ))}
+            {followUpQueue.map((msg, i) => (
+              <div key={`f${i}`} className="steering-queue-chip followup" title="Follow-up 消息：Agent 完全空闲后投递">
+                <span className="steering-queue-icon">⏳</span>
+                <span className="steering-queue-text">{msg}</span>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="steering-queue-clear"
+              onClick={() => clearQueue()}
+              title="清空所有排队消息"
+            >
+              <Icon name="i-x" size={12} /> 清空
+            </button>
+          </div>
+        )}
+
         <div className="input-row">
           <textarea
             ref={taRef}
@@ -631,7 +702,13 @@ export function InputBar() {
             onChange={handleChange}
             onKeyDown={handleKey}
             onPaste={handlePaste}
-            placeholder={connected ? "给 MyAgent 发消息…" : "正在连接…"}
+            placeholder={
+              !connected ? "正在连接…"
+              : isGenerating && steerMode === "steer" ? "🎯 输入 Steering 消息（工具调用后立即投递）…"
+              : isGenerating && steerMode === "followUp" ? "⏳ 输入 Follow-up 消息（Agent 空闲后投递）…"
+              : isGenerating ? "Agent 执行中… 点 🎯 排队干预消息"
+              : "给 MyAgent 发消息…"
+            }
             disabled={!connected}
             rows={1}
           />
@@ -643,28 +720,68 @@ export function InputBar() {
             </div>
           )}
 
-          {/* 自动驾驶 toggle（一次性模式，开启后下次发送走 autopilot） */}
-          <button
-            className={`input-thinking ${autopilotEnabled ? "active" : ""}`}
-            onClick={() => setAutopilotEnabled(!autopilotEnabled)}
-            type="button"
-            title={autopilotEnabled ? "自动驾驶已开启（点发送启动）" : "开启自动驾驶：分析→规划→执行→验证→修复"}
-          >
-            🚀
-          </button>
+          {/* 自动驾驶 toggle（仅空闲时可切换） */}
+          {!isGenerating && (
+            <button
+              className={`input-thinking ${autopilotEnabled ? "active" : ""}`}
+              onClick={() => setAutopilotEnabled(!autopilotEnabled)}
+              type="button"
+              title={autopilotEnabled ? "自动驾驶已开启（点发送启动）" : "开启自动驾驶：分析→规划→执行→验证→修复"}
+            >
+              🚀
+            </button>
+          )}
 
-          {/* 思考模式切换 */}
-          <button
-            className={`input-thinking ${thinkingEnabled ? "active" : ""}`}
-            onClick={toggleThinking}
-            type="button"
-            title={thinkingEnabled ? "思考已开启（点击关闭）" : "思考已关闭（点击开启，模型会先思考再回答）"}
-          >
-            🧠
-          </button>
+          {/* Steering 模式切换（仅 Agent 执行中可用） */}
+          {isGenerating && (
+            <button
+              className={`input-thinking ${steerMode !== "normal" ? "active" : ""}`}
+              onClick={() => setSteerMode(prev => prev === "normal" ? "steer" : prev === "steer" ? "followUp" : "normal")}
+              type="button"
+              title={
+                steerMode === "steer" ? "🎯 Steering：当前工具调用后立即投递（点击切到 Follow-up）"
+                : steerMode === "followUp" ? "⏳ Follow-up：Agent 空闲后投递（点击关闭）"
+                : "排队干预消息：Steering（立即）/ Follow-up（等空闲）"
+              }
+              style={steerMode === "steer" ? { color: "var(--accent)" } : steerMode === "followUp" ? { color: "#e8a838" } : undefined}
+            >
+              {steerMode === "followUp" ? "⏳" : "🎯"}
+            </button>
+          )}
+
+          {/* 思考级别选择器 */}
+          <div className="thinking-selector" ref={thinkingDropdownRef} style={{ position: "relative" }}>
+            <button
+              className={`input-thinking ${thinkingLevel !== "off" ? "active" : ""}`}
+              onClick={() => setThinkingDropdownOpen(v => !v)}
+              type="button"
+              title={`思考级别：${THINKING_LEVELS.find(l => l.value === thinkingLevel)?.label ?? thinkingLevel}`}
+            >
+              {THINKING_LEVELS.find(l => l.value === thinkingLevel)?.icon ?? "🧠"}
+            </button>
+            {thinkingDropdownOpen && (
+              <div className="thinking-dropdown show">
+                {THINKING_LEVELS.map(l => (
+                  <button
+                    key={l.value}
+                    className={`thinking-dropdown-item ${thinkingLevel === l.value ? "active" : ""}`}
+                    onClick={() => { changeThinkingLevel(l.value); setThinkingDropdownOpen(false); }}
+                    type="button"
+                  >
+                    <span className="thinking-dropdown-icon">{l.icon}</span>
+                    <span className="thinking-dropdown-text">
+                      <span className="thinking-dropdown-label">{l.label}</span>
+                      <span className="thinking-dropdown-desc">{l.desc}</span>
+                    </span>
+                    {thinkingLevel === l.value && <Icon name="i-check" size={14} className="thinking-dropdown-check" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* 发送 / 停止 */}
-          {isGenerating ? (
+          {isGenerating && steerMode === "normal" ? (
             <button
               className="btn-send"
               onClick={abort}
@@ -681,8 +798,8 @@ export function InputBar() {
               onClick={handleSend}
               disabled={!canSend}
               type="button"
-              aria-label="发送"
-              title="发送"
+              aria-label={steerMode !== "normal" ? "排队" : "发送"}
+              title={steerMode === "steer" ? "排队 Steering 消息" : steerMode === "followUp" ? "排队 Follow-up 消息" : "发送"}
             >
               <Icon name="i-send" size={16} />
             </button>

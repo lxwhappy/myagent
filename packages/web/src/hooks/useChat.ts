@@ -4,7 +4,7 @@
 
 import { useEffect, useCallback } from "react";
 import { sseClient } from "../services/sse-client";
-import { useChatStore, type SkillInfo } from "../stores/chat";
+import { useChatStore, type SkillInfo, type ThinkingLevel } from "../stores/chat";
 import { useTeamFlowStore } from "../stores/team-flow";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useAgentsStore } from "../stores/agents";
@@ -379,6 +379,24 @@ export function useChat() {
           }
           break;
         }
+
+        // ── Steering 队列更新 ──
+        case "queue_update":
+          if (sid && msg.payload) {
+            chat.setQueuedMessages(sid, {
+              steering: msg.payload.steering || [],
+              followUp: msg.payload.followUp || [],
+            });
+          }
+          break;
+
+        // ── 思考级别变更（SDK clamp 后的实际级别） ──
+        case "thinking_level_changed":
+          if (sid && msg.payload?.level) {
+            // SDK 可能 clamp 级别（如模型不支持 max），同步到全局 store
+            useChatStore.getState().setThinkingLevel(msg.payload.level as ThinkingLevel);
+          }
+          break;
         case "autopilot_stream": {
           if (sid && msg.payload) {
             const p = msg.payload as { phase: string; snippet: string };
@@ -499,7 +517,7 @@ export function useChat() {
         ws.updateSession(ws.activeSessionId, { title });
       }
     }
-    sseClient.prompt(sid!, fullText, images, useChatStore.getState().thinkingEnabled);
+    sseClient.prompt(sid!, fullText, images, useChatStore.getState().thinkingLevel);
   }, []);
 
   const abort = useCallback(() => {
@@ -538,7 +556,7 @@ export function useChat() {
     // 短暂延迟后重新发送（给 abort 时间生效）
     setTimeout(() => {
       useChatStore.getState().startAssistantMessage(sid);
-      sseClient.prompt(sid, lastUserText, undefined, useChatStore.getState().thinkingEnabled);
+      sseClient.prompt(sid, lastUserText, undefined, useChatStore.getState().thinkingLevel);
     }, 300);
   }, []);
 
@@ -578,6 +596,34 @@ export function useChat() {
     const activeWs = ws.workspaces.find(w => w.id === ws.activeId);
     const sess = useChatStore.getState().sessions[sid];
     sseClient.createAgent(sid, { cwd: activeWs?.path, agentId: sess?.agentId, teamId });
+  }, []);
+
+  // ── Steering: Agent 执行中排队干预消息 ──
+  const sendSteer = useCallback(async (text: string) => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid || !text.trim()) return;
+    await sseClient.steer(sid, text.trim());
+  }, []);
+
+  const sendFollowUp = useCallback(async (text: string) => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid || !text.trim()) return;
+    await sseClient.followUp(sid, text.trim());
+  }, []);
+
+  const clearQueue = useCallback(async () => {
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (!sid) return;
+    await sseClient.clearQueue(sid);
+    // 立即更新前端状态（SSE queue_update 也会同步）
+    useChatStore.getState().setQueuedMessages(sid, { steering: [], followUp: [] });
+  }, []);
+
+  // ── 思考级别控制 ──
+  const changeThinkingLevel = useCallback((level: ThinkingLevel) => {
+    useChatStore.getState().setThinkingLevel(level);
+    const sid = useChatStore.getState().activeChatSessionId;
+    if (sid) sseClient.setThinking(sid, level);
   }, []);
 
   const loadSession = useCallback(async (chatSessionId: string, appSessionId: string, forceCwd?: string) => {
@@ -705,6 +751,10 @@ export function useChat() {
     loadSession,
     switchAgent,
     switchTeam,
+    sendSteer,
+    sendFollowUp,
+    clearQueue,
+    changeThinkingLevel,
   };
 }
 

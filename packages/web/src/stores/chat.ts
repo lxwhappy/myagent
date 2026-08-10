@@ -1,6 +1,20 @@
-// stores/chat.ts — 多会话状态（支持 thinking + skills）
+// stores/chat.ts — 多会话状态（支持 thinking + skills + steering）
 
 import { create } from "zustand";
+
+/** SDK 思考级别 */
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+/** 思考级别显示配置 */
+export const THINKING_LEVELS: { value: ThinkingLevel; label: string; desc: string; icon: string }[] = [
+  { value: "off",      label: "关闭",   desc: "不生成推理 token，最快响应", icon: "🚫" },
+  { value: "minimal",  label: "极简",   desc: "极少推理，适合简单问答",     icon: "💭" },
+  { value: "low",      label: "低",     desc: "轻量推理，日常任务推荐",     icon: "🧩" },
+  { value: "medium",   label: "中",     desc: "中等推理，适合编程/分析",     icon: "🧠" },
+  { value: "high",     label: "高",     desc: "深度推理，复杂逻辑/调试",     icon: "🔬" },
+  { value: "xhigh",    label: "极高",   desc: "极致推理，数学/架构设计",     icon: "🧪" },
+  { value: "max",      label: "最大",   desc: "最大推理预算，最慢最贵",      icon: "💯" },
+];
 
 /** pending raw LLM 请求：llm_raw 事件可能先于 message_end 到达，
  *  此时 debugEvent 尚未创建，暂存于此，待 addDebugLLM 时补匹配。 */
@@ -181,20 +195,23 @@ interface SessionChatState {
     issues?: string[];
     error?: string;
   } | null;
+  // ── Steering 队列（Agent 执行中排队的干预消息）──
+  steeringQueue: string[];    // 🎯 当前工具调用后立即投递
+  followUpQueue: string[];    // ⏳ Agent 完全空闲后才投递
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null, autopilot: null });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null, autopilot: null, steeringQueue: [], followUpQueue: [] });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
   activeChatSessionId: string | null;
   connected: boolean;
-  thinkingEnabled: boolean;
+  thinkingLevel: ThinkingLevel;
   activeSubId: string | null;   // 当前钻入查看的子 agent id（null=主会话视图）
 
   setConnected: (v: boolean) => void;
-  toggleThinking: () => void;
+  setThinkingLevel: (level: ThinkingLevel) => void;
   setActiveSub: (subId: string | null) => void;
   setActiveChatSession: (id: string | null) => void;
   ensureSession: (id: string) => void;
@@ -233,6 +250,8 @@ interface ChatStore {
   removeLastAssistant: (id: string) => string | null;
   /** 将原始 LLM API 请求/响应附加到最近的 debugEvent */
   attachRawLLM: (id: string, raw: { url: string; method: string; headers?: Record<string, string>; body?: string | null; respBody?: string | null; durationMs?: number; timestamp?: number }) => void;
+  // ── Steering 队列 ──
+  setQueuedMessages: (id: string, queues: { steering: string[]; followUp: string[] }) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
@@ -240,18 +259,25 @@ export const useChatStore = create<ChatStore>((set) => ({
   activeChatSessionId: null,
   connected: false,
   // 思考默认关闭：思考模式会让 GLM-4.7 每轮多花 3-15s 生成推理 token。
-  // 大部分场景不需要深度思考，用户可手动点 🧠 按钮开启。
-  thinkingEnabled: (() => { try { return localStorage.getItem("myagent:thinking") === "1"; } catch { return false; } })(),
+  // 大部分场景不需要深度思考，用户可手动点 🧠 按钮切换级别。
+  thinkingLevel: (() => {
+    try {
+      const saved = localStorage.getItem("myagent:thinking");
+      // 向后兼容：旧版存 "1"/"0"，映射到 medium/off
+      if (saved === "1") return "medium" as ThinkingLevel;
+      if (saved === "0" || saved === null) return "off" as ThinkingLevel;
+      return saved as ThinkingLevel;
+    } catch { return "off" as ThinkingLevel; }
+  })(),
   activeSubId: null,
 
   setConnected: (v) => set({ connected: v }),
   setActiveSub: (subId) => set({ activeSubId: subId }),
   setActiveChatSession: (id) => set({ activeChatSessionId: id, activeSubId: null }),
-  toggleThinking: () => set((s) => {
-    const v = !s.thinkingEnabled;
-    try { localStorage.setItem("myagent:thinking", v ? "1" : "0"); } catch {}
-    return { thinkingEnabled: v };
-  }),
+  setThinkingLevel: (level) => {
+    try { localStorage.setItem("myagent:thinking", level); } catch {}
+    set({ thinkingLevel: level });
+  },
 
   ensureSession: (id) => set((s) => s.sessions[id] ? {} : { sessions: { ...s.sessions, [id]: empty() } }),
 
@@ -633,5 +659,10 @@ export const useChatStore = create<ChatStore>((set) => ({
       }
     }
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: msgs } } };
+  }),
+
+  setQueuedMessages: (id, queues) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, steeringQueue: queues.steering, followUpQueue: queues.followUp } } };
   }),
 }));

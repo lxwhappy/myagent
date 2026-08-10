@@ -165,6 +165,22 @@ export class EventBridge {
           break;
         }
 
+        // ── Steering 队列更新 ──
+        // SDK 在 steer()/followUp() 投递或清除排队消息时发出
+        case "queue_update": {
+          const q = event as any;
+          send("queue_update", { steering: [...(q.steering || [])], followUp: [...(q.followUp || [])] });
+          break;
+        }
+
+        // ── 思考级别变更 ──
+        case "thinking_level_changed": {
+          const level = (event as any).level;
+          console.log(`[thinking] ${chatSessionId.slice(0, 8)} 级别变更: ${level}`);
+          send("thinking_level_changed", { level });
+          break;
+        }
+
         case "tool_execution_start": {
           const toolName = (event as any).toolName;
           const toolCallId = (event as any).toolCallId;

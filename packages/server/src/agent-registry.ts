@@ -10,6 +10,9 @@ import {
   DefaultResourceLoader,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+
+/** SDK 思考级别（对应 pi-agent-core 的 ThinkingLevel） */
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 import { getModel } from "@earendil-works/pi-ai/compat";
 import { config } from "./config.js";
 import { eventBridge } from "./event-bridge.js";
@@ -387,7 +390,7 @@ export function getAgentModelInput(chatSessionId: string): string[] {
 
 // 动态切换思考级别（在 prompt 前调用，对下一轮 agent 回合生效）
 // setThinkingLevel 内部会 clamp 到当前模型支持的范围。
-export function setThinkingLevel(chatSessionId: string, level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"): boolean {
+export function setThinkingLevel(chatSessionId: string, level: ThinkingLevel): boolean {
   const entry = registry.get(chatSessionId);
   if (!entry) return false;
   try {
@@ -395,6 +398,73 @@ export function setThinkingLevel(chatSessionId: string, level: "off" | "minimal"
     return true;
   } catch {
     return false;
+  }
+}
+
+// 获取当前思考级别
+export function getThinkingLevel(chatSessionId: string): ThinkingLevel | undefined {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return undefined;
+  try {
+    return entry.agent.thinkingLevel as ThinkingLevel;
+  } catch {
+    return undefined;
+  }
+}
+
+// ── Steering 消息队列 ──
+// Agent 正在执行时，用户可以排队消息来实时干预：
+// - steer: 当前工具调用完成后、下一次 LLM 调用前投递
+// - followUp: Agent 完全空闲后才投递
+
+/** 排队一条 steering 消息（Agent 执行中实时干预） */
+export async function steerMessage(chatSessionId: string, text: string): Promise<boolean> {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return false;
+  try {
+    await entry.agent.steer(text);
+    return true;
+  } catch (err: any) {
+    console.error(`[steer] ${chatSessionId.slice(0, 8)} 失败: ${err?.message}`);
+    return false;
+  }
+}
+
+/** 排队一条 follow-up 消息（Agent 完全空闲后投递） */
+export async function followUpMessage(chatSessionId: string, text: string): Promise<boolean> {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return false;
+  try {
+    await entry.agent.followUp(text);
+    return true;
+  } catch (err: any) {
+    console.error(`[followUp] ${chatSessionId.slice(0, 8)} 失败: ${err?.message}`);
+    return false;
+  }
+}
+
+/** 获取当前排队消息（steering + followUp） */
+export function getQueuedMessages(chatSessionId: string): { steering: string[]; followUp: string[] } {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return { steering: [], followUp: [] };
+  try {
+    return {
+      steering: [...entry.agent.getSteeringMessages()],
+      followUp: [...entry.agent.getFollowUpMessages()],
+    };
+  } catch {
+    return { steering: [], followUp: [] };
+  }
+}
+
+/** 清空所有排队消息，返回被清除的内容 */
+export function clearMessageQueue(chatSessionId: string): { steering: string[]; followUp: string[] } {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return { steering: [], followUp: [] };
+  try {
+    return entry.agent.clearQueue();
+  } catch {
+    return { steering: [], followUp: [] };
   }
 }
 

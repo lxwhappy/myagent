@@ -10,7 +10,8 @@
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
 import { setLlmInterceptorSession } from "./llm-interceptor.js";
-import { createAgent, getAgent, destroyAgent, setThinkingLevel, getAgentModelInput, getSkillPaths, getAgentCwd } from "./agent-registry.js";
+import { createAgent, getAgent, destroyAgent, setThinkingLevel, getThinkingLevel, getAgentModelInput, getSkillPaths, getAgentCwd, steerMessage, followUpMessage, getQueuedMessages, clearMessageQueue } from "./agent-registry.js";
+import type { ThinkingLevel } from "./agent-registry.js";
 import { abortSubagents } from "./subagent-runner.js";
 import { pushPendingImages } from "./tools/image-tool.js";
 import { resolveAsk, abortAsks } from "./tools/ask-tool.js";
@@ -87,10 +88,14 @@ export function setupSSEGateway(app: FastifyInstance) {
     }
 
     // 对话中动态切换思考级别（影响本轮及后续）。
-    // thinking=true → medium（setThinkingLevel 内部会 clamp 到模型支持范围）
-    // thinking=false → off
+    // 支持两种格式：
+    //   thinking: "medium" → 直接使用 SDK 级别
+    //   thinking: true/false → 向后兼容（true=medium, false=off）
     if (body?.thinking !== undefined) {
-      setThinkingLevel(id, body.thinking ? "medium" : "off");
+      const level: ThinkingLevel = typeof body.thinking === "string"
+        ? (body.thinking as ThinkingLevel)
+        : body.thinking ? "medium" : "off";
+      setThinkingLevel(id, level);
     }
 
     console.log(`[prompt] ${id.slice(0, 8)}: ${String(body?.message).slice(0, 60)}${body?.thinking ? " [thinking]" : ""}${body?.images ? ` [${(body.images as any[]).length}图]` : ""}`);
@@ -243,6 +248,58 @@ export function setupSSEGateway(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     destroyAgent(id);
     reply.send({ success: true });
+  });
+
+  // ── Steering: 排队干预消息 ──
+  app.post("/api/agent/:id/steer", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { message?: string } | null;
+    const text = body?.message?.trim();
+    if (!text) { reply.status(400).send({ error: "message is required" }); return; }
+    const ok = await steerMessage(id, text);
+    if (!ok) { reply.status(404).send({ error: "Agent not found or steer failed" }); return; }
+    reply.send({ success: true });
+  });
+
+  // ── Follow-up: 排队后续消息 ──
+  app.post("/api/agent/:id/followUp", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { message?: string } | null;
+    const text = body?.message?.trim();
+    if (!text) { reply.status(400).send({ error: "message is required" }); return; }
+    const ok = await followUpMessage(id, text);
+    if (!ok) { reply.status(404).send({ error: "Agent not found or followUp failed" }); return; }
+    reply.send({ success: true });
+  });
+
+  // ── 查询当前排队消息 ──
+  app.get("/api/agent/:id/queued", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    reply.send(getQueuedMessages(id));
+  });
+
+  // ── 清空排队消息 ──
+  app.post("/api/agent/:id/clear-queue", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const cleared = clearMessageQueue(id);
+    reply.send(cleared);
+  });
+
+  // ── 获取/设置思考级别 ──
+  app.get("/api/agent/:id/thinking", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const level = getThinkingLevel(id);
+    if (level === undefined) { reply.status(404).send({ error: "Agent not found" }); return; }
+    reply.send({ level });
+  });
+
+  app.put("/api/agent/:id/thinking", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { level?: string } | null;
+    if (!body?.level) { reply.status(400).send({ error: "level is required" }); return; }
+    const ok = setThinkingLevel(id, body.level as ThinkingLevel);
+    if (!ok) { reply.status(404).send({ error: "Agent not found" }); return; }
+    reply.send({ success: true, level: body.level });
   });
 
   // ── Autopilot 全自动执行 ──

@@ -78,7 +78,7 @@ class SSEClient {
     }
   }
 
-  async prompt(chatSessionId: string, message: string, images?: unknown, thinking?: boolean) {
+  async prompt(chatSessionId: string, message: string, images?: unknown, thinking?: boolean | string) {
     try {
       await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/prompt`, {
         method: "POST",
@@ -87,6 +87,65 @@ class SSEClient {
       });
     } catch (err) {
       console.error("[sse] prompt failed:", err);
+    }
+  }
+
+  async steer(chatSessionId: string, message: string) {
+    try {
+      const res = await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/steer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.error("[sse] steer failed:", err);
+      return false;
+    }
+  }
+
+  async followUp(chatSessionId: string, message: string) {
+    try {
+      const res = await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/followUp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.error("[sse] followUp failed:", err);
+      return false;
+    }
+  }
+
+  async clearQueue(chatSessionId: string) {
+    try {
+      await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/clear-queue`, { method: "POST" });
+    } catch (err) {
+      console.error("[sse] clearQueue failed:", err);
+    }
+  }
+
+  async setThinking(chatSessionId: string, level: string) {
+    try {
+      await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/thinking`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level }),
+      });
+    } catch (err) {
+      console.error("[sse] setThinking failed:", err);
+    }
+  }
+
+  async getThinking(chatSessionId: string): Promise<string | undefined> {
+    try {
+      const res = await fetch(`/api/agent/${encodeURIComponent(chatSessionId)}/thinking`);
+      if (!res.ok) return undefined;
+      const data = await res.json();
+      return data.level;
+    } catch {
+      return undefined;
     }
   }
 
