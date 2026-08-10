@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyAgent 快速入门教程</title>
+  <style>
+    @font-face {
+      font-family: 'System Font';
+      src: local('-apple-system'), local('BlinkMacSystemFont'), local('Segoe UI'), local('Roboto'), local('sans-serif');
+    }
+    @font-face {
+      font-family: 'Code Font';
+      src: local('SF Mono'), local('JetBrains Mono'), local('Fira Code'), local('Consolas'), local('monospace');
+    }
+    :root {
+      --bg: #1a1a1a;
+      --surface: #242424;
+      --border: #333;
+      --accent: #e07855;
+      --text: #e0e0e0;
+      --text-secondary: #888;
+      --code-bg: #1e1e1e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: System Font, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .scene {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      background: var(--bg);
+    }
+    .scene-content {
+      width: 100%;
+      height: 100%;
+      padding: 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Title styles */
+    .title-screen {
+      text-align: center;
+    }
+    .title-screen h1 {
+      font-size: 56px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    .title-screen .subtitle {
+      font-size: 24px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .title-screen .meta {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-top: 32px;
+    }
+
+    /* Content slide */
+    .content-slide {
+      text-align: left;
+      max-width: 900px;
+    }
+    .content-slide h2 {
+      font-size: 36px;
+      font-weight: 600;
+      margin-bottom: 32px;
+      color: var(--accent);
+    }
+    .content-slide p {
+      font-size: 18px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    .content-slide ul {
+      list-style: none;
+      margin: 16px 0;
+    }
+    .content-slide li {
+      font-size: 16px;
+      line-height: 1.8;
+      padding-left: 24px;
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .content-slide li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Code block */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px;
+      margin: 20px 0;
+      font-family: Code Font, monospace;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #d4d4d4;
+      width: 100%;
+      overflow-x: auto;
+    }
+    .code-block .prompt {
+      color: var(--accent);
+      margin-right: 8px;
+    }
+    .code-block .comment {
+      color: var(--text-secondary);
+    }
+    .code-block .keyword {
+      color: #569cd6;
+    }
+    .code-block .string {
+      color: #ce9178;
+    }
+
+    /* Screenshot container */
+    .screenshot-container {
+      margin-top: 24px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 800px;
+    }
+    .screenshot-container img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .screenshot-caption {
+      background: var(--surface);
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    /* Two column layout */
+    .two-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      width: 100%;
+      align-items: start;
+    }
+    .column {
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .column h3 {
+      font-size: 20px;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    /* End screen */
+    .end-screen {
+      text-align: center;
+    }
+    .end-screen h2 {
+      font-size: 48px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+    .end-screen .cta {
+      font-size: 24px;
+      color: var(--accent);
+      margin-bottom: 32px;
+    }
+    .end-screen .link {
+      font-size: 16px;
+      color: var(--text-secondary);
+      font-family: Code Font, monospace;
+    }
+
+    /* Caption styles */
+    .caption-container {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 1000px;
+      text-align: center;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .caption {
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      padding: 16px 24px;
+      border-radius: 8px;
+      font-size: 18px;
+      line-height: 1.5;
+      display: inline-block;
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="scene" data-composition-id="main" data-duration="20" data-fps="30" data-width="1280" data-height="720">
+    <div class="scene-content">
+
+      <!-- Scene 1: Title (0-2s) -->
+      <div class="title-screen" id="scene-title">
+        <h1 data-start="0" data-duration="2">MyAgent</h1>
+        <p class="subtitle" data-start="0.3" data-duration="1.7">快速入门教程</p>
+        <p class="meta" data-start="0.6" data-duration="1.4">基于 Pi Agent 的 AI Agent + Web 端</p>
+      </div>
+
+      <!-- Scene 2: What is MyAgent (2-4s) -->
+      <div class="content-slide" id="scene-intro">
+        <h2 data-start="2" data-duration="2">什么是 MyAgent？</h2>
+        <p data-start="2.3" data-duration="1.7">MyAgent 是一个基于 Pi Agent 的小而巧的 AI Agent 系统</p>
+        <ul data-start="2.6" data-duration="1.4">
+          <li data-start="2.6" data-duration="1.4"><strong>Node.js 后端</strong> - Fastify 框架，WebSocket 实时通信</li>
+          <li data-start="2.8" data-duration="1.2"><strong>React 前端</strong> - 现代化界面，支持多会话管理</li>
+          <li data-start="3.0" data-duration="1.0"><strong>可扩展</strong> - 支持自定义工具和技能</li>
+          <li data-start="3.2" data-duration="0.8"><strong>多模型</strong> - 支持 Anthropic、OpenAI、Ollama 等</li>
+        </ul>
+      </div>
+
+      <!-- Scene 3: Installation (4-7s) -->
+      <div class="content-slide" id="scene-install">
+        <h2 data-start="4" data-duration="3">安装配置</h2>
+        <p data-start="4.2" data-duration="2.8"><strong>步骤 1:</strong> 安装依赖</p>
+        <div class="code-block" data-start="4.4" data-duration="2.6">
+          <span class="prompt">$</span> pnpm install
+        </div>
+        <p data-start="5.4" data-duration="1.6"><strong>步骤 2:</strong> 配置 API Key（以 Anthropic 为例）</p>
+        <div class="code-block" data-start="5.6" data-duration="1.4">
+          <span class="prompt">$</span> <span class="keyword">export</span> ANTHROPIC_API_KEY=sk-ant-your-key-here
+        </div>
+        <p class="note" data-start="6.4" data-duration="0.6" style="font-size: 14px; color: var(--text-secondary);">也支持 OpenAI、Google、Ollama 等多种 LLM</p>
+      </div>
+
+      <!-- Scene 4: Start (7-9.5s) -->
+      <div class="content-slide" id="scene-start">
+        <h2 data-start="7" data-duration="2.5">启动服务</h2>
+        <p data-start="7.2" data-duration="2.3">同时启动前后端：</p>
+        <div class="code-block" data-start="7.4" data-duration="2.1">
+          <span class="prompt">$</span> pnpm dev
+        </div>
+        <p data-start="8.2" data-duration="1.3">或分别启动：</p>
+        <div class="code-block" data-start="8.4" data-duration="1.1">
+          <span class="prompt">$</span> pnpm dev:server   <span class="comment"># → localhost:3000</span><br>
+          <span class="prompt">$</span> pnpm dev:web      <span class="comment"># → localhost:5180</span>
+        </div>
+      </div>
+
+      <!-- Scene 5: Interface (9.5-11.5s) -->
+      <div class="content-slide" id="scene-interface">
+        <h2 data-start="9.5" data-duration="2">主界面介绍</h2>
+        <div class="screenshot-container" data-start="9.7" data-duration="1.8">
+          <img src="assets/screenshots/main-interface.png" alt="MyAgent 主界面">
+          <div class="screenshot-caption">MyAgent 主界面 - 对话区域 + 工具执行展示</div>
+        </div>
+      </div>
+
+      <!-- Scene 6: Features (11.5-13.5s) -->
+      <div class="content-slide" id="scene-features">
+        <h2 data-start="11.5" data-duration="2">基本功能</h2>
+        <div class="two-columns" data-start="11.7" data-duration="1.8">
+          <div class="column">
+            <h3>对话交互</h3>
+            <p style="font-size: 14px; color: var(--text-secondary);">
+              • 自然语言对话<br>
+              • 多轮上下文记忆<br>
+              • 实时思考过程展示
+            </p>
+          </div>
+          <div class="column">
+            <h3>工具调用</h3>
+            <p style="font-size: 14px; color: var(--text-secondary);">
+              • 读取文件<br>
+              • 执行命令<br>
+              • 搜索、创建文件等
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 7: Settings (13.5-15.5s) -->
+      <div class="content-slide" id="scene-settings">
+        <h2 data-start="13.5" data-duration="2">切换模型</h2>
+        <div class="screenshot-container" data-start="13.7" data-duration="1.8">
+          <img src="assets/screenshots/settings.png" alt="设置面板">
+          <div class="screenshot-caption">设置面板 - 切换 LLM Provider 和模型</div>
+        </div>
+      </div>
+
+      <!-- Scene 8: Agents (15.5-17.5s) -->
+      <div class="content-slide" id="scene-agents">
+        <h2 data-start="15.5" data-duration="2">Agent 管理</h2>
+        <div class="screenshot-container" data-start="15.7" data-duration="1.8">
+          <img src="assets/screenshots/agent-selector.png" alt="Agent 选择器">
+          <div class="screenshot-caption">Agent 管理 - 创建自定义角色预设</div>
+        </div>
+      </div>
+
+      <!-- Scene 9: Extensions (17.5-20s) -->
+      <div class="content-slide" id="scene-extensions">
+        <h2 data-start="17.5" data-duration="2.5">扩展功能</h2>
+        <ul data-start="17.7" data-duration="2.3">
+          <li data-start="17.7" data-duration="2.3"><strong>自定义工具</strong> - 在 session-manager.ts 中添加自定义工具</li>
+          <li data-start="18.0" data-duration="2.0"><strong>Skills 系统</strong> - 安装 ~/.pi/agent/skills 中的技能包</li>
+          <li data-start="18.3" data-duration="1.7"><strong>二次开发</strong> - 修改前后端代码，定制功能</li>
+        </ul>
+        <div class="code-block" data-start="18.7" data-duration="1.3" style="margin-top: 16px;">
+          <span class="comment">// 添加自定义工具示例</span><br>
+          <span class="keyword">const</span> myTool = defineTool({<br>
+          &nbsp;&nbsp;name: <span class="string">"my_tool"</span>,<br>
+          &nbsp;&nbsp;description: <span class="string">"描述..."</span>,<br>
+          &nbsp;&nbsp;execute: <span class="keyword">async</span> (args) => { ... }<br>
+          });
+        </div>
+      </div>
+
+      <!-- Scene 10: End (20s+) -->
+      <div class="end-screen" id="scene-end">
+        <h2 data-start="20" data-duration="2">开始体验 MyAgent</h2>
+        <p class="cta" data-start="20.3" data-duration="1.7">快速上手 · 自定义扩展 · 无限可能</p>
+        <p class="link" data-start="20.6" data-duration="1.4">https://github.com/your-repo/myagent</p>
+      </div>
+
+      <!-- Captions overlay -->
+      <div class="caption-container">
+        <div class="caption" id="caption-text"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    // Register timeline for HyperFrames
+    window.__timelines = window.__timelines || {};
+
+    const scenes = [
+      'scene-title',
+      'scene-intro',
+      'scene-install',
+      'scene-start',
+      'scene-interface',
+      'scene-features',
+      'scene-settings',
+      'scene-agents',
+      'scene-extensions',
+      'scene-end'
+    ];
+
+    const sceneDurations = [2, 2, 3, 2.5, 2, 2, 2, 2, 2.5, 2]; // seconds per scene (total ~22s)
+    const captions = [
+      { text: "MyAgent 快速入门教程，基于 Pi Agent 的 AI Agent + Web 端", start: 0, end: 2 },
+      { text: "MyAgent 是一个基于 Pi Agent 的小而巧的 AI Agent 系统，支持多种模型", start: 2, end: 4 },
+      { text: "使用 pnpm install 安装依赖，然后配置 ANTHROPIC_API_KEY", start: 4, end: 7 },
+      { text: "运行 pnpm dev 同时启动前后端，或分别启动服务和前端", start: 7, end: 9.5 },
+      { text: "主界面提供对话区域和工具执行展示，支持自然语言交互", start: 9.5, end: 11.5 },
+      { text: "基本功能包括对话交互和工具调用，支持读取文件、执行命令等", start: 11.5, end: 13.5 },
+      { text: "在设置面板中可以切换 LLM Provider 和选择不同的模型", start: 13.5, end: 15.5 },
+      { text: "Agent 管理支持创建自定义角色预设，定义不同的系统提示词", start: 15.5, end: 17.5 },
+      { text: "扩展功能支持自定义工具、Skills 系统和二次开发", start: 17.5, end: 20 },
+      { text: "开始体验 MyAgent，快速上手，自定义扩展，无限可能", start: 20, end: 22 }
+    ];
+
+    const tl = gsap.timeline({ paused: true });
+
+    // Initial state: all hidden except title
+    scenes.forEach((id, i) => {
+      if (i > 0) gsap.set('#' + id, { opacity: 0, display: 'none' });
+    });
+
+    // Scene 1: Title entrance
+    tl.from('#scene-title h1', { opacity: 0, y: 30, duration: 0.5, ease: 'power2.out' }, 0)
+      .from('#scene-title .subtitle', { opacity: 0, y: 20, duration: 0.5, ease: 'power2.out' }, 0.3)
+      .from('#scene-title .meta', { opacity: 0, duration: 0.5, ease: 'power2.out' }, 0.6);
+
+    let currentTime = sceneDurations[0];
+
+    // Build scene transitions
+    for (let i = 0; i < scenes.length - 1; i++) {
+      const from = '#' + scenes[i];
+      const to = '#' + scenes[i + 1];
+
+      // Hide outgoing scene
+      tl.to(from, {
+        opacity: 0,
+        duration: 0.25,
+        ease: 'power2.in'
+      }, currentTime);
+
+      // Show incoming scene
+      tl.set(to, { display: i + 1 === 0 ? 'flex' : (i + 1 === 9 ? 'flex' : 'block') }, currentTime + 0.25);
+      tl.fromTo(to,
+        { opacity: 0, y: 15 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.35,
+          ease: 'power2.out'
+        },
+        currentTime + 0.25
+      );
+
+      // Content animations per scene
+      if (scenes[i + 1] === 'scene-intro') {
+        tl.from('#scene-intro h2', { opacity: 0, x: -20, duration: 0.4 }, currentTime + 0.4);
+        tl.from('#scene-intro p', { opacity: 0, duration: 0.4 }, currentTime + 0.6);
+        tl.from('#scene-intro li', { opacity: 0, x: -20, duration: 0.3, stagger: 0.1 }, currentTime + 0.8);
+      } else if (scenes[i + 1] === 'scene-features') {
+        tl.from('#scene-features .column', { opacity: 0, y: 20, duration: 0.4, stagger: 0.15 }, currentTime + 0.5);
+      } else if (scenes[i + 1] === 'scene-end') {
+        tl.from('#scene-end h2', { opacity: 0, scale: 0.9, duration: 0.5 }, currentTime + 0.4);
+        tl.from('#scene-end .cta', { opacity: 0, duration: 0.4 }, currentTime + 0.7);
+        tl.from('#scene-end .link', { opacity: 0, duration: 0.4 }, currentTime + 0.9);
+      }
+
+      currentTime += sceneDurations[i + 1];
+    }
+
+    // Caption animations
+    captions.forEach((cap, i) => {
+      tl.set('#caption-text', { innerText: cap.text }, cap.start);
+      tl.fromTo('#caption-text',
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.3, ease: 'power2.out' },
+        cap.start
+      );
+      tl.to('#caption-text', { opacity: 0, duration: 0.2, ease: 'power2.in' }, cap.end - 0.2);
+    });
+
+    // Final fade out
+    tl.to('.scene-content', { opacity: 0, duration: 0.5, ease: 'power2.in' }, currentTime);
+
+    window.__timelines["main"] = tl;
+  </script>
+</body>
+</html>

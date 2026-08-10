@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>演示文稿</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #000000;
+            --bg-light: #ffffff;
+            --text-dark: #fafafa;
+            --text-light: #171717;
+            --accent: #0070f3;
+            --accent-hover: #0051cc;
+            --border: rgba(255, 255, 255, 0.1);
+            --card-bg: #111111;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .deck-container {
+            width: 1920px;
+            height: 1080px;
+            background: var(--bg-light);
+            position: relative;
+            transform-origin: center center;
+            overflow: hidden;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Hero Slide (Dark) */
+        .slide[data-theme="dark"] {
+            background: var(--bg-dark);
+            color: var(--text-dark);
+        }
+
+        .slide[data-theme="light"] {
+            background: var(--bg-light);
+            color: var(--text-light);
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 80px 120px;
+            text-align: center;
+        }
+
+        .slide-hero h1 {
+            font-size: 96px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 32px;
+            background: linear-gradient(135deg, #fff 0%, #888 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .slide-hero p {
+            font-size: 32px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 900px;
+            line-height: 1.5;
+        }
+
+        /* Content Slide */
+        .slide-title {
+            font-size: 56px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 48px;
+        }
+
+        .slide-body {
+            font-size: 28px;
+            line-height: 1.6;
+            max-width: 1400px;
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            width: 100%;
+            max-width: 1600px;
+        }
+
+        .feature-card {
+            padding: 48px;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            text-align: left;
+            background: #fafafa;
+        }
+
+        .slide[data-theme="dark"] .feature-card {
+            background: var(--card-bg);
+            border-color: var(--border);
+        }
+
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--accent) 0%, #00d4ff 100%);
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .feature-card h3 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .feature-card p {
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .slide[data-theme="light"] .feature-card p {
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 6px;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        /* Slide Counter */
+        .slide-counter {
+            position: absolute;
+            bottom: 32px;
+            right: 40px;
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .slide[data-theme="light"] .slide-counter {
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        /* Navigation Arrows */
+        .nav-hint {
+            position: absolute;
+            bottom: 32px;
+            left: 40px;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .slide[data-theme="light"] .nav-hint {
+            color: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Steps Layout */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 24px;
+            padding: 32px;
+            border-radius: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+        }
+
+        .slide[data-theme="light"] .step-item {
+            background: #f5f5f5;
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .step-number {
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .step-content h3 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .step-content p {
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .slide[data-theme="light"] .step-content p {
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 32px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 20px;
+            line-height: 1.6;
+            color: #e0e0e0;
+            text-align: left;
+            overflow-x: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Compare Layout */
+        .compare {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            width: 100%;
+            max-width: 1600px;
+        }
+
+        .compare-item {
+            padding: 48px;
+            border-radius: 16px;
+        }
+
+        .compare-before {
+            background: #2a2a2a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .compare-after {
+            background: linear-gradient(135deg, var(--accent) 0%, #00d4ff 100%);
+            border: none;
+        }
+
+        .compare-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .compare-desc {
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Print Styles */
+        @media print {
+            .deck-container {
+                transform: none !important;
+            }
+            .slide {
+                position: relative;
+                page-break-after: always;
+                opacity: 1 !important;
+                visibility: visible !important;
+            }
+            .progress-bar,
+            .slide-counter,
+            .nav-hint {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="deck-container" id="deck">
+        <!-- SLIDE 1: Hero -->
+        <div class="slide slide-hero active" data-slide="1" data-theme="dark">
+            <div class="slide-content">
+                <h1>演示文稿标题</h1>
+                <p>副标题或描述性文字</p>
+            </div>
+            <div class="progress-bar" style="width: 20%"></div>
+            <div class="slide-counter">1 / 5</div>
+            <div class="nav-hint">← → 键盘导航</div>
+        </div>
+
+        <!-- SLIDE 2: Features -->
+        <div class="slide" data-slide="2" data-theme="dark">
+            <div class="slide-content">
+                <h2 class="slide-title">核心特性</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon"></div>
+                        <h3>特性一</h3>
+                        <p>描述性文字，说明这个特性的价值和作用。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"></div>
+                        <h3>特性二</h3>
+                        <p>描述性文字，说明这个特性的价值和作用。</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"></div>
+                        <h3>特性三</h3>
+                        <p>描述性文字，说明这个特性的价值和作用。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="progress-bar" style="width: 40%"></div>
+            <div class="slide-counter">2 / 5</div>
+        </div>
+
+        <!-- SLIDE 3: Steps -->
+        <div class="slide" data-slide="3" data-theme="light">
+            <div class="slide-content">
+                <h2 class="slide-title">实施步骤</h2>
+                <div class="steps">
+                    <div class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>第一步</h3>
+                            <p>详细说明第一步的具体内容和目标。</p>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>第二步</h3>
+                            <p>详细说明第二步的具体内容和目标。</p>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>第三步</h3>
+                            <p>详细说明第三步的具体内容和目标。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="progress-bar" style="width: 60%"></div>
+            <div class="slide-counter">3 / 5</div>
+        </div>
+
+        <!-- SLIDE 4: Compare -->
+        <div class="slide" data-slide="4" data-theme="dark">
+            <div class="slide-content">
+                <h2 class="slide-title">前后对比</h2>
+                <div class="compare">
+                    <div class="compare-item compare-before">
+                        <h3 class="compare-title">改进前</h3>
+                        <p class="compare-desc">描述之前的情况或问题点，突出痛点。</p>
+                    </div>
+                    <div class="compare-item compare-after">
+                        <h3 class="compare-title">改进后</h3>
+                        <p class="compare-desc">描述改进后的效果和价值，突出优势。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="progress-bar" style="width: 80%"></div>
+            <div class="slide-counter">4 / 5</div>
+        </div>
+
+        <!-- SLIDE 5: End -->
+        <div class="slide slide-hero" data-slide="5" data-theme="dark">
+            <div class="slide-content">
+                <h1>谢谢</h1>
+                <p>联系方式或结束语</p>
+            </div>
+            <div class="progress-bar" style="width: 100%"></div>
+            <div class="slide-counter">5 / 5</div>
+        </div>
+    </div>
+
+    <script>
+        // Slide Navigation
+        const deck = document.getElementById('deck');
+        const slides = document.querySelectorAll('.slide');
+        let current = parseInt(localStorage.getItem('deck-slide') || '1');
+        const total = slides.length;
+
+        function goToSlide(index) {
+            if (index < 1 || index > total) return;
+            current = index;
+            localStorage.setItem('deck-slide', current);
+            updateSlides();
+        }
+
+        function updateSlides() {
+            slides.forEach(slide => {
+                const slideNum = parseInt(slide.dataset.slide);
+                if (slideNum === current) {
+                    slide.classList.add('active');
+                } else {
+                    slide.classList.remove('active');
+                }
+            });
+        }
+
+        function nextSlide() {
+            goToSlide(current + 1);
+        }
+
+        function prevSlide() {
+            goToSlide(current - 1);
+        }
+
+        function scaleDeck() {
+            const container = deck;
+            const targetWidth = 1920;
+            const targetHeight = 1080;
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const scaleX = windowWidth / targetWidth;
+            const scaleY = windowHeight / targetHeight;
+            const scale = Math.min(scaleX, scaleY);
+            container.style.transform = `scale(${scale})`;
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                goToSlide(1);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                goToSlide(total);
+            }
+        });
+
+        // Click navigation (left/right halves)
+        deck.addEventListener('click', (e) => {
+            const rect = deck.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            if (x < rect.width / 2) {
+                prevSlide();
+            } else {
+                nextSlide();
+            }
+        });
+
+        // Initial setup
+        window.addEventListener('resize', scaleDeck);
+        scaleDeck();
+        updateSlides();
+    </script>
+</body>
+</html>

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyAgent 产品演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            aspect-ratio: 16/9;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .slide {
+            display: none;
+            width: 100%;
+            height: 100%;
+            padding: 60px 80px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .slide.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 40px;
+            color: #333;
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            gap: 40px;
+            overflow-y: auto;
+        }
+
+        .content-left, .content-right {
+            flex: 1;
+        }
+
+        .content-text {
+            font-size: 20px;
+            line-height: 1.8;
+            color: #555;
+            white-space: pre-wrap;
+        }
+
+        .content-text.large {
+            font-size: 24px;
+            font-weight: 500;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin-top: 20px;
+        }
+
+        .feature-list li {
+            padding: 12px 0;
+            padding-left: 30px;
+            position: relative;
+            font-size: 18px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .feature-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #0099FF;
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px 25px;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 16px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+
+        .nav-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .nav-btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-btn.primary {
+            background: #0099FF;
+            color: white;
+        }
+
+        .nav-btn.primary:hover {
+            background: #007acc;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 153, 255, 0.4);
+        }
+
+        .nav-btn.secondary {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+
+        .nav-btn.secondary:hover {
+            background: white;
+            transform: translateY(-2px);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .slide-indicator {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 25px;
+            border-radius: 20px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .keyboard-hint {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        /* Title slide specific */
+        .title-slide {
+            text-align: center;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .title-slide h1 {
+            font-size: 72px;
+            font-weight: bold;
+            color: #0099FF;
+            margin-bottom: 20px;
+        }
+
+        .title-slide .subtitle {
+            font-size: 32px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .title-slide .tagline {
+            font-size: 24px;
+            color: #999;
+        }
+
+        /* Two content layout */
+        .two-content .slide-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+        }
+
+        /* Section headers */
+        .section-header {
+            font-size: 28px;
+            font-weight: bold;
+            color: #0099FF;
+            margin-bottom: 20px;
+        }
+
+        /* Step items */
+        .step-item {
+            margin-bottom: 25px;
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .step-content {
+            font-size: 16px;
+            color: #666;
+            margin-left: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .slide {
+                padding: 30px 20px;
+            }
+
+            .slide-title {
+                font-size: 32px;
+            }
+
+            .content-text {
+                font-size: 16px;
+            }
+
+            .two-content .slide-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .title-slide h1 {
+                font-size: 48px;
+            }
+
+            .nav-controls {
+                bottom: 20px;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 10px;
+            }
+
+            .keyboard-hint {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Slide 1: Title -->
+        <div class="slide title-slide active" data-slide="1">
+            <h1>MyAgent</h1>
+            <div class="subtitle">基于 AI 的智能对话助手</div>
+            <div class="tagline">让 AI 成为你的高效工作伙伴</div>
+        </div>
+
+        <!-- Slide 2: What is MyAgent -->
+        <div class="slide" data-slide="2">
+            <div class="slide-title">什么是 MyAgent？</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <p class="content-text">MyAgent 是一个基于 Pi Agent 构建的 AI 智能对话系统，提供直观的 Web 界面，让你轻松与 AI 交互。</p>
+                </div>
+                <div class="content-right">
+                    <div class="section-header">核心特性</div>
+                    <ul class="feature-list">
+                        <li>智能对话：流畅的 AI 交流体验</li>
+                        <li>多模型支持：Anthropic、OpenAI、Google 等</li>
+                        <li>Agent 管理：创建和管理多个 AI 角色</li>
+                        <li>任务管理：内置 Todo 列表功能</li>
+                        <li>会话保存：自动保存对话历史</li>
+                        <li>技能扩展：丰富的技能库支持</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Quick Start -->
+        <div class="slide" data-slide="3">
+            <div class="slide-title">快速开始</div>
+            <div class="slide-content">
+                <div class="content-left">
+                    <div class="content-text large">三步启动 MyAgent</div>
+                </div>
+                <div class="content-right">
+                    <div class="step-item">
+                        <div class="step-title">步骤 1：安装依赖</div>
+                        <div class="code-block">pnpm install</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-title">步骤 2：配置 API Key</div>
+                        <div class="code-block">export ANTHROPIC_API_KEY=sk-ant-your-key-here</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-title">步骤 3：启动服务</div>
+                        <div class="code-block">pnpm dev</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Interface Overview -->
+        <div class="slide" data-slide="4">
+            <div class="slide-title">界面概览</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="section-header">界面布局</div>
+                    <div class="content-text">
+<strong>左侧：会话列表</strong>
+  - 查看历史对话
+  - 新建会话
+  - 删除会话
+
+<strong>中间：对话区域</strong>
+  - AI 回复展示
+  - 工具执行过程
+  - 思考过程面板
+
+<strong>右侧：状态栏</strong>
+  - 当前 Agent 信息
+  - 会话统计
+  - 快捷操作
+                    </div>
+                </div>
+                <div class="content-right">
+                    <div class="section-header">输入栏</div>
+                    <div class="content-text">
+<strong>底部：输入栏</strong>
+  - 消息输入
+  - 发送按钮
+  - Steering 干预
+  - Abort 中止
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Agent Management -->
+        <div class="slide" data-slide="5">
+            <div class="slide-title">Agent 管理功能</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="content-text large">创建自定义 Agent</div>
+                    <p class="content-text">点击「Agent 管理」按钮，可以创建新的 AI 角色。</p>
+                    <ul class="feature-list">
+                        <li>设置名称和描述</li>
+                        <li>配置系统指令（System Prompt）</li>
+                        <li>定义行为模式和风格</li>
+                        <li>分配到不同会话</li>
+                    </ul>
+                </div>
+                <div class="content-right">
+                    <div class="section-header">默认 Agent</div>
+                    <p class="content-text">内置默认 Agent：通用的 AI 助手，适合大多数场景。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Task Management -->
+        <div class="slide" data-slide="6">
+            <div class="slide-title">任务管理</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="content-text large">内置 Todo 任务清单</div>
+                </div>
+                <div class="content-right">
+                    <p class="content-text">当 AI 接收到复杂任务（3步以上），会自动创建任务清单，逐步执行。</p>
+                    <ul class="feature-list">
+                        <li>查看任务进度</li>
+                        <li>确认任务状态</li>
+                        <li>追踪执行步骤</li>
+                    </ul>
+                    <p class="content-text" style="margin-top: 20px; color: #999;">AI 会按照清单有序推进，确保每一步都完成。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Multi-model Support -->
+        <div class="slide" data-slide="7">
+            <div class="slide-title">多模型支持</div>
+            <div class="slide-content">
+                <div class="content-left">
+                    <div class="content-text large">灵活选择 AI 模型</div>
+                </div>
+                <div class="content-right">
+                    <div class="step-item">
+                        <div class="step-title">Anthropic Claude</div>
+                        <div class="code-block">export ANTHROPIC_API_KEY=sk-ant...
+LLM_PROVIDER=anthropic LLM_MODEL=claude-sonnet-4</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-title">OpenAI GPT</div>
+                        <div class="code-block">export OPENAI_API_KEY=sk-...
+LLM_PROVIDER=openai LLM_MODEL=gpt-4o</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-title">更多选择</div>
+                        <p class="content-text">Google Gemini / Ollama 本地模型</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Dialogue Control -->
+        <div class="slide" data-slide="8">
+            <div class="slide-title">核心功能：对话控制</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="section-header">Steering（智能干预）</div>
+                    <p class="content-text">AI 正在生成时，你可以通过 Steering 功能：</p>
+                    <ul class="feature-list">
+                        <li>引导 AI 朝特定方向思考</li>
+                        <li>补充必要信息</li>
+                        <li>纠正误解方向</li>
+                        <li>控制生成节奏</li>
+                    </ul>
+                </div>
+                <div class="content-right">
+                    <div class="section-header">Abort（中止生成）</div>
+                    <p class="content-text">随时点击中止按钮，停止 AI 生成。</p>
+                    <p class="content-text" style="margin-top: 15px;">已生成的内容会保留，便于后续继续对话。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Skills -->
+        <div class="slide" data-slide="9">
+            <div class="slide-title">技能扩展</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="content-text large">丰富的技能库</div>
+                </div>
+                <div class="content-right">
+                    <p class="content-text">MyAgent 内置 50+ 技能：</p>
+                    <ul class="feature-list" style="columns: 2;">
+                        <li>Apple Notes / Reminders / iMessage</li>
+                        <li>图像生成 / ASCII 艺术</li>
+                        <li>Jupyter Notebook</li>
+                        <li>GitHub / 代码审查</li>
+                        <li>Notion / Airtable</li>
+                        <li>Spotify / YouTube</li>
+                        <li>arXiv 论文 / 文献管理</li>
+                        <li>还有更多...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Data Persistence -->
+        <div class="slide" data-slide="10">
+            <div class="slide-title">数据持久化</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="content-text large">所有数据保存在 ~/.myagent/</div>
+                    <div class="code-block">settings.json      - 模型和 Provider 配置
+agents.json        - Agent 预设列表
+workspaces.json    - 工作空间管理
+todos.json         - 任务清单
+cron-jobs.json     - 定时任务
+chat-sessions/     - 聊天会话历史
+skills/            - 技能库
+sessions/          - SDK 日志</div>
+                </div>
+                <div class="content-right">
+                    <p class="content-text">首次启动自动从旧版本迁移数据，确保无缝升级。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Use Cases -->
+        <div class="slide" data-slide="11">
+            <div class="slide-title">使用场景</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="section-header">1. 代码开发</div>
+                    <p class="content-text">• 编写和审查代码<br>• 调试问题<br>• 架构设计</p>
+
+                    <div class="section-header" style="margin-top: 30px;">2. 内容创作</div>
+                    <p class="content-text">• 文章写作<br>• 图表设计<br>• 视频脚本</p>
+                </div>
+                <div class="content-right">
+                    <div class="section-header">3. 数据分析</div>
+                    <p class="content-text">• 数据探索<br>• 报告生成<br>• 可视化</p>
+
+                    <div class="section-header" style="margin-top: 30px;">4. 日常办公</div>
+                    <p class="content-text">• 日程管理<br>• 邮件处理<br>• 文档整理</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 12: Tech Architecture -->
+        <div class="slide" data-slide="12">
+            <div class="slide-title">技术架构</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="section-header">前端</div>
+                    <p class="content-text"><strong>React + TypeScript + Zustand</strong></p>
+                    <ul class="feature-list">
+                        <li>组件化界面设计</li>
+                        <li>WebSocket 实时通信</li>
+                        <li>状态驱动的事件系统</li>
+                    </ul>
+
+                    <div class="section-header" style="margin-top: 30px;">后端</div>
+                    <p class="content-text"><strong>Node.js + Fastify</strong></p>
+                    <ul class="feature-list">
+                        <li>WebSocket 网关</li>
+                        <li>Session 生命周期管理</li>
+                        <li>事件桥接器</li>
+                    </ul>
+                </div>
+                <div class="content-right">
+                    <div class="section-header">核心</div>
+                    <p class="content-text"><strong>Pi Agent SDK</strong></p>
+                    <ul class="feature-list">
+                        <li>createAgentSession</li>
+                        <li>prompt / steer / abort</li>
+                        <li>模型切换</li>
+                        <li>工具集成</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 13: Quick Prompts -->
+        <div class="slide" data-slide="13">
+            <div class="slide-title">快捷提示词</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="content-text large">常用提示词模板</div>
+                </div>
+                <div class="content-right">
+                    <ul class="feature-list">
+                        <li>代码审查：帮我检查这段代码</li>
+                        <li>任务规划：为这个需求制定计划</li>
+                        <li>总结摘要：总结这篇文档</li>
+                        <li>翻译：翻译成英文</li>
+                        <li>优化：优化这段代码性能</li>
+                        <li>解释：解释这个概念</li>
+                    </ul>
+                    <p class="content-text" style="margin-top: 20px; color: #999;">你可以自定义快捷提示词，快速复用常用的提问模式。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Best Practices -->
+        <div class="slide" data-slide="14">
+            <div class="slide-title">最佳实践</div>
+            <div class="slide-content">
+                <ul class="feature-list">
+                    <li><strong>1. 明确需求</strong> — 清晰描述你想要什么</li>
+                    <li><strong>2. 利用 Steering</strong> — 生成时引导方向，提高效率</li>
+                    <li><strong>3. 合理使用 Agent</strong> — 不同场景切换不同角色</li>
+                    <li><strong>4. 保存关键对话</strong> — 重要结果及时保存</li>
+                    <li><strong>5. 尝试不同模型</strong> — 根据任务特点选择合适的模型</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 15: FAQ -->
+        <div class="slide" data-slide="15">
+            <div class="slide-title">常见问题</div>
+            <div class="slide-content">
+                <div class="content-text">
+<strong>Q: 如何切换模型？</strong>
+A: 在设置中配置环境变量，重启服务即可。
+
+<strong>Q: 如何添加自定义技能？</strong>
+A: 在 ~/.myagent/skills/ 目录添加 SKILL.md 文件。
+
+<strong>Q: 对话历史保存在哪里？</strong>
+A: ~/.myagent/chat-sessions/ 目录。
+
+<strong>Q: 如何导出对话？</strong>
+A: 使用会话列表中的导出功能。
+
+<strong>Q: 支持多用户吗？</strong>
+A: 当前版本为单用户设计。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 16: Future Plans -->
+        <div class="slide" data-slide="16">
+            <div class="slide-title">未来计划</div>
+            <div class="slide-content two-content">
+                <div class="content-left">
+                    <div class="content-text large">即将推出的功能</div>
+                </div>
+                <div class="content-right">
+                    <ul class="feature-list">
+                        <li>多用户支持</li>
+                        <li>对话分享和协作</li>
+                        <li>更多技能扩展</li>
+                        <li>插件系统</li>
+                        <li>移动端适配</li>
+                        <li>离线模式</li>
+                        <li>语音输入/输出</li>
+                        <li>视频对话</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 17: Get Started -->
+        <div class="slide title-slide" data-slide="17">
+            <div class="subtitle">开始使用 MyAgent</div>
+            <div class="code-block" style="font-size: 28px; margin: 30px 0;">pnpm dev</div>
+            <div class="subtitle" style="font-size: 20px;">打开 http://localhost:5180</div>
+            <div class="tagline" style="margin-top: 30px;">让 AI 成为你的高效工作伙伴</div>
+        </div>
+
+        <!-- Slide 18: Thank You -->
+        <div class="slide title-slide" data-slide="18">
+            <h1>感谢观看</h1>
+            <div class="subtitle" style="margin-top: 40px;">如有问题，欢迎反馈！</div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-controls">
+            <button class="nav-btn secondary" id="prevBtn" onclick="prevSlide()">← 上一页</button>
+            <div class="slide-indicator"><span id="currentSlide">1</span> / <span id="totalSlides">18</span></div>
+            <button class="nav-btn primary" id="nextBtn" onclick="nextSlide()">下一页 →</button>
+        </div>
+
+        <div class="keyboard-hint">使用 ← → 键或空格键切换</div>
+    </div>
+
+    <script>
+        let currentSlideIndex = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function updateSlide() {
+            slides.forEach((slide, index) => {
+                slide.classList.remove('active');
+                if (index === currentSlideIndex) {
+                    slide.classList.add('active');
+                }
+            });
+
+            document.getElementById('currentSlide').textContent = currentSlideIndex + 1;
+            document.getElementById('totalSlides').textContent = totalSlides;
+
+            document.getElementById('prevBtn').disabled = currentSlideIndex === 0;
+            document.getElementById('nextBtn').disabled = currentSlideIndex === totalSlides - 1;
+        }
+
+        function nextSlide() {
+            if (currentSlideIndex < totalSlides - 1) {
+                currentSlideIndex++;
+                updateSlide();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlideIndex > 0) {
+                currentSlideIndex--;
+                updateSlide();
+            }
+        }
+
+        function goToSlide(index) {
+            if (index >= 0 && index < totalSlides) {
+                currentSlideIndex = index;
+                updateSlide();
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                goToSlide(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                goToSlide(totalSlides - 1);
+            }
+        });
+
+        // Touch swipe support
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }
+
+        // Initialize
+        updateSlide();
+    </script>
+</body>
+</html>

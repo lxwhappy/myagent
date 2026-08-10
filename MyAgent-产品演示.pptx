@@ -1,0 +1,672 @@
+{
+  "title": "MyAgent 产品演示",
+  "author": "",
+  "subject": "AI Agent 智能助手产品",
+  "keywords": "AI, Agent, Chat, Assistant",
+  "slides": [
+    {
+      "layout": "Title",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "MyAgent",
+            "fontSize": 54,
+            "bold": true,
+            "color": "0099FF"
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "基于 AI 的智能对话助手",
+            "fontSize": 28,
+            "color": "666666"
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "让 AI 成为你的高效工作伙伴",
+            "fontSize": 20,
+            "color": "999999",
+            "y": 2.5
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "什么是 MyAgent？",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "MyAgent 是一个基于 Pi Agent 构建的 AI 智能对话系统，\n提供直观的 Web 界面，让你轻松与 AI 交互。",
+            "fontSize": 18,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "核心特性",
+            "fontSize": 24,
+            "bold": true,
+            "y": 2.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• 智能对话：流畅的 AI 交流体验\n• 多模型支持：Anthropic、OpenAI、Google 等\n• Agent 管理：创建和管理多个 AI 角色\n• 任务管理：内置 Todo 列表功能\n• 会话保存：自动保存对话历史\n• 技能扩展：丰富的技能库支持",
+            "fontSize": 16,
+            "y": 3.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "快速开始",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "三步启动 MyAgent",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "步骤 1：安装依赖",
+            "fontSize": 18,
+            "bold": true,
+            "y": 2.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "pnpm install",
+            "fontSize": 14,
+            "y": 2.7
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "步骤 2：配置 API Key",
+            "fontSize": 18,
+            "bold": true,
+            "y": 3.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "export ANTHROPIC_API_KEY=sk-ant-your-key-here",
+            "fontSize": 14,
+            "y": 3.7
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "步骤 3：启动服务",
+            "fontSize": 18,
+            "bold": true,
+            "y": 4.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "pnpm dev",
+            "fontSize": 14,
+            "y": 4.7
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "界面概览",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "左侧：会话列表\n  - 查看历史对话\n  - 新建会话\n  - 删除会话\n\n中间：对话区域\n  - AI 回复展示\n  - 工具执行过程\n  - 思考过程面板\n\n右侧：状态栏\n  - 当前 Agent 信息\n  - 会话统计\n  - 快捷操作",
+            "fontSize": 16,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "底部：输入栏\n  - 消息输入\n  - 发送按钮\n  - Steering 干预\n  - Abort 中止",
+            "fontSize": 16,
+            "y": 3.5
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "Agent 管理功能",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "创建自定义 Agent",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "点击「Agent 管理」按钮，\n可以创建新的 AI 角色。\n\n每个 Agent 可以：\n\n• 设置名称和描述\n• 配置系统指令（System Prompt）\n• 定义行为模式和风格\n• 分配到不同会话",
+            "fontSize": 16,
+            "y": 2.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "内置默认 Agent：\n通用的 AI 助手，适合大多数场景。",
+            "fontSize": 14,
+            "y": 4.5,
+            "color": "999999"
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "任务管理",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "内置 Todo 任务清单",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "当 AI 接收到复杂任务（3步以上），\n会自动创建任务清单，逐步执行。\n\n你可以：\n\n• 查看任务进度\n• 确认任务状态\n• 追踪执行步骤\n\nAI 会按照清单有序推进，\n确保每一步都完成。",
+            "fontSize": 16,
+            "y": 2.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "多模型支持",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "灵活选择 AI 模型",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "Anthropic Claude",
+            "fontSize": 18,
+            "bold": true,
+            "y": 2.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "export ANTHROPIC_API_KEY=sk-ant...\nLLM_PROVIDER=anthropic LLM_MODEL=claude-sonnet-4",
+            "fontSize": 14,
+            "y": 2.7
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "OpenAI GPT",
+            "fontSize": 18,
+            "bold": true,
+            "y": 3.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "export OPENAI_API_KEY=sk-...\nLLM_PROVIDER=openai LLM_MODEL=gpt-4o",
+            "fontSize": 14,
+            "y": 3.7
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "Google Gemini / Ollama 本地模型",
+            "fontSize": 14,
+            "y": 4.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "核心功能：对话控制",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "Steering（智能干预）",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "AI 正在生成时，\n你可以通过 Steering 功能：\n\n• 引导 AI 朝特定方向思考\n• 补充必要信息\n• 纠正误解方向\n• 控制生成节奏",
+            "fontSize": 16,
+            "y": 2.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "Abort（中止生成）",
+            "fontSize": 22,
+            "y": 3.7
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "随时点击中止按钮，\n停止 AI 生成。\n\n已生成的内容会保留，\n便于后续继续对话。",
+            "fontSize": 16,
+            "y": 4.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "技能扩展",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "丰富的技能库",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "MyAgent 内置 50+ 技能：\n\n• 苹果生态：Apple Notes、Reminders、iMessage\n• 创意设计：图像生成、ASCII 艺术、架构图\n• 数据分析：Jupyter Notebook、图表可视化\n• 开发工具：GitHub、代码审查、调试\n• 生产力：Notion、Airtable、Google Workspace\n• 媒体处理：Spotify、YouTube、GIF 搜索\n• 研究工具：arXiv 论文、文献管理",
+            "fontSize": 14,
+            "y": 2.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "数据持久化",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "所有数据保存在 ~/.myagent/",
+            "fontSize": 20,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• settings.json - 模型和 Provider 配置\n• agents.json - Agent 预设列表\n• workspaces.json - 工作空间管理\n• todos.json - 任务清单\n• cron-jobs.json - 定时任务\n• chat-sessions/ - 聊天会话历史\n• skills/ - 技能库\n• sessions/ - SDK 日志",
+            "fontSize": 14,
+            "y": 2.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "首次启动自动从旧版本迁移数据，\n确保无缝升级。",
+            "fontSize": 14,
+            "y": 4.5,
+            "color": "999999"
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "使用场景",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "1. 代码开发\n   - 编写和审查代码\n   - 调试问题\n   - 架构设计\n\n2. 内容创作\n   - 文章写作\n   - 图表设计\n   - 视频脚本\n\n3. 数据分析\n   - 数据探索\n   - 报告生成\n   - 可视化\n\n4. 日常办公\n   - 日程管理\n   - 邮件处理\n   - 文档整理",
+            "fontSize": 14,
+            "y": 1.5
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "技术架构",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "前端：React + TypeScript + Zustand",
+            "fontSize": 16,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• 组件化界面设计\n• WebSocket 实时通信\n• 状态驱动的事件系统",
+            "fontSize": 14,
+            "y": 2.0
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "后端：Node.js + Fastify",
+            "fontSize": 16,
+            "y": 2.7
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• WebSocket 网关\n• Session 生命周期管理\n• 事件桥接器",
+            "fontSize": 14,
+            "y": 3.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "核心：Pi Agent SDK",
+            "fontSize": 16,
+            "y": 3.9
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• createAgentSession\n• prompt / steer / abort\n• 模型切换\n• 工具集成",
+            "fontSize": 14,
+            "y": 4.4
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "快捷提示词",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "常用提示词模板",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• 代码审查：帮我检查这段代码\n• 任务规划：为这个需求制定计划\n• 总结摘要：总结这篇文档\n• 翻译：翻译成英文\n• 优化：优化这段代码性能\n• 解释：解释这个概念",
+            "fontSize": 14,
+            "y": 2.2
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "你可以自定义快捷提示词，\n快速复用常用的提问模式。",
+            "fontSize": 14,
+            "y": 4.0,
+            "color": "999999"
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "最佳实践",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "1. 明确需求\n   清晰描述你想要什么\n\n2. 利用 Steering\n   生成时引导方向，提高效率\n\n3. 合理使用 Agent\n   不同场景切换不同角色\n\n4. 保存关键对话\n   重要结果及时保存\n\n5. 尝试不同模型\n   根据任务特点选择合适的模型",
+            "fontSize": 16,
+            "y": 1.5
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "常见问题",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "Q: 如何切换模型？\nA: 在设置中配置环境变量，重启服务即可。\n\nQ: 如何添加自定义技能？\nA: 在 ~/.myagent/skills/ 目录添加 SKILL.md 文件。\n\nQ: 对话历史保存在哪里？\nA: ~/.myagent/chat-sessions/ 目录。\n\nQ: 如何导出对话？\nA: 使用会话列表中的导出功能。\n\nQ: 支持多用户吗？\nA: 当前版本为单用户设计。",
+            "fontSize": 14,
+            "y": 1.5
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "未来计划",
+            "fontSize": 36,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "即将推出的功能",
+            "fontSize": 22,
+            "y": 1.5
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "• 多用户支持\n• 对话分享和协作\n• 更多技能扩展\n• 插件系统\n• 移动端适配\n• 离线模式\n• 语音输入/输出\n• 视频对话",
+            "fontSize": 16,
+            "y": 2.2
+          }
+        }
+      ]
+    },
+    {
+      "layout": "Title",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "开始使用 MyAgent",
+            "fontSize": 42,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "pnpm dev",
+            "fontSize": 32,
+            "y": 2,
+            "color": "0099FF"
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "打开 http://localhost:5180",
+            "fontSize": 24,
+            "y": 3
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "让 AI 成为你的高效工作伙伴",
+            "fontSize": 20,
+            "y": 4,
+            "color": "666666"
+          }
+        }
+      ]
+    },
+    {
+      "layout": "TwoContent",
+      "elements": [
+        {
+          "type": "text",
+          "options": {
+            "text": "感谢观看",
+            "fontSize": 42,
+            "bold": true
+          }
+        },
+        {
+          "type": "text",
+          "options": {
+            "text": "如有问题，欢迎反馈！",
+            "fontSize": 24,
+            "y": 2.5,
+            "color": "666666"
+          }
+        }
+      ]
+    }
+  ]
+}

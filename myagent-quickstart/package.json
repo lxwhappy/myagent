@@ -1,0 +1,11 @@
+{
+  "name": "myagent-quickstart-video",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "preview": "hyperframes preview",
+    "render": "hyperframes render --quality high --output myagent-quickstart.mp4",
+    "render-draft": "hyperframes render --quality draft --output myagent-quickstart-draft.mp4",
+    "lint": "hyperframes lint"
+  }
+}
