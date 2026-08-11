@@ -7,6 +7,7 @@ import { Icon } from "./components/Icon";
 import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
+import { setSessionMapping } from "./lib/sessionMap";
 import { useAgentsStore } from "./stores/agents";
 import { useAgentTeamsStore } from "./stores/agent-teams";
 import { useOrchestrationModesStore } from "./stores/orchestration-modes";
@@ -62,11 +63,6 @@ export default function App() {
       }
     }
   }, [openFileRequest]);
-
-  useEffect(() => {
-    (window as any).__wsStore = useWorkspaceStore;
-    (window as any).__chatStore = useChatStore;
-  }, []);
 
   useEffect(() => {
     fetch("/api/workspaces").then(r => r.json()).then(async (d) => {
@@ -129,8 +125,7 @@ export default function App() {
     const chatSession = await sessions.createSession(curWsStore.activeId);
     const ws = curWsStore.workspaces.find(w => w.id === curWsStore.activeId);
     createChatSession(chatSession.id, ws?.path);
-    if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
-    (window as any).__chatToAppSession[chatSession.id] = chatSession.id;
+    setSessionMapping(chatSession.id, chatSession.id);
   };
 
   const handleSelectSession = (session: ChatSession) => {

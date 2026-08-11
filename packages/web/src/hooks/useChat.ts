@@ -10,8 +10,13 @@ import { useWorkspaceStore } from "../stores/workspace";
 import { useAgentsStore } from "../stores/agents";
 import { playCompletionSound } from "../hooks/useAudio";
 import { formatCodeRefs, type CodeRef } from "../stores/code-refs";
+import { setSessionMapping, getAppSessionId, deleteSessionMapping } from "../lib/sessionMap";
 
 let eventsBound = false;
+
+// 稳定空数组引用 —— 避免 `?? []` 每次渲染创建新数组触发消费组件不必要的重渲染
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY: any[] = [];
 
 // 防重复发送 guard：记录最近一次发送，相同内容在短时间内的重复调用会被忽略
 let lastSentText = "";
@@ -42,9 +47,7 @@ function persistStreamingState(chatSessionId: string) {
   if (!last || last.role !== "assistant" || !last.isStreaming) return;
 
   // 映射到 appSessionId
-  const map = (window as any).__chatToAppSession;
-  const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
-  const appSessionId = map?.[chatSessionId] ?? ws?.activeSessionId;
+  const appSessionId = getAppSessionId(chatSessionId) ?? useWorkspaceStore.getState().activeSessionId;
   if (!appSessionId) return;
 
   const body: any = {
@@ -149,7 +152,16 @@ function flushAllDeltas(sid: string) {
 }
 
 export function useChat() {
-  const store = useChatStore();
+  // 精确订阅：只关注当前会话的状态切片，避免流式 delta 触发全树重渲染。
+  // 之前 const store = useChatStore() 订阅整个 store —— 任何 session 的任何
+  // state 变化（包括非活跃会话的后台操作）都会触发 App.tsx 全树重渲染。
+  const activeChatSessionId = useChatStore(s => s.activeChatSessionId);
+  const connected = useChatStore(s => s.connected);
+  const activeSubId = useChatStore(s => s.activeSubId);
+  // 只订阅活跃会话对象 —— 非活跃会话的 delta 不再触发本组件重渲染
+  const activeSession = useChatStore(s =>
+    activeChatSessionId ? s.sessions[activeChatSessionId] : undefined
+  );
 
   useEffect(() => {
     if (eventsBound) return;
@@ -158,7 +170,6 @@ export function useChat() {
 
     sseClient.onMessage((msg) => {
       const chat = useChatStore.getState();
-      (window as any).__chatStore = useChatStore;
       const sid = msg.chatSessionId;
 
       switch (msg.type) {
@@ -327,8 +338,8 @@ export function useChat() {
             chat.addSystemNotice(sid, notice);
             scheduleStreamingPersist(sid);
             // 持久化 system 消息（saveReply 只存 assistant，这里单独存）
-            const wsState = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
-            const appSid = (window as any).__chatToAppSession?.[sid] ?? wsState?.activeSessionId;
+            const wsState = useWorkspaceStore.getState();
+            const appSid = getAppSessionId(sid) ?? wsState?.activeSessionId;
             if (appSid) {
               const text = `⚡ 上下文压缩：${before != null ? `${(before/1000).toFixed(1)}K` : "?"} → ${after != null ? `${(after/1000).toFixed(1)}K` : "?"}${saved != null ? `（节省 ${saved}%）` : ""}`;
               fetch(`/api/sessions/${appSid}/messages`, {
@@ -470,7 +481,7 @@ export function useChat() {
 
     // 兜底：如果没有活跃会话，尝试自动创建一个
     if (!sid) {
-      const wsState = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
+      const wsState = useWorkspaceStore.getState();
       const workspaces = wsState?.workspaces || [];
       const activeWs = wsState?.activeId ? workspaces.find((w: any) => w.id === wsState.activeId) : null;
       const targetWs = activeWs || workspaces[0];
@@ -491,8 +502,7 @@ export function useChat() {
         useChatStore.getState().setActiveChatSession(sessionData.id);
         sseClient.createAgent(sessionData.id, { cwd: targetWs.path, agentId: useAgentsStore.getState().activeAgentId });
         sid = sessionData.id;
-        if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
-        (window as any).__chatToAppSession[sessionData.id] = sessionData.id;
+        setSessionMapping(sessionData.id, sessionData.id);
       } catch (e: any) {
         alert("创建会话失败: " + e.message);
         return;
@@ -508,7 +518,7 @@ export function useChat() {
     // 前端用户气泡只显示用户输入的文字；引用内容随 fullText 持久化 + 发给 agent
     useChatStore.getState().addUserMessage(sid!, text, userImages);
 
-    const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
+    const ws = useWorkspaceStore.getState();
     if (ws?.activeSessionId) {
       fetch(`/api/sessions/${ws.activeSessionId}/messages`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -550,8 +560,8 @@ export function useChat() {
     sseClient.abort(sid);
 
     // 同步删除后端存储的最后一条 assistant 消息
-    const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
-    const appSessionId = (window as any).__chatToAppSession?.[sid] ?? ws?.activeSessionId;
+    const ws = useWorkspaceStore.getState();
+    const appSessionId = getAppSessionId(sid) ?? ws?.activeSessionId;
     if (appSessionId) {
       fetch(`/api/sessions/${appSessionId}`, { method: "DELETE" }).catch(() => {});
     }
@@ -695,8 +705,7 @@ export function useChat() {
       }
       // 恢复上次保存的 usage（刷新后不丢失）
       if (data.lastUsage) chat.setUsage(chatSessionId, data.lastUsage);
-      if (!(window as any).__chatToAppSession) (window as any).__chatToAppSession = {};
-      (window as any).__chatToAppSession[chatSessionId] = appSessionId;
+      setSessionMapping(chatSessionId, appSessionId);
 
       // 重新读取 store（前面的 set 已更新 state，旧 chat 引用是 stale 的）
       const fresh = useChatStore.getState();
@@ -720,30 +729,30 @@ export function useChat() {
     } catch (e) { console.error("Failed to load session:", e); }
   }, []);
 
-  const activeId = store.activeChatSessionId;
-  const activeSession = activeId ? store.sessions[activeId] : null;
-  const activeSubId = store.activeSubId;
+  const activeId = activeChatSessionId;
+  // activeSession 已通过 selector 订阅
+  // activeSubId 已通过 selector 订阅
   // 钻入子 agent 视图时，取当前子 agent 的 token 明细
   const activeSub = activeSubId && activeSession
     ? activeSession.subagents.find(sa => sa.subId === activeSubId)
     : null;
 
   return {
-    messages: activeSession?.messages ?? [],
+    messages: activeSession?.messages ?? EMPTY,
     isGenerating: activeSession?.isGenerating ?? false,
-    skills: activeSession?.skills ?? [],
+    skills: activeSession?.skills ?? EMPTY,
     skillsNotified: activeSession?.skillsNotified ?? false,
     modelInfo: activeSession?.modelInfo ?? null,
     usage: activeSession?.usage ?? null,
     activeSkill: activeSession?.activeSkill ?? null,
-    todos: activeSession?.todos ?? [],
+    todos: activeSession?.todos ?? EMPTY,
     agent: activeSession?.agent ?? null,
     agentId: activeSession?.agentId ?? null,
     // 钻入子 agent 时的 token 明细（独立于主会话，侧栏 token 栏据此切换）
     subToken: activeSub?.tokenBreakdown ?? null,
     subDurationMs: activeSub?.durationMs ?? null,
     subStatus: activeSub?.status ?? null,
-    connected: store.connected,
+    connected,
     activeChatSessionId: activeId,
     teamId: activeSession?.teamId,
     createChatSession,
@@ -762,9 +771,8 @@ export function useChat() {
 }
 
 function saveReply(chatSessionId: string) {
-  const ws = (window as any).__wsStore?.getState?.() ?? (window as any).__wsStore;
-  const map = (window as any).__chatToAppSession;
-  const appSessionId = map?.[chatSessionId] ?? ws?.activeSessionId;
+  const ws = useWorkspaceStore.getState();
+  const appSessionId = getAppSessionId(chatSessionId) ?? ws?.activeSessionId;
   if (!appSessionId) return;
   const sess = useChatStore.getState().sessions[chatSessionId];
   if (!sess) return;

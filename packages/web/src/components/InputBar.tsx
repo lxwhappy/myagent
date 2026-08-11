@@ -5,6 +5,7 @@ import { useRef, useState, useEffect, useMemo, useCallback, type KeyboardEvent }
 import { useChat } from "../hooks/useChat";
 import { useChatStore, type SkillInfo, type ThinkingLevel, THINKING_LEVELS } from "../stores/chat";
 import { useAgentsStore } from "../stores/agents";
+import { useWorkspaceStore } from "../stores/workspace";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
 import { useCodeRefStore } from "../stores/code-refs";
 import { useQuickPromptStore } from "../stores/quick-prompts";
@@ -245,9 +246,9 @@ export function InputBar() {
       // 确保有会话（和正常发送一样的兜底逻辑）
       let sid = activeChatSessionId;
       if (!sid) {
-        const wsStore = (window as any).__wsStore;
-        const workspaces = wsStore?.getState?.()?.workspaces || wsStore?.workspaces || [];
-        const activeId = wsStore?.getState?.()?.activeId ?? wsStore?.activeId;
+        const wsStore = useWorkspaceStore.getState();
+        const workspaces = wsStore?.workspaces || [];
+        const activeId = wsStore?.activeId;
         const targetWs = (activeId ? workspaces.find((w: any) => w.id === activeId) : null) || workspaces[0];
         if (!targetWs) { alert("请先添加一个工作空间"); return; }
         try {
