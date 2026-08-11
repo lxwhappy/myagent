@@ -98,6 +98,11 @@ export function InputBar() {
   const steeringQueue = useChatStore(s => s.sessions[activeChatSessionId ?? ""]?.steeringQueue) ?? EMPTY_ARRAY;
   const followUpQueue = useChatStore(s => s.sessions[activeChatSessionId ?? ""]?.followUpQueue) ?? EMPTY_ARRAY;
 
+  // 上下文使用量 + 压缩状态
+  const contextPercent = useChatStore(s => s.sessions[activeChatSessionId ?? ""]?.usage?.context?.percent) ?? null;
+  const isCompacting = useChatStore(s => s.sessions[activeChatSessionId ?? ""]?.isCompacting) ?? false;
+  const showCompactBtn = !isGenerating && contextPercent != null && contextPercent > 50;
+
   // 当前选中的团队（从 session state 读取，切换会话自然恢复）
   const activeTeam = teamId ? teams.find(t => t.id === teamId) : null;
   // 选择器按钮上显示的图标+名称
@@ -746,6 +751,23 @@ export function InputBar() {
               style={steerMode === "steer" ? { color: "var(--accent)" } : steerMode === "followUp" ? { color: "#e8a838" } : undefined}
             >
               {steerMode === "followUp" ? "⏳" : "🎯"}
+            </button>
+          )}
+
+          {/* 手动上下文压缩（context > 50% 时显示） */}
+          {showCompactBtn && (
+            <button
+              className={`input-thinking ${isCompacting ? "active" : ""}`}
+              onClick={() => {
+                if (isCompacting || !activeChatSessionId) return;
+                fetch(`/api/agent/${activeChatSessionId}/compact`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+              }}
+              type="button"
+              disabled={isCompacting}
+              title={isCompacting ? "正在压缩上下文…" : `手动压缩上下文（当前 ${contextPercent}%）`}
+              style={contextPercent! > 80 ? { color: "var(--danger)" } : undefined}
+            >
+              {isCompacting ? "⏳" : "⚡"}
             </button>
           )}
 

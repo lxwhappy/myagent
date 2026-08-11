@@ -412,6 +412,20 @@ export function getThinkingLevel(chatSessionId: string): ThinkingLevel | undefin
   }
 }
 
+// ── 手动上下文压缩 ──
+/** 手动触发上下文压缩 */
+export async function compactSession(chatSessionId: string, customInstructions?: string): Promise<boolean> {
+  const entry = registry.get(chatSessionId);
+  if (!entry) return false;
+  try {
+    await entry.agent.compact(customInstructions);
+    return true;
+  } catch (err: any) {
+    console.error(`[compact] ${chatSessionId.slice(0, 8)} 手动压缩失败: ${err?.message}`);
+    return false;
+  }
+}
+
 // ── Steering 消息队列 ──
 // Agent 正在执行时，用户可以排队消息来实时干预：
 // - steer: 当前工具调用完成后、下一次 LLM 调用前投递

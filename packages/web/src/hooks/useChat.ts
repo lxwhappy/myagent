@@ -302,11 +302,13 @@ export function useChat() {
         case "compaction_start":
           if (sid && msg.payload) {
             console.log(`[compaction] 触发压缩，原因: ${msg.payload.reason}`);
+            chat.setCompacting(sid, true);
           }
           break;
 
         case "compaction_end":
           if (sid && msg.payload) {
+            chat.setCompacting(sid, false);
             const p = msg.payload;
             const before = typeof p.tokensBefore === "number" ? p.tokensBefore : null;
             const after = typeof p.estimatedTokensAfter === "number" ? p.estimatedTokensAfter : null;
@@ -320,6 +322,7 @@ export function useChat() {
               tokensAfter: after ?? undefined,
               savedPercent: saved ?? undefined,
               aborted: p.aborted,
+              summary: typeof p.summary === "string" ? p.summary : undefined,
             };
             chat.addSystemNotice(sid, notice);
             scheduleStreamingPersist(sid);

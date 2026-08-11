@@ -77,6 +77,7 @@ export interface SystemNotice {
   tokensAfter?: number;
   savedPercent?: number;
   aborted?: boolean;
+  summary?: string;  // 压缩摘要（compaction_end 时 SDK 返回）
 }
 
 /** 用户消息附带的图片（前端展示用） */
@@ -198,10 +199,11 @@ interface SessionChatState {
   // ── Steering 队列（Agent 执行中排队的干预消息）──
   steeringQueue: string[];    // 🎯 当前工具调用后立即投递
   followUpQueue: string[];    // ⏳ Agent 完全空闲后才投递
+  isCompacting: boolean;      // 上下文压缩进行中
 }
 
 let msgCounter = 0;
-const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null, autopilot: null, steeringQueue: [], followUpQueue: [] });
+const empty = (): SessionChatState => ({ messages: [], isGenerating: false, agentCreated: false, skills: [], skillsNotified: false, modelInfo: null, usage: null, activeSkill: null, todos: [], subagents: [], availableTools: [], toolsWithSource: [], disabledTools: [], retryStatus: null, autopilot: null, steeringQueue: [], followUpQueue: [], isCompacting: false });
 
 interface ChatStore {
   sessions: Record<string, SessionChatState>;
@@ -232,6 +234,7 @@ interface ChatStore {
 
   addUserMessage: (id: string, text: string, images?: AttachedImage[]) => void;
   addSystemNotice: (id: string, notice: SystemNotice) => void;
+  setCompacting: (id: string, v: boolean) => void;
   startAssistantMessage: (id: string) => void;
   appendDelta: (id: string, delta: string) => void;
   appendThinking: (id: string, delta: string) => void;
@@ -334,6 +337,11 @@ export const useChatStore = create<ChatStore>((set) => ({
   addSystemNotice: (id, notice) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
     return { sessions: { ...s.sessions, [id]: { ...sess, messages: [...sess.messages, { id: `sys-${msgCounter++}`, role: "system", content: "", systemNotice: notice }] } } };
+  }),
+
+  setCompacting: (id, v) => set((s) => {
+    const sess = s.sessions[id]; if (!sess) return {};
+    return { sessions: { ...s.sessions, [id]: { ...sess, isCompacting: v } } };
   }),
 
   startAssistantMessage: (id) => set((s) => {

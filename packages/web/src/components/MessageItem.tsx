@@ -766,14 +766,17 @@ export const MessageItem = memo(MessageItemInner);
 // ── 系统通知卡片（上下文压缩等） ──
 function SystemNoticeCard({ notice }: { notice: SystemNotice }) {
   const toK = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   if (notice.type === "compaction") {
+    // SDK 事件 reason 值: "manual" | "threshold" | "overflow"
     const reasonMap: Record<string, string> = {
-      "approaching_context_window": "上下文窗口即将达上限",
-      "context_window_exceeded": "上下文窗口超出限制",
-      "user_requested": "用户手动触发",
+      "manual": "手动触发",
+      "threshold": "接近上下文上限",
+      "overflow": "上下文超限",
     };
     const reasonText = notice.reason ? (reasonMap[notice.reason] || notice.reason) : "自动触发";
+    const hasSummary = !!notice.summary;
 
     return (
       <div className="sys-notice compaction">
@@ -800,7 +803,20 @@ function SystemNoticeCard({ notice }: { notice: SystemNotice }) {
             </>
           )}
           {notice.aborted && <span className="sys-notice-aborted">已中止</span>}
+          {hasSummary && (
+            <button
+              className="sys-notice-toggle"
+              onClick={() => setSummaryOpen(v => !v)}
+            >
+              {summaryOpen ? "收起摘要" : "查看摘要"}
+            </button>
+          )}
         </div>
+        {summaryOpen && hasSummary && (
+          <div className="sys-notice-summary">
+            {notice.summary}
+          </div>
+        )}
       </div>
     );
   }

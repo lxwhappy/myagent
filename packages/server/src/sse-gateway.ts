@@ -10,7 +10,7 @@
 import type { FastifyInstance } from "fastify";
 import { subscribe, emit } from "./event-bus.js";
 import { setLlmInterceptorSession } from "./llm-interceptor.js";
-import { createAgent, getAgent, destroyAgent, setThinkingLevel, getThinkingLevel, getAgentModelInput, getSkillPaths, getAgentCwd, steerMessage, followUpMessage, getQueuedMessages, clearMessageQueue } from "./agent-registry.js";
+import { createAgent, getAgent, destroyAgent, setThinkingLevel, getThinkingLevel, getAgentModelInput, getSkillPaths, getAgentCwd, steerMessage, followUpMessage, getQueuedMessages, clearMessageQueue, compactSession } from "./agent-registry.js";
 import type { ThinkingLevel } from "./agent-registry.js";
 import { abortSubagents } from "./subagent-runner.js";
 import { pushPendingImages } from "./tools/image-tool.js";
@@ -300,6 +300,15 @@ export function setupSSEGateway(app: FastifyInstance) {
     const ok = setThinkingLevel(id, body.level as ThinkingLevel);
     if (!ok) { reply.status(404).send({ error: "Agent not found" }); return; }
     reply.send({ success: true, level: body.level });
+  });
+
+  // ── 手动上下文压缩 ──
+  app.post("/api/agent/:id/compact", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { customInstructions?: string } | null;
+    const ok = await compactSession(id, body?.customInstructions);
+    if (!ok) { reply.status(404).send({ error: "Agent not found or compact failed" }); return; }
+    reply.send({ success: true });
   });
 
   // ── Autopilot 全自动执行 ──
