@@ -18,6 +18,8 @@ export interface SubagentResult {
   durationMs?: number;
   /** 失败时的错误信息 */
   error?: string;
+  /** 子 agent 的 SDK session jsonl 日志文件绝对路径（供下载原始日志） */
+  sdkSessionFile?: string;
 }
 
 /** 前端展示用的进度事件 */

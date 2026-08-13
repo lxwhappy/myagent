@@ -45,6 +45,12 @@ export default function App() {
   const openSettings = useUIStore(s => s.openSettings);
   const closeSettings = useUIStore(s => s.closeSettings);
   const activeChatSessionId = useChatStore(s => s.activeChatSessionId);
+  // 子 agent 钻入视图：判断当前是否在 subagent 视图 + 取其 sdkSessionFile
+  const activeSubId = useChatStore(s => s.activeSubId);
+  const activeSubLogPath = useChatStore(s => {
+    if (!activeSubId || !activeChatSessionId) return undefined;
+    return s.sessions[activeChatSessionId]?.subagents.find(sa => sa.subId === activeSubId)?.sdkSessionFile;
+  });
   useEffect(() => {
     if (gotoFilesTab > 0) setSidebarTab("files");
   }, [gotoFilesTab]);
@@ -749,6 +755,8 @@ export default function App() {
               {downloadMenuOpen && (
                 <DownloadMenu
                   sessionId={activeChatSessionId}
+                  subAgentLogPath={activeSubLogPath}
+                  subAgentId={activeSubId ?? undefined}
                   onDownloadJson={downloadCurrentSession}
                   onDownloadMarkdown={downloadAsMarkdown}
                   onClose={() => setDownloadMenuOpen(false)}
@@ -1077,8 +1085,10 @@ function groupSessionsByDate(sessions: ChatSession[]) {
 
 // ── 下载菜单：会话 JSON + Agent 原始 jsonl 日志列表 ──
 
-function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }: {
+function DownloadMenu({ sessionId, subAgentLogPath, subAgentId, onDownloadJson, onDownloadMarkdown, onClose }: {
   sessionId: string | null;
+  subAgentLogPath?: string;
+  subAgentId?: string;
   onDownloadJson: () => void;
   onDownloadMarkdown: () => void;
   onClose: () => void;
@@ -1086,15 +1096,28 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
   const [logs, setLogs] = useState<{ name: string; size: number; mtime: string }[] | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // 子 agent 视图：不请求主会话日志，直接用 subAgentLogPath 构造单条日志项
   useEffect(() => {
+    if (subAgentLogPath) {
+      // 异步取文件大小/时间（前端无法直接 stat，通过 fetch HEAD 或直接用已知路径）
+      // 简化：直接列出文件名，大小/时间用占位（下载时按路径取）
+      const name = subAgentLogPath.split("/").pop() || "subagent.jsonl";
+      setLogs([{ name, size: 0, mtime: new Date().toISOString() }]);
+      return;
+    }
     if (!sessionId) return;
     fetch(`/api/sessions/${sessionId}/agent-logs`)
       .then(r => r.json())
       .then(d => setLogs(d.logs || []))
       .catch(() => setLogs([]));
-  }, [sessionId]);
+  }, [sessionId, subAgentLogPath]);
 
   const downloadLog = (filename: string) => {
+    if (subAgentLogPath) {
+      // 子 agent：按绝对路径下载
+      window.open(`/api/agent-log/by-path?path=${encodeURIComponent(subAgentLogPath)}`, "_blank");
+      return;
+    }
     if (!sessionId) return;
     window.open(`/api/sessions/${sessionId}/agent-logs/${encodeURIComponent(filename)}`, "_blank");
   };
@@ -1105,8 +1128,9 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
   };
 
   const copySessionId = () => {
-    if (!sessionId) return;
-    navigator.clipboard.writeText(sessionId).then(() => {
+    const idToCopy = subAgentId || sessionId;
+    if (!idToCopy) return;
+    navigator.clipboard.writeText(idToCopy).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -1127,11 +1151,11 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
     <>
       <div className="download-menu-overlay" onClick={onClose} />
       <div className="download-menu">
-        {/* Session ID 快速复制 */}
-        {sessionId && (
+        {/* Session ID / 子 Agent ID 快速复制 */}
+        {(subAgentId || sessionId) && (
           <div className="dm-session-id">
-            <span className="dm-session-id-label">会话 ID</span>
-            <code className="dm-session-id-value" title={sessionId}>{sessionId}</code>
+            <span className="dm-session-id-label">{subAgentId ? "子 Agent ID" : "会话 ID"}</span>
+            <code className="dm-session-id-value" title={subAgentId || sessionId!}>{subAgentId || sessionId}</code>
             <button className="dm-session-id-copy" onClick={copySessionId} type="button">
               {copied ? "✓ 已复制" : "复制"}
             </button>
@@ -1153,7 +1177,7 @@ function DownloadMenu({ sessionId, onDownloadJson, onDownloadMarkdown, onClose }
         </button>
         <div className="download-menu-divider" />
         <div className="download-menu-label-row">
-          <span className="download-menu-label">SDK 原始日志 (JSONL)</span>
+          <span className="download-menu-label">{subAgentLogPath ? "子 Agent SDK 日志 (JSONL)" : "SDK 原始日志 (JSONL)"}</span>
           <button className="download-menu-open-dir" onClick={openLogDir} type="button" title="在 Finder 中打开日志目录">
             📂 打开目录
           </button>

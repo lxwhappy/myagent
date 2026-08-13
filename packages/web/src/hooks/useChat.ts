@@ -64,7 +64,8 @@ function persistStreamingState(chatSessionId: string) {
       subId: sa.subId, goal: sa.goal, status: sa.status,
       toolCount: sa.toolCount, tokens: (sa.tokens as any)?.total ?? sa.tokens,
       tokenBreakdown: sa.tokenBreakdown,
-      durationMs: sa.durationMs, summary: sa.summary, error: sa.error, messages: sa.messages,
+      durationMs: sa.durationMs, summary: sa.summary, error: sa.error,
+      sdkSessionFile: sa.sdkSessionFile, messages: sa.messages,
     }));
   }
 
@@ -291,7 +292,7 @@ export function useChat() {
         case "subagent_end":
           if (sid && msg.payload) {
             const p = msg.payload;
-            chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, tokenBreakdown: p.tokenBreakdown, durationMs: p.durationMs, error: p.error });
+            chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, tokenBreakdown: p.tokenBreakdown, durationMs: p.durationMs, error: p.error, sdkSessionFile: p.sdkSessionFile });
             // 团队执行可视化：更新节点状态
             const tfState = useTeamFlowStore.getState();
             if (tfState.active) {
@@ -700,6 +701,7 @@ export function useChat() {
           durationMs: sa.durationMs,
           summary: sa.summary,
           error: sa.error,
+          sdkSessionFile: sa.sdkSessionFile,
           messages: sa.messages,
         })));
       }
@@ -797,6 +799,7 @@ function saveReply(chatSessionId: string) {
         durationMs: sa.durationMs,
         summary: sa.summary,
         error: sa.error,
+        sdkSessionFile: sa.sdkSessionFile,
         messages: sa.messages,
       }));
     }

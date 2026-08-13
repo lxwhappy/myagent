@@ -609,6 +609,32 @@ export function setupWorkspaceRoutes(app: FastifyInstance) {
     return { success: true, dir };
   });
 
+  // 按绝对路径下载 SDK session jsonl 日志（用于子 agent 日志——它没有独立 chatSessionId）
+  // 安全：只允许 agent 日志根目录下的 .jsonl 文件
+  app.get("/api/agent-log/by-path", async (req, reply) => {
+    const filePath = (req.query as any)?.path as string | undefined;
+    if (!filePath || !filePath.endsWith(".jsonl")) {
+      return reply.code(400).send({ error: "Invalid path (must be .jsonl)" });
+    }
+    // 路径安全：resolve 后必须落在已知 agent 日志根目录之下
+    const resolved = resolve(filePath);
+    const allowedRoots = [PATHS.agentLogsDir, join(OLD_AGENT_DIR, "sessions")];
+    const isAllowed = allowedRoots.some(root => {
+      const rel = relative(resolve(root), resolved);
+      return rel && !rel.startsWith("..") && !resolve(root).includes(rel);
+    });
+    if (!isAllowed) {
+      return reply.code(403).send({ error: "Path outside allowed log directories" });
+    }
+    if (!existsSync(resolved)) {
+      return reply.code(404).send({ error: "Log file not found" });
+    }
+    const content = await readFile(resolved, "utf-8");
+    reply.header("Content-Type", "application/jsonl;charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${basename(resolved)}"`);
+    return content;
+  });
+
   // ── Git: 列出分支 ──
   app.get("/api/workspace/:id/git/branches", async (req, reply) => {
     const { id } = req.params as { id: string };

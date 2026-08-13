@@ -121,9 +121,15 @@ async function runSubagentInner(
   let promptPhase = "init";         // 诊断：当前阶段
   let unsub: (() => void) | undefined;
 
+  // LLM 调用计时（与 event-bridge.ts 同构）：message_start 记录开始时间，message_end 算耗时
+  const llmTimings = new Map<string, { startTs: number; firstTokenTs?: number }>();
+  // 工具调用计时：tool_execution_start 记录开始时间，tool_execution_end 算耗时
+  const toolTimings = new Map<string, number>();
+
   // 提前声明，确保 finally 块总能访问（即使异常发生在创建 session 之前）
   let abortController: AbortController | undefined;
   let controllers: Set<AbortController> | undefined;
+  let sdkSessionFile: string | undefined;  // 子 agent SDK 日志路径（创建 session 后赋值）
 
   const IDLE_TIMEOUT_MS = 180_000;  // 180 秒无任何活动 → 判定卡死，提前 abort
   // 子 agent 执行编码任务时，LLM 单轮推理可能要 60-120s，90s 太激进
@@ -145,6 +151,9 @@ async function runSubagentInner(
       // 没有 delegate_task，无法再委派。这样 agent 套娃深度恒为 1。
       customTools: [],
     });
+
+    // 记录子 agent 的 SDK session 日志文件路径（供前端下载原始 jsonl）
+    sdkSessionFile = session.sessionManager.getSessionFile();
 
     // ── 订阅子 agent 事件 ──
     // 完整事件流转发到前端（带 subId 归属），让用户能"钻入"查看子 agent 执行过程。
@@ -175,6 +184,11 @@ async function runSubagentInner(
         case "agent_end":
           fwd({ type: "agent_end" });
           break;
+        case "message_start": {
+          // 记录 LLM 调用开始时间（与 event-bridge.ts 同构）
+          llmTimings.set("current", { startTs: Date.now() });
+          break;
+        }
         case "message_update": {
           const ae = event.assistantMessageEvent;
           if (ae?.type === "text_delta" && typeof ae.delta === "string") {
@@ -183,13 +197,39 @@ async function runSubagentInner(
           } else if (ae?.type === "thinking_delta" && typeof ae.delta === "string") {
             fwd({ type: "thinking_delta", delta: ae.delta });
           }
+          // 首 token 时间（与 event-bridge.ts 同构）
+          if (ae && (ae.type === "text_delta" || ae.type === "thinking_delta") && typeof ae.delta === "string") {
+            const t = llmTimings.get("current");
+            if (t && !t.firstTokenTs) t.firstTokenTs = Date.now();
+          }
+          break;
+        }
+        case "message_end": {
+          // 转发本次 LLM 调用的 token 明细 + 耗时（与 event-bridge.ts 同构）
+          const msg = event.message;
+          const t = llmTimings.get("current");
+          const now = Date.now();
+          const debug = t ? {
+            startTs: t.startTs,
+            endTs: now,
+            llmDurationMs: now - t.startTs,
+            firstTokenMs: t.firstTokenTs ? t.firstTokenTs - t.startTs : undefined,
+          } : undefined;
+          if (msg?.usage) {
+            fwd({ type: "message_end", usage: msg.usage, model: msg.model, debug });
+          } else {
+            fwd({ type: "message_end", debug });
+          }
+          llmTimings.delete("current");
           break;
         }
         case "tool_execution_start": {
           toolCalls++;
           const toolName = event.toolName;
+          const toolCallId = event.toolCallId;
+          toolTimings.set(toolCallId, Date.now());
           console.log(`[subagent] ${subId.slice(-4)} 工具调用 #${toolCalls}: ${toolName}`);
-          fwd({ type: "tool_execution_start", toolCallId: event.toolCallId, tool: toolName, input: event.args });
+          fwd({ type: "tool_execution_start", toolCallId, tool: toolName, input: event.args });
           const pe: SubagentProgressEvent = {
             subId, parentSessionId, goal, phase: "tool", tool: toolName,
           };
@@ -197,9 +237,15 @@ async function runSubagentInner(
           onProgress(pe);
           break;
         }
-        case "tool_execution_end":
-          fwd({ type: "tool_execution_end", toolCallId: event.toolCallId, result: event.result, isError: event.isError });
+        case "tool_execution_end": {
+          const toolCallId = event.toolCallId;
+          const startTs = toolTimings.get(toolCallId);
+          const now = Date.now();
+          const durationMs = startTs ? now - startTs : undefined;
+          toolTimings.delete(toolCallId);
+          fwd({ type: "tool_execution_end", toolCallId, result: event.result, isError: event.isError, debug: durationMs != null ? { startTs, endTs: now, durationMs } : undefined });
           break;
+        }
       }
     });
 
@@ -283,6 +329,7 @@ async function runSubagentInner(
           error: "子 agent 被主 agent 中止",
           toolCalls,
           durationMs: Date.now() - startedAt,
+          sdkSessionFile,
         };
         emit({ type: "subagent_end", chatSessionId: parentSessionId, payload: { subId, ...result }, ts: Date.now() });
         return result;
@@ -299,6 +346,7 @@ async function runSubagentInner(
           error: reason,
           toolCalls,
           durationMs: Date.now() - startedAt,
+          sdkSessionFile,
         };
         emit({ type: "subagent_end", chatSessionId: parentSessionId, payload: { subId, ...result }, ts: Date.now() });
         return result;
@@ -321,6 +369,7 @@ async function runSubagentInner(
       tokenBreakdown: stats.tokens,
       toolCalls: stats.toolCalls ?? toolCalls,
       durationMs: Date.now() - startedAt,
+      sdkSessionFile,
     };
 
     emit({
@@ -339,6 +388,7 @@ async function runSubagentInner(
       error: errMsg,
       toolCalls,
       durationMs: Date.now() - startedAt,
+      sdkSessionFile,
     };
     emit({
       type: "subagent_end",

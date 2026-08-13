@@ -118,6 +118,7 @@ export interface SubagentState {
   summary?: string;
   error?: string;
   messages?: Message[];   // 子 agent 的完整执行过程（供钻入查看）
+  sdkSessionFile?: string;  // 子 agent SDK session jsonl 日志路径（供下载）
 }
 
 export interface SkillInfo {
@@ -228,7 +229,7 @@ interface ChatStore {
   setTodos: (id: string, todos: TodoItem[]) => void;
   addSubagent: (id: string, sub: SubagentState) => void;
   updateSubagentProgress: (id: string, subId: string, tool: string) => void;
-  finishSubagent: (id: string, subId: string, result: { status: "done" | "error"; summary?: string; tokens?: number; tokenBreakdown?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number }; durationMs?: number; error?: string }) => void;
+  finishSubagent: (id: string, subId: string, result: { status: "done" | "error"; summary?: string; tokens?: number; tokenBreakdown?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number }; durationMs?: number; error?: string; sdkSessionFile?: string }) => void;
   applySubagentEvent: (id: string, subId: string, event: any) => void;
   setSubagents: (id: string, subs: SubagentState[]) => void;
 
@@ -539,7 +540,7 @@ export const useChatStore = create<ChatStore>((set) => ({
   }),
   finishSubagent: (id, subId, result) => set((s) => {
     const sess = s.sessions[id]; if (!sess) return {};
-    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: sess.subagents.map(sa => sa.subId === subId ? { ...sa, status: result.status, summary: result.summary, tokens: result.tokens, tokenBreakdown: result.tokenBreakdown, durationMs: result.durationMs, error: result.error, currentTool: undefined } : sa) } } };
+    return { sessions: { ...s.sessions, [id]: { ...sess, subagents: sess.subagents.map(sa => sa.subId === subId ? { ...sa, status: result.status, summary: result.summary, tokens: result.tokens, tokenBreakdown: result.tokenBreakdown, durationMs: result.durationMs, error: result.error, sdkSessionFile: result.sdkSessionFile, currentTool: undefined } : sa) } } };
   }),
   // 把子 agent 的实时事件累积成 messages（结构同主会话，复用 MessageItem 渲染）
   applySubagentEvent: (id, subId, event) => set((s) => {
@@ -571,17 +572,42 @@ export const useChatStore = create<ChatStore>((set) => ({
           if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, thinking: (last.thinking || "") + event.delta };
           break;
         }
+        case "message_end": {
+          // 记录本次 LLM 调用的 token 明细 + 耗时（与主会话 addDebugLLM 同构）
+          // 只记录带 usage 的真实调用（SDK 对部分 provider 会多发空 message_end）
+          if (!event.usage) break;
+          const last = msgs[msgs.length - 1];
+          if (last?.role === "assistant") {
+            // 快照当前 thinking（正常时序：thinking → message_end → tool_start 清空）
+            let thinking = (last.thinking || "").trim();
+            if (!thinking && last.tools?.length) {
+              thinking = (last.tools[last.tools.length - 1].precedingThinking || "").trim();
+            }
+            const evt: DebugLLMEvent = {
+              type: "llm",
+              model: event.model,
+              usage: event.usage,
+              durationMs: event.debug?.llmDurationMs,
+              firstTokenMs: event.debug?.firstTokenMs,
+              startTs: event.debug?.startTs,
+              endTs: event.debug?.endTs,
+              thinking: thinking || undefined,
+            };
+            msgs[msgs.length - 1] = { ...last, debugEvents: [...(last.debugEvents || []), evt] };
+          }
+          break;
+        }
         case "tool_execution_start": {
           const last = msgs[msgs.length - 1];
           if (last?.role === "assistant") {
             const ct = (last.thinking || "").trim();
-            msgs[msgs.length - 1] = { ...last, thinking: "", tools: [...(last.tools || []), { toolCallId: event.toolCallId, tool: event.tool, input: event.input, status: "running", precedingThinking: ct || undefined }] };
+            msgs[msgs.length - 1] = { ...last, thinking: "", tools: [...(last.tools || []), { toolCallId: event.toolCallId, tool: event.tool, input: event.input, status: "running", precedingThinking: ct || undefined, startTs: event.debug?.startTs ?? Date.now() }] };
           }
           break;
         }
         case "tool_execution_end": {
           const last = msgs[msgs.length - 1];
-          if (last?.role === "assistant" && last.tools) msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === event.toolCallId ? { ...t, output: event.result, isError: event.isError, status: event.isError ? "error" : "done" } : t) };
+          if (last?.role === "assistant" && last.tools) msgs[msgs.length - 1] = { ...last, tools: last.tools.map(t => t.toolCallId === event.toolCallId ? { ...t, output: event.result, isError: event.isError, status: event.isError ? "error" : "done", durationMs: event.debug?.durationMs, startTs: event.debug?.startTs ?? t.startTs } : t) };
           break;
         }
         case "agent_end": {
