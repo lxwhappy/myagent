@@ -4,6 +4,8 @@ import { InputBar } from "./components/InputBar";
 import { SidebarFileTree, FilePreviewPane } from "./components/WorkspaceDrawer";
 import { DirBrowser } from "./components/DirBrowser";
 import { Icon } from "./components/Icon";
+import { PipelineRunView } from "./components/PipelineRunView";
+import { usePipelinesStore } from "./stores/pipelines";
 import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
 import { useWorkspaceStore, type ChatSession } from "./stores/workspace";
@@ -24,7 +26,11 @@ export default function App() {
   const [showDirBrowser, setShowDirBrowser] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
-  const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
+  const [sidebarTab, setSidebarTab] = useState<"sessions" | "files" | "pipelines">("sessions");
+  // 流水线：正在运行的 run 数（侧栏 tab 红点）
+  const pipelineLiveCount = usePipelinesStore((s) =>
+    s.activeRun?.status === "running" ? 1 : 0
+  );
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const wsDropdownRef = useRef<HTMLDivElement>(null);
   // Git 分支选择器
@@ -577,13 +583,22 @@ export default function App() {
             <Icon name="i-folder" size={15} />
             <span>文件</span>
           </div>
+          <div className={`sb-tab ${sidebarTab === "pipelines" ? "active" : ""}`} onClick={() => setSidebarTab("pipelines")} title="流水线执行">
+            <Icon name="i-bolt" size={15} />
+            <span>流水线</span>
+            {pipelineLiveCount > 0 && <span className="sb-tab-count pipeline-live">{pipelineLiveCount}</span>}
+          </div>
           <button className="sb-search-btn" title="搜索 (⌘K)" onClick={() => setSidebarTab("sessions")}>
             <Icon name="i-search" size={15} />
           </button>
         </nav>
 
         {/* Zone 3: Content */}
-        {sidebarTab === "sessions" ? (
+        {sidebarTab === "pipelines" ? (
+          <div className="sb-pipeline-panel">
+            <PipelineRunView />
+          </div>
+        ) : sidebarTab === "sessions" ? (
           <div className="session-list">
             {wsStore.workspaces.length === 0 ? (
               <div className="ws-empty-hint" onClick={() => setShowDirBrowser(true)}>

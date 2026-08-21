@@ -1220,6 +1220,47 @@ textarea { resize: none; }
 }
 .input-hint span { display: flex; align-items: center; gap: var(--space-1); }
 
+/* ── Push-to-Talk 语音输入 ── */
+/* 麦克风按钮 */
+.mic-btn { color: var(--muted); }
+.mic-btn:hover { color: var(--fg); }
+.mic-btn.recording {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+.mic-btn.recording .icon { animation: mic-shake 0.6s ease-in-out infinite; }
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+@keyframes mic-shake {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+/* 录音中输入框微调 */
+.input.ptt-active { color: var(--muted); }
+/* 实时预览条 */
+.ptt-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  margin: var(--space-1) 0;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.ptt-bar .ptt-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  animation: mic-pulse 1s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.ptt-bar .ptt-text {
+  flex: 1; color: var(--fg);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.ptt-bar .ptt-hint { color: var(--muted); flex-shrink: 0; }
+
 /* ════════════════════════════════════════════════════════════════════════════
  * 13. Empty State
  * ════════════════════════════════════════════════════════════════════════════ */

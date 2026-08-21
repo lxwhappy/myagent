@@ -38,6 +38,8 @@ export interface AgentTeam {
 export const useAgentTeamsStore = create<{
   teams: AgentTeam[];
   loaded: boolean;
+  /** 列表加载失败时的错误信息（null=成功）；UI 据此显示错误横幅 + 重试 */
+  loadError: string | null;
 
   load: () => Promise<void>;
   getById: (id: string) => AgentTeam | undefined;
@@ -47,15 +49,18 @@ export const useAgentTeamsStore = create<{
 }>((set, get) => ({
   teams: [],
   loaded: false,
+  loadError: null,
 
   load: async () => {
     try {
       const res = await fetch("/api/agent-teams");
       const data = await res.json();
-      set({ teams: data.teams || [], loaded: true });
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      set({ teams: data.teams || [], loaded: true, loadError: null });
     } catch (e) {
       console.error("[agent-teams] load failed:", e);
-      set({ loaded: true });
+      // 不再静默吞错：记录到状态，UI 显示错误横幅 + 重试
+      set({ loaded: true, loadError: e instanceof Error ? e.message : String(e) });
     }
   },
 

@@ -46,6 +46,14 @@ export const PATHS = {
   quickPrompts: join(AGENT_DIR, "quick-prompts.json"),
   /** Autopilot 配置（各阶段提示词模板） */
   autopilotConfig: join(AGENT_DIR, "autopilot-config.json"),
+  /** Agent 流水线定义目录（每条流水线一个 JSON 文件） */
+  pipelinesDir: join(AGENT_DIR, "pipelines"),
+  /** 流水线执行记录目录（每次 run 一个 JSON 文件） */
+  pipelineRunsDir: join(AGENT_DIR, "pipeline-runs"),
+  /** 流水线执行记录索引 */
+  pipelineRunsIndex: join(AGENT_DIR, "pipeline-runs", "index.json"),
+  /** 需求池（P3：流水线轮询触发源） */
+  backlog: join(AGENT_DIR, "backlog.json"),
 
   // ── 定时任务 ──
   cronJobs: join(AGENT_DIR, "cron-jobs.json"),

@@ -14,6 +14,7 @@ export interface AgentConfig {
   model?: string;
   disabledTools?: string[];
   enabledMcpServers?: string[];
+  enabledSkills?: string[];
   isBuiltIn?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -25,23 +26,27 @@ export const useAgentsStore = create<{
   agents: AgentConfig[];
   activeAgentId: string;
   loaded: boolean;
+  /** 列表加载失败时的错误信息（null=成功）；UI 据此显示错误横幅 + 重试 */
+  loadError: string | null;
 
   load: () => Promise<void>;
   setActive: (id: string) => void;
   getById: (id: string) => AgentConfig | undefined;
   getActive: () => AgentConfig;
   create: (input: { name: string; description?: string; systemPrompt?: string; icon?: string; model?: string }) => Promise<AgentConfig | null>;
-  update: (id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model" | "disabledTools" | "enabledMcpServers">>) => Promise<boolean>;
+  update: (id: string, patch: Partial<Pick<AgentConfig, "name" | "description" | "systemPrompt" | "icon" | "model" | "disabledTools" | "enabledMcpServers" | "enabledSkills">>) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
 }>((set, get) => ({
   agents: [],
   activeAgentId: (() => { try { return localStorage.getItem(ACTIVE_KEY) || "default"; } catch { return "default"; } })(),
   loaded: false,
+  loadError: null,
 
   load: async () => {
     try {
       const res = await fetch("/api/agents");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const agents: AgentConfig[] = data.agents || [];
       // 校验持久化的 activeAgentId 仍存在，否则回退默认
       const active = get().activeAgentId;
@@ -49,10 +54,11 @@ export const useAgentsStore = create<{
       if (!exists && agents.length > 0) {
         get().setActive(agents[0].id);
       }
-      set({ agents, loaded: true });
+      set({ agents, loaded: true, loadError: null });
     } catch (e) {
       console.error("[agents] load failed:", e);
-      set({ loaded: true });
+      // 不再静默吞错：记录到状态，UI 显示错误横幅 + 重试
+      set({ loaded: true, loadError: e instanceof Error ? e.message : String(e) });
     }
   },
 

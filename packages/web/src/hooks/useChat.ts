@@ -11,6 +11,7 @@ import { useAgentsStore } from "../stores/agents";
 import { playCompletionSound } from "../hooks/useAudio";
 import { formatCodeRefs, type CodeRef } from "../stores/code-refs";
 import { setSessionMapping, getAppSessionId, deleteSessionMapping } from "../lib/sessionMap";
+import { usePipelinesStore } from "../stores/pipelines";
 
 let eventsBound = false;
 
@@ -276,6 +277,33 @@ export function useChat() {
         case "todo_update":
           if (sid && msg.payload?.todos) chat.setTodos(sid, msg.payload.todos);
           break;
+
+        // ── 流水线编排（pipeline engine 驱动）──
+        case "pipeline_flow_start": {
+          if (msg.payload?.runId) {
+            import("../stores/pipelines").then(({ usePipelinesStore }) => {
+              usePipelinesStore.getState().loadRun(msg.payload!.runId);
+            });
+          }
+          break;
+        }
+        case "pipeline_flow_update": {
+          if (msg.payload?.runId && msg.payload?.step) {
+            usePipelinesStore.getState().applyStepUpdate(msg.payload.runId, msg.payload.step);
+          }
+          break;
+        }
+        case "pipeline_flow_end": {
+          if (msg.payload?.runId) {
+            import("../stores/pipelines").then(({ usePipelinesStore }) => {
+              Promise.all([
+                usePipelinesStore.getState().loadRun(msg.payload!.runId),
+                usePipelinesStore.getState().loadRunHistory(),
+              ]);
+            });
+          }
+          break;
+        }
 
         // ── 子 agent（delegate_task 工具触发的隔离子任务）──
         case "subagent_start":

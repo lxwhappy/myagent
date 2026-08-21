@@ -7,7 +7,7 @@ import { create } from "zustand";
 
 /** 设置页面的分区（左侧导航项） */
 export type SettingsSection =
-  | "models" | "agents" | "teams" | "appearance"
+  | "models" | "agents" | "teams" | "pipelines" | "appearance"
   | "skills" | "extensions" | "mcp" | "cron"
   | "workspace" | "debug" | "autopilot";
 

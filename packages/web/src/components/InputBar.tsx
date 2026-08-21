@@ -7,6 +7,7 @@ import { useChatStore, type SkillInfo, type ThinkingLevel, THINKING_LEVELS } fro
 import { useAgentsStore } from "../stores/agents";
 import { useWorkspaceStore } from "../stores/workspace";
 import { getDraft, setDraft, clearDraft } from "../lib/draft-store";
+import { setSessionMapping } from "../lib/sessionMap";
 import { useCodeRefStore } from "../stores/code-refs";
 import { useQuickPromptStore } from "../stores/quick-prompts";
 import { Icon } from "./Icon";
@@ -14,6 +15,7 @@ import { useAgentTeamsStore } from "../stores/agent-teams";
 import { useUIStore } from "../stores/ui";
 import { sseClient } from "../services/sse-client";
 import { QuickPromptManager } from "./QuickPromptManager";
+import { usePushToTalk } from "../hooks/usePushToTalk";
 
 const MAX_HEIGHT = 200;
 const HISTORY_KEY = "myagent_input_history";
@@ -114,6 +116,20 @@ export function InputBar() {
   const draftKey = activeChatSessionId ?? "__default";
   const [text, setText] = useState(() => getDraft(draftKey));
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+
+  // ── 语音输入（push-to-talk）──
+  // 转写结果追加到输入框（保留已有内容，自动补空格）
+  const appendTranscript = useCallback((spoken: string, _isFinal: boolean) => {
+    setText(prev => {
+      const base = prev.replace(/\s+$/, ""); // 去掉尾部空白避免重复空格
+      const join = base.length === 0 ? "" : /[一-龥]$/.test(base) ? "" : " ";
+      // 中文结尾不加空格，英文/数字结尾补一个空格
+      return base + join + spoken;
+    });
+  }, []);
+  const ptt = usePushToTalk({ onTranscript: appendTranscript });
+  // 录音中光标提示行：显示实时中间识别文本
+  const pttPreview = ptt.isRecording ? (ptt.interimText || "正在聆听…") : "";
 
   // 代码引用片段（来自右侧文件预览面板的选中）—— 多片段累积，发送时拼接到消息末尾
   const codeRefs = useCodeRefStore(s => s.refs);
@@ -257,13 +273,14 @@ export function InputBar() {
           });
           const sessionData = await res.json();
           if (!res.ok) { alert("创建会话失败: " + sessionData.error); return; }
-          const ws = wsStore?.getState?.() ?? wsStore;
-          ws.setActive?.(targetWs.id);
-          ws.addSession?.(targetWs.id, sessionData);
-          ws.setActiveSession?.(sessionData.id);
+          wsStore.setActive(targetWs.id);
+          wsStore.addSession(targetWs.id, sessionData);
+          wsStore.setActiveSession(sessionData.id);
           useChatStore.getState().ensureSession(sessionData.id);
           useChatStore.getState().setActiveChatSession(sessionData.id);
-          sseClient.createAgent(sessionData.id, { cwd: targetWs.path });
+          // 与 useChat.ts 普通发送路径保持一致：传入 agentId + 建立 session 映射
+          sseClient.createAgent(sessionData.id, { cwd: targetWs.path, agentId: useAgentsStore.getState().activeAgentId });
+          setSessionMapping(sessionData.id, sessionData.id);
           sid = sessionData.id;
         } catch (e: any) { alert("创建会话失败: " + e.message); return; }
       }
@@ -570,6 +587,21 @@ export function InputBar() {
             )}
           </div>
 
+          {/* 麦克风按钮（push-to-talk，点击按住说话；也支持按住空格键）*/}
+          {ptt.isSupported && (
+            <button
+              className={`input-attach mic-btn${ptt.isRecording ? " recording" : ""}`}
+              onPointerDown={(e) => { e.preventDefault(); ptt.start(); }}
+              onPointerUp={(e) => { e.preventDefault(); ptt.stop(); }}
+              onPointerLeave={() => ptt.isRecording && ptt.stop()}
+              type="button"
+              aria-label={ptt.isRecording ? "松开结束语音输入" : "按住说话"}
+              title={ptt.isRecording ? "松开结束" : "按住说话（或按住空格键）"}
+            >
+              <Icon name="i-mic" size={18} />
+            </button>
+          )}
+
           {/* 附件按钮 */}
           <button
             className="input-attach"
@@ -700,16 +732,26 @@ export function InputBar() {
           </div>
         )}
 
+        {/* ── 语音输入实时预览 ── */}
+        {ptt.isRecording && (
+          <div className="ptt-bar recording">
+            <span className="ptt-dot" />
+            <span className="ptt-text">{pttPreview}</span>
+            <span className="ptt-hint">松开结束</span>
+          </div>
+        )}
+
         <div className="input-row">
           <textarea
             ref={taRef}
-            className="input"
+            className={`input${ptt.isRecording ? " ptt-active" : ""}`}
             value={text}
             onChange={handleChange}
             onKeyDown={handleKey}
             onPaste={handlePaste}
             placeholder={
-              !connected ? "正在连接…"
+              ptt.isRecording ? "🎙️ 正在聆听…松开结束语音输入"
+              : !connected ? "正在连接…"
               : isGenerating && steerMode === "steer" ? "🎯 输入 Steering 消息（工具调用后立即投递）…"
               : isGenerating && steerMode === "followUp" ? "⏳ 输入 Follow-up 消息（Agent 空闲后投递）…"
               : isGenerating ? "Agent 执行中… 点 🎯 排队干预消息"
@@ -883,6 +925,11 @@ export function InputBar() {
         <span>
           <kbd>/</kbd> 选择 Skill
         </span>
+        {ptt.isSupported && (
+          <span>
+            按住 <kbd>Space</kbd> 语音输入
+          </span>
+        )}
       </div>
 
       {showPromptManager && (

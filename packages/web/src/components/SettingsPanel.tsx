@@ -10,6 +10,7 @@ import { useUIStore, type SettingsSection } from "../stores/ui";
 import { useThemeStore, type ThemeMode } from "../stores/theme";
 import { AgentManagerSection } from "./AgentManager";
 import { AgentTeamManagerSection } from "./AgentTeamManager";
+import { PipelineManagerSection } from "./PipelineManager";
 
 interface ModelInfo {
   id: string;
@@ -62,6 +63,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace, onSw
       items: [
         { key: "agents", icon: "🤖", label: "Agent 管理" },
         { key: "teams", icon: "👥", label: "团队管理" },
+        { key: "pipelines", icon: "🔗", label: "流水线" },
         { key: "models", icon: "⚡", label: "模型" },
         { key: "autopilot", icon: "🚀", label: "自动驾驶" },
       ],
@@ -120,6 +122,7 @@ export function SettingsPanel({ onClose, onSwitchWorkspace, onAddWorkspace, onSw
         <div className="settings-body">
           {tab === "agents" && <AgentManagerSection onSwitchActive={onSwitchAgent} />}
           {tab === "teams" && <AgentTeamManagerSection />}
+          {tab === "pipelines" && <PipelineManagerSection />}
           {tab === "models" && <ModelsTab />}
           {tab === "autopilot" && <AutopilotTab />}
           {tab === "appearance" && <AppearanceTab />}

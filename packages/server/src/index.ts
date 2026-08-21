@@ -27,6 +27,8 @@ import { setupAgentTeamRoutes } from "./agent-team-routes.js";
 import { setupTeamExecutorRoutes } from "./team-executor.js";
 import { setupQuickPromptRoutes } from "./quick-prompt-routes.js";
 import { setupCronRoutes } from "./cron-routes.js";
+import { setupPipelineRoutes } from "./pipeline/pipeline-routes.js";
+import { runStore as pipelineRunStore } from "./pipeline/run-store.js";
 import { mcpManager } from "./mcp-manager.js";
 import { restoreAllJobs, cronStore } from "./tools/cron-store.js";
 
@@ -78,6 +80,9 @@ async function main() {
   // 定时任务管理 API
   setupCronRoutes(app);
 
+  // 流水线编排 API（定义 CRUD / 触发 / 历史 / 中止）
+  setupPipelineRoutes(app);
+
   // 健康检查
   app.get("/health", async () => ({ status: "ok", ts: Date.now() }));
 
@@ -115,6 +120,11 @@ async function main() {
 
     // 恢复定时任务（宿主级调度，独立于 agent session）
     restoreAllJobs().catch((e) => console.error("[cron] restore error:", e.message));
+
+    // 上次异常退出留下的流水线 run 标记 unclean
+    pipelineRunStore.markUncleanRuns().then((n) => {
+      if (n > 0) console.log(`  [pipeline] ${n} 个未正常结束的 run 已标记为 aborted(unclean)`);
+    }).catch((e) => console.error("[pipeline] unclean scan error:", e.message));
 
     // 优雅关闭：停止所有定时任务
     process.on("SIGINT", () => { cronStore.stopAll(); process.exit(0); });

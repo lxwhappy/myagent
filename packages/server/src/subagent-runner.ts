@@ -80,7 +80,11 @@ export const runSubagent: SubagentSpawnFn = async (
   onProgress,
 ) => {
   // 强制串行：同一 session 内的 delegate_task 必须排队执行，
-  // 防止 LLM 并行发起多个子 agent（团队/loop 模式要求严格串行）
+  // 防止 LLM 并行发起多个子 agent（团队/loop 模式要求严格串行）。
+  // 例外：opts.concurrent（流水线引擎路径）——由引擎自己做并发控制，跳过串行锁。
+  if (opts?.concurrent) {
+    return runSubagentInner(parentSessionId, goal, context, opts, onProgress);
+  }
   return withSessionLock(parentSessionId, () => runSubagentInner(parentSessionId, goal, context, opts, onProgress));
 };
 
@@ -141,6 +145,14 @@ async function runSubagentInner(
     console.log(`[subagent] ${subId.slice(-4)} 创建子 agent (model=${provider}/${modelId}, cwd=${cwd})`);
     const loader = new DefaultResourceLoader({ cwd, agentDir });
     await loader.reload();
+
+    // ── 继承父 agent 的 skill 白名单 ──
+    if (opts.enabledSkills && opts.enabledSkills.length > 0) {
+      const before = (loader as any).getSkills?.()?.skills ?? (loader as any).skills ?? [];
+      const whitelist = new Set(opts.enabledSkills);
+      const filtered = before.filter((s: any) => whitelist.has(s.name));
+      (loader as any).skills = filtered;
+    }
 
     const { session } = await createAgentSession({
       model,

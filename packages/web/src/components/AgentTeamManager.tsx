@@ -38,6 +38,7 @@ const blankEdit: EditState = { isNew: true, icon: "👥", name: "", description:
  */
 export function AgentTeamManagerSection() {
   const teams = useAgentTeamsStore(s => s.teams);
+  const loadError = useAgentTeamsStore(s => s.loadError);
   const agents = useAgentsStore(s => s.agents);
   const modes = useOrchestrationModesStore(s => s.modes);
   const loadModes = useOrchestrationModesStore(s => s.load);
@@ -425,6 +426,12 @@ export function AgentTeamManagerSection() {
 
   return (
     <div className="agent-mgr-body">
+      {loadError && (
+        <div className="mgr-load-error">
+          <span>⚠️ 团队列表加载失败：{loadError}</span>
+          <button onClick={() => useAgentTeamsStore.getState().load()}>重试</button>
+        </div>
+      )}
       {teams.length > 0 ? (
         <div className="agent-mgr-list">
           {teams.map(t => {

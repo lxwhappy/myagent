@@ -24,9 +24,10 @@ interface EditState {
   model: string;
   disabledTools: string[];
   enabledMcpServers: string[];
+  enabledSkills: string[];
 }
 
-const blankEdit: EditState = { isNew: true, icon: "🤖", name: "", description: "", systemPrompt: "", model: "", disabledTools: [], enabledMcpServers: [] };
+const blankEdit: EditState = { isNew: true, icon: "🤖", name: "", description: "", systemPrompt: "", model: "", disabledTools: [], enabledMcpServers: [], enabledSkills: [] };
 
 /**
  * Agent 管理内联内容 — 嵌入设置页面使用。
@@ -35,6 +36,7 @@ const blankEdit: EditState = { isNew: true, icon: "🤖", name: "", description:
 export function AgentManagerSection({ onSwitchActive }: { onSwitchActive?: (id: string) => void }) {
   const agents = useAgentsStore(s => s.agents);
   const activeAgentId = useAgentsStore(s => s.activeAgentId);
+  const loadError = useAgentsStore(s => s.loadError);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -44,6 +46,7 @@ export function AgentManagerSection({ onSwitchActive }: { onSwitchActive?: (id: 
     description: a.description, systemPrompt: a.systemPrompt, model: a.model || "",
     disabledTools: a.disabledTools || [],
     enabledMcpServers: a.enabledMcpServers || [],
+    enabledSkills: a.enabledSkills || [],
   });
 
   const handleSave = async () => {
@@ -68,6 +71,7 @@ export function AgentManagerSection({ onSwitchActive }: { onSwitchActive?: (id: 
         model: editing.model.trim() || undefined,
         disabledTools: editing.disabledTools,
         enabledMcpServers: editing.enabledMcpServers,
+        enabledSkills: editing.enabledSkills,
       });
       if (ok) setEditing(null);
     }
@@ -160,6 +164,14 @@ export function AgentManagerSection({ onSwitchActive }: { onSwitchActive?: (id: 
         </div>
 
         <div className="agent-edit-field">
+          <label>Skills {editing.enabledSkills.length === 0 && <span className="agent-tools-hint">（全部加载）</span>}</label>
+          <AgentSkillSelector
+            enabledSkills={editing.enabledSkills}
+            onChange={(skills) => setEditing({ ...editing, enabledSkills: skills })}
+          />
+        </div>
+
+        <div className="agent-edit-field">
           <label>角色指令（System Prompt）</label>
           <textarea
             className="agent-edit-prompt"
@@ -188,6 +200,12 @@ export function AgentManagerSection({ onSwitchActive }: { onSwitchActive?: (id: 
 
   return (
     <div className="agent-mgr-body">
+      {loadError && (
+        <div className="mgr-load-error">
+          <span>⚠️ Agent 列表加载失败：{loadError}</span>
+          <button onClick={() => useAgentsStore.getState().load()}>重试</button>
+        </div>
+      )}
       <div className="agent-mgr-list">
         {agents.map(a => (
           <div
@@ -385,6 +403,53 @@ function AgentMcpSelector({ enabledMcpServers, onChange }: { enabledMcpServers: 
               <span className="agent-tool-dot" />
               <span>{server}</span>
               <span className="agent-tool-pkg">{toolCounts[server] || 0} tools</span>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// ── Skill 选择器（默认全部加载，白名单模式） ──
+function AgentSkillSelector({ enabledSkills, onChange }: { enabledSkills: string[]; onChange: (skills: string[]) => void }) {
+  const sid = useChatStore(s => s.activeChatSessionId);
+  // 从当前会话的 skill 列表获取可用 skill（agent_created 事件带回）
+  const sessionSkills = useChatStore(s => sid ? s.sessions[sid]?.skills : undefined) ?? [];
+
+  if (sessionSkills.length === 0) {
+    return <span className="agent-tools-fallback-hint">新建会话后可见可用 Skills 列表</span>;
+  }
+
+  const toggle = (name: string) => {
+    if (enabledSkills.includes(name)) {
+      onChange(enabledSkills.filter(s => s !== name));
+    } else {
+      onChange([...enabledSkills, name]);
+    }
+  };
+
+  return (
+    <>
+      <div className="agent-tools-summary">
+        {enabledSkills.length === 0
+          ? `全部 ${sessionSkills.length} 个（默认加载全部）`
+          : `${enabledSkills.length} / ${sessionSkills.length} 个启用`}
+      </div>
+      <div className="agent-tools-grid">
+        {sessionSkills.map(skill => {
+          // 空 enabledSkills = 全部启用；非空 = 只启用白名单内的
+          const enabled = enabledSkills.length === 0 || enabledSkills.includes(skill.name);
+          return (
+            <button
+              key={skill.name}
+              type="button"
+              className={`agent-tool-chip ${enabled ? "on" : "off"}`}
+              onClick={() => toggle(skill.name)}
+              title={skill.description}
+            >
+              <span className="agent-tool-dot" />
+              <span>{skill.name}</span>
             </button>
           );
         })}

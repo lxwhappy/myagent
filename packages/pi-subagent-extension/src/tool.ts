@@ -17,10 +17,12 @@ export interface CreateDelegateToolOptions {
   sessionId: string;
   /** 主 agent 的工作目录（子 agent 默认继承，LLM 可通过 cwd 参数覆盖） */
   cwd?: string;
+  /** 父 agent 的 skill 白名单（传给子 agent 继承） */
+  enabledSkills?: string[];
 }
 
 export function createDelegateTool(opts: CreateDelegateToolOptions): ToolDefinition {
-  const { spawn, sessionId, cwd: defaultCwd } = opts;
+  const { spawn, sessionId, cwd: defaultCwd, enabledSkills } = opts;
 
   return {
     name: "delegate_task",
@@ -82,7 +84,7 @@ export function createDelegateTool(opts: CreateDelegateToolOptions): ToolDefinit
           sessionId,
           goal,
           context,
-          { cwd: cwd ?? defaultCwd, model },
+          { cwd: cwd ?? defaultCwd, model, enabledSkills },
           (e) => { /* 兜底：server 实现负责 emit */ },
         );
 

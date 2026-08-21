@@ -43,6 +43,10 @@ export interface SubagentSpawnOptions {
   provider?: string;
   /** 子 agent 最大轮次（防止失控） */
   maxTurns?: number;
+  /** 子 agent 的 skill 白名单（默认空=继承全部） */
+  enabledSkills?: string[];
+  /** 流水线引擎专用：跳过会话级串行锁，允许多 job 真并行（LLM 驱动的团队模式不受影响） */
+  concurrent?: boolean;
 }
 
 /**

@@ -124,6 +124,20 @@ export async function createAgent(
   });
   await loader.reload();
 
+  // ── Skill 白名单过滤 ──
+  // agentCfg.enabledSkills 非空时，只保留白名单内的 skill。
+  // loader.skills 是 SDK 内部数组，reload() 后填充，
+  // createAgentSession 构建系统提示词时读 loader.getSkills()，
+  // 过滤它就直接影响 "Available skills" 段和 /skillname 映射。
+  const enabledSkills = agentCfg?.enabledSkills;
+  if (enabledSkills && enabledSkills.length > 0) {
+    const before = (loader as any).getSkills?.()?.skills ?? (loader as any).skills ?? [];
+    const whitelist = new Set(enabledSkills);
+    const filtered = before.filter((s: any) => whitelist.has(s.name));
+    (loader as any).skills = filtered;
+    console.log(`[agent] skill filter: ${before.length} → ${filtered.length} (whitelist: ${enabledSkills.join(", ")})`);
+  }
+
   const provider = opts?.provider ?? config.defaultProvider;
   const modelId = opts?.model ?? agentCfg?.model ?? config.defaultModel;
   const model = getModel(provider, modelId);
@@ -142,7 +156,7 @@ export async function createAgent(
 
   // 组装所有自定义工具：todo + delegate + analyze_image + web_search + web_fetch + (已过滤的)MCP
   const todoTool = createTodoTool(todoStore, chatSessionId);
-  const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId, cwd });
+  const delegateTool = createDelegateTool({ spawn: runSubagent, sessionId: chatSessionId, cwd, enabledSkills: agentCfg?.enabledSkills });
   const analyzeImageTool = createAnalyzeImageTool(chatSessionId);
   const cronTool = createCronTool(chatSessionId);
   const askUserTool = createAskUserTool(chatSessionId);
