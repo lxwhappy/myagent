@@ -338,6 +338,7 @@ async function runSubagentInner(
         console.log(`[subagent] ${subId.slice(-4)} 被外部中止（主 agent abort/destroy）`);
         const result: SubagentResult = {
           summary: textBuf.trim() || "(已中止)",
+          subId,
           error: "子 agent 被主 agent 中止",
           toolCalls,
           durationMs: Date.now() - startedAt,
@@ -355,6 +356,7 @@ async function runSubagentInner(
         console.log(`[subagent] ${subId.slice(-4)} 超时中止: ${reason}`);
         const result: SubagentResult = {
           summary: textBuf.trim() || "(已中止，部分产出见上)",
+          subId,
           error: reason,
           toolCalls,
           durationMs: Date.now() - startedAt,
@@ -377,6 +379,7 @@ async function runSubagentInner(
     const stats = session.getSessionStats();
     const result: SubagentResult = {
       summary: textBuf.trim() || "(子 agent 未产生文本输出)",
+      subId,
       tokens: stats.tokens.total,
       tokenBreakdown: stats.tokens,
       toolCalls: stats.toolCalls ?? toolCalls,
@@ -397,6 +400,7 @@ async function runSubagentInner(
     console.error(`[subagent] ${subId.slice(-4)} 异常 @${promptPhase}: ${errMsg}`);
     const result: SubagentResult = {
       summary: textBuf.trim() || "",
+      subId,
       error: errMsg,
       toolCalls,
       durationMs: Date.now() - startedAt,

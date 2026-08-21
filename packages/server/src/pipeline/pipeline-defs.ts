@@ -13,6 +13,9 @@ import { existsSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { PATHS } from "../paths.js";
+import type { PipelineDag } from "./dag-model.js";
+import { validateDag } from "./dag-model.js";
+import { compileDag, treeToDagNodes } from "./dag-to-tree.js";
 
 // ── 树形原语类型 ──
 
@@ -102,7 +105,9 @@ export interface PipelineDef {
   name: string;
   description: string;
   icon: string;
-  steps: StepNode[];             // 顶层序列
+  steps: StepNode[];             // 顶层序列（由 dag 编译产出；旧数据直接存树）
+  /** 路线A：DAG 编辑层（workflowbuilder 产出的节点+边）。有 dag 时以 dag 为准 */
+  dag?: PipelineDag;
   maxParallel: number;           // 默认 3
   budget?: { maxLLMCalls: number };   // 默认 40
   timeoutMs?: number;                 // 默认 2h
@@ -294,6 +299,41 @@ function findById(steps: StepNode[], id: string): StepNode | undefined {
   return undefined;
 }
 
+/**
+ * 统一校验入口（路线A）：
+ * - 有 dag → validateDag + compileDag，编译产物写回 steps（DAG 为唯一真源）
+ * - 无 dag → 旧树校验（validatePipeline）
+ */
+export function validatePipelineDef(def: PipelineDef): ValidationIssue[] {
+  if (def.dag) {
+    const dagIssues = validateDag(def.dag);
+    if (dagIssues.length > 0) {
+      return dagIssues.map((i) => ({ code: i.code, path: "$.dag", message: i.message }));
+    }
+    const { steps, issues } = compileDag(def.dag);
+    if (issues.length > 0) {
+      return issues.map((i) => ({ code: "compile", path: "$.dag", message: i.message }));
+    }
+    def.steps = steps; // 编译产物写回（同一对象原地更新）
+    // 基础字段校验（名称/预算等）
+    const base = validatePipeline(def).filter((i) => !i.code.startsWith("empty-graph"));
+    return base;
+  }
+  return validatePipeline(def);
+}
+
+/** 读取时迁移：旧树数据自动生成 dag（一次性，生成后回写盘） */
+async function migrateToDag(def: PipelineDef): Promise<boolean> {
+  if (def.dag || !def.steps?.length) return false;
+  try {
+    def.dag = treeToDagNodes(def);
+    await persistOne(def);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── CRUD ──
 
 let loaded = false;
@@ -309,7 +349,11 @@ async function ensureLoaded() {
     if (!f.endsWith(".json")) continue;
     try {
       const def: PipelineDef = JSON.parse(await readFile(join(PATHS.pipelinesDir, f), "utf-8"));
-      if (def?.id) defs.set(def.id, def);
+      if (def?.id) {
+        defs.set(def.id, def);
+        // 路线A迁移：旧树自动生成 dag（异步不阻塞启动，失败不致命）
+        migrateToDag(def).catch(() => {});
+      }
     } catch { /* 跳过损坏文件 */ }
   }
 }
@@ -337,23 +381,24 @@ export const pipelineStore = {
   async create(input: Partial<PipelineDef> & { name: string }): Promise<{ def?: PipelineDef; issues: ValidationIssue[] }> {
     await ensureLoaded();
     const now = Date.now();
-    const def: PipelineDef = {
+    const base: PipelineDef = {
       id: randomUUID(),
       name: input.name,
       description: input.description ?? "",
       icon: input.icon ?? "➡️",
       steps: (input.steps as StepNode[]) ?? [],
+      dag: input.dag,
       maxParallel: input.maxParallel ?? 3,
       budget: input.budget ?? { maxLLMCalls: 40 },
       timeoutMs: input.timeoutMs ?? 7_200_000,
       createdAt: now,
       updatedAt: now,
     };
-    const issues = validatePipeline(def);
+    const issues = validatePipelineDef(base);
     if (issues.length > 0) return { issues };
-    defs.set(def.id, def);
-    await persistOne(def);
-    return { def: { ...def }, issues: [] };
+    defs.set(base.id, base);
+    await persistOne(base);
+    return { def: { ...base }, issues: [] };
   },
 
   async update(id: string, patch: Partial<PipelineDef>): Promise<{ def?: PipelineDef; issues: ValidationIssue[] }> {
@@ -367,7 +412,7 @@ export const pipelineStore = {
       createdAt: cur.createdAt,
       updatedAt: Date.now(),
     };
-    const issues = validatePipeline(next);
+    const issues = validatePipelineDef(next);
     if (issues.length > 0) return { issues };
     defs.set(id, next);
     await persistOne(next);

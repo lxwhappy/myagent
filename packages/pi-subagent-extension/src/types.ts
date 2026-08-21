@@ -8,6 +8,8 @@
 export interface SubagentResult {
   /** 子 agent 的最终文本输出（交给主 agent 作为 tool result） */
   summary: string;
+  /** 子 agent 的实例 id（sub_xxx，供前端钻入/关联 RunStep） */
+  subId?: string;
   /** 子 agent 本轮消耗的 token（可选，用于展示） */
   tokens?: number;
   /** 子 agent token 明细（input/output/cache/total），用于汇总到主会话 */

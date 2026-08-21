@@ -308,6 +308,11 @@ export function useChat() {
         // ── 子 agent（delegate_task 工具触发的隔离子任务）──
         case "subagent_start":
           if (sid && msg.payload) {
+            // pipeline 命名空间的事件走 pipelines store（步骤钻入视图），不进聊天会话
+            if (sid.startsWith("pipeline:")) {
+              usePipelinesStore.getState().applySubStart(sid.slice("pipeline:".length), msg.payload);
+              break;
+            }
             chat.addSubagent(sid, { subId: msg.payload.subId, goal: msg.payload.goal, status: "running", toolCount: 0 });
             // 团队执行可视化：从 goal 解析 [team:nodeId] 标记
             const nodeId = useTeamFlowStore.getState().resolveNodeId(msg.payload.goal);
@@ -319,6 +324,11 @@ export function useChat() {
           break;
         case "subagent_end":
           if (sid && msg.payload) {
+            // pipeline 命名空间的事件走 pipelines store
+            if (sid.startsWith("pipeline:")) {
+              usePipelinesStore.getState().applySubEnd(sid.slice("pipeline:".length), msg.payload);
+              break;
+            }
             const p = msg.payload;
             chat.finishSubagent(sid, p.subId, { status: p.error ? "error" : "done", summary: p.summary, tokens: p.tokens, tokenBreakdown: p.tokenBreakdown, durationMs: p.durationMs, error: p.error, sdkSessionFile: p.sdkSessionFile });
             // 团队执行可视化：更新节点状态
@@ -381,7 +391,14 @@ export function useChat() {
 
         // ── 子 agent 完整事件流（供钻入查看执行过程）──
         case "subagent_event":
-          if (sid && msg.payload) { chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event); scheduleStreamingPersist(sid); }
+          if (sid && msg.payload) {
+            // pipeline 命名空间的事件走 pipelines store（步骤过程视图）
+            if (sid.startsWith("pipeline:")) {
+              usePipelinesStore.getState().applySubEvent(sid.slice("pipeline:".length), msg.payload.subId, msg.payload.event);
+              break;
+            }
+            chat.applySubagentEvent(sid, msg.payload.subId, msg.payload.event); scheduleStreamingPersist(sid);
+          }
           break;
 
         // ── API 自动重试：SDK 在请求失败时自动重试，显示状态避免界面卡死 ──

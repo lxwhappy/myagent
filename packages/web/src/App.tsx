@@ -4,7 +4,7 @@ import { InputBar } from "./components/InputBar";
 import { SidebarFileTree, FilePreviewPane } from "./components/WorkspaceDrawer";
 import { DirBrowser } from "./components/DirBrowser";
 import { Icon } from "./components/Icon";
-import { PipelineRunView } from "./components/PipelineRunView";
+import { PipelineWorkbench, PipelineSidebarList } from "./components/PipelineWorkbench";
 import { usePipelinesStore } from "./stores/pipelines";
 import { useChat } from "./hooks/useChat";
 import { useChatStore } from "./stores/chat";
@@ -27,6 +27,7 @@ export default function App() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files" | "pipelines">("sessions");
+  const [pipelineWorkbench, setPipelineWorkbench] = useState(false);
   // 流水线：正在运行的 run 数（侧栏 tab 红点）
   const pipelineLiveCount = usePipelinesStore((s) =>
     s.activeRun?.status === "running" ? 1 : 0
@@ -583,7 +584,7 @@ export default function App() {
             <Icon name="i-folder" size={15} />
             <span>文件</span>
           </div>
-          <div className={`sb-tab ${sidebarTab === "pipelines" ? "active" : ""}`} onClick={() => setSidebarTab("pipelines")} title="流水线执行">
+          <div className={`sb-tab ${sidebarTab === "pipelines" ? "active" : ""}`} onClick={() => { setSidebarTab("pipelines"); setPipelineWorkbench(true); }} title="流水线执行">
             <Icon name="i-bolt" size={15} />
             <span>流水线</span>
             {pipelineLiveCount > 0 && <span className="sb-tab-count pipeline-live">{pipelineLiveCount}</span>}
@@ -596,7 +597,7 @@ export default function App() {
         {/* Zone 3: Content */}
         {sidebarTab === "pipelines" ? (
           <div className="sb-pipeline-panel">
-            <PipelineRunView />
+            <PipelineSidebarList onOpenRun={() => setPipelineWorkbench(true)} />
           </div>
         ) : sidebarTab === "sessions" ? (
           <div className="session-list">
@@ -673,7 +674,7 @@ export default function App() {
         />
       </aside>
 
-      {/* ===== Main 或 设置子页面 ===== */}
+      {/* ===== Main 或 设置子页面 或 流水线工作台 ===== */}
       {settingsView ? (
         <SettingsPanel
           onClose={closeSettings}
@@ -681,6 +682,8 @@ export default function App() {
           onAddWorkspace={() => setShowDirBrowser(true)}
           onSwitchAgent={switchAgent}
         />
+      ) : pipelineWorkbench ? (
+        <PipelineWorkbench onClose={() => setPipelineWorkbench(false)} />
       ) : (
       <main className={`main ${wsStore.drawerOpen ? "preview-open" : ""}`}>
         {/* Chat Header — 在 main 里，不在 ChatPanel 里 */}

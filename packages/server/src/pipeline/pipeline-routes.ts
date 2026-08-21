@@ -110,6 +110,20 @@ export function setupPipelineRoutes(app: FastifyInstance) {
     reply.send(treeToDag(def));
   });
 
+  // 路线A：编辑器保存 DAG（校验+编译，steps 由编译产出）
+  app.put("/api/pipelines/:id/dag", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { dag?: unknown } | null;
+    if (!body?.dag) { reply.status(400).send({ error: "dag 必填" }); return; }
+    const { def, issues } = await pipelineStore.update(id, { dag: body.dag as any });
+    if (!def) {
+      const notFound = issues.some((i) => i.code === "not-found");
+      reply.status(notFound ? 404 : 400).send({ error: notFound ? "流水线不存在" : "DAG 校验失败", issues });
+      return;
+    }
+    reply.send({ pipeline: def, steps: def.steps });
+  });
+
   app.get("/api/pipeline-runs", async () => {
     return { runs: await runStore.listIndex() };
   });

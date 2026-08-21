@@ -188,8 +188,10 @@ async function runAgentStep(
       skills: step.skills,
       jobInput,
       cwd: ctx.cwd,
+      runId: ctx.run.runId,
     };
     const result = await ctx.spawnJob(params);
+    if (result.subId) rs.subId = result.subId;
     rs.durationMs = Date.now() - (rs.startedAt ?? Date.now());
     rs.endedAt = Date.now();
 

@@ -4591,6 +4591,22 @@
   padding: 4px 10px 6px; font-size: 12px; color: #e54d42;
 }
 
+/* ── 子 Agent 卡片：header(状态行) + goal(任务目标，完整显示) ── */
+.tl-subagent .tl-header { gap: 8px; }
+.tl-subagent .tl-status { margin-left: auto; }
+.sub-tool-count {
+  flex-shrink: 0; font-size: 10px; opacity: 0.5;
+  font-family: var(--font-mono, monospace); white-space: nowrap;
+}
+.sub-goal {
+  padding: 2px 22px 6px 30px; /* 左侧对齐 icon+label 宽度 */
+  font-size: 12.5px; line-height: 1.5; color: var(--fg);
+  word-break: break-word; white-space: pre-wrap;
+  cursor: pointer; transition: color 0.12s;
+}
+.sub-goal:hover { color: var(--accent); }
+.tl-running .sub-goal { color: var(--muted); }
+
 /* ── 子 agent 过程详情折叠面板（design system 配色） ── */
 .sub-detail {
   border: 1px solid var(--border);
@@ -5050,3 +5066,167 @@
 .sb-pipeline-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 4px 4px; }
 .sb-pipeline-panel .pipeline-run-view { font-size: 12px; }
 .sb-tab-count.pipeline-live { background: #e5484d; color: white; animation: pipeline-pulse 1.2s infinite; }
+
+/* ══════════════════════════════════════════════════════
+   流水线全屏工作台（PipelineWorkbench A1 三栏）
+   ══════════════════════════════════════════════════════ */
+.pw-root { display: flex; flex-direction: column; height: 100vh; min-width: 0; background: var(--bg); overflow: hidden; }
+
+/* 顶栏 */
+.pw-head { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.pw-title { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.pw-title strong { font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 600; }
+.pw-sub { color: var(--muted); font-size: 12px; }
+.pw-meta { display: flex; gap: 10px; font-size: 11px; color: var(--muted); font-family: var(--font-mono, monospace); margin-left: auto; }
+.pw-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #2f6feb; animation: pipeline-pulse 1.2s infinite; }
+.pw-abort { font-size: 11px; padding: 3px 10px; border-radius: var(--radius-sm); border: 1px solid #e5484d66; color: #e5484d; background: transparent; cursor: pointer; }
+.pw-abort:hover { background: #e5484d14; }
+.pw-hist-toggle { font-size: 11px; padding: 3px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--muted); background: transparent; cursor: pointer; }
+.pw-close { width: 24px; height: 24px; border: none; background: transparent; color: var(--muted); cursor: pointer; border-radius: var(--radius-sm); font-size: 13px; }
+.pw-close:hover { background: var(--border); color: var(--fg); }
+
+/* 三栏主体 */
+.pw-body { flex: 1; display: grid; grid-template-columns: 280px 1fr 340px; min-height: 0; }
+.pw-history-body { display: flex; flex-direction: column; gap: 4px; padding: 12px; overflow-y: auto; }
+
+/* 左栏：时间线 */
+.pw-timeline { border-right: 1px solid var(--border); overflow-y: auto; padding: 6px 4px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.pw-step-row { display: flex; align-items: center; gap: 7px; padding: 5px 8px; border: none; background: transparent; border-radius: var(--radius-sm); cursor: pointer; text-align: left; font-size: 12px; font-family: var(--font-mono, monospace); width: 100%; }
+.pw-step-row:hover { background: var(--surface); }
+.pw-step-row.selected { background: color-mix(in oklab, var(--accent, #2f6feb), transparent 88%); }
+.pw-step-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pw-step-dot.st-pending { background: var(--border); }
+.pw-step-dot.st-running { background: #2f6feb; animation: pipeline-pulse 1.2s infinite; }
+.pw-step-dot.st-success { background: #30a46c; }
+.pw-step-dot.st-error { background: #e5484d; }
+.pw-step-dot.st-skipped { background: var(--muted); }
+.pw-step-dot.st-waiting { background: #f5a524; }
+.pw-step-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-step-instance { color: var(--muted); font-size: 10px; margin-left: 4px; }
+.pw-step-iter, .pw-step-att { font-size: 9px; padding: 0 3px; border-radius: 3px; background: var(--border); color: var(--fg); margin-left: 3px; }
+.pw-verdict { font-size: 10px; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+.pw-verdict em { font-style: normal; opacity: 0.6; margin-left: 2px; font-size: 9px; }
+.pw-verdict.v-pass, .pw-verdict.v-small { background: #30a46c22; color: #30a46c; }
+.pw-verdict.v-fail, .pw-verdict.v-complex { background: #e5484d22; color: #e5484d; }
+.pw-verdict.v-unknown { background: #f5a52422; color: #f5a524; }
+.pw-step-dur { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+
+/* 中栏 */
+.pw-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+.pw-center-tabs { display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.pw-center-tabs button { font-size: 11px; padding: 4px 12px; border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); cursor: pointer; }
+.pw-center-tabs button.on { background: var(--surface); color: var(--fg); border-color: var(--border); position: relative; top: 1px; }
+.pw-process-stream { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.pw-process-block-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; text-align: left; width: 100%; font-size: 12px; }
+.pw-process-block-head:hover { border-color: var(--accent, #2f6feb); }
+.pw-sub-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pw-sub-dot.running { background: #2f6feb; animation: pipeline-pulse 1.2s infinite; }
+.pw-sub-dot.done { background: #30a46c; }
+.pw-sub-dot.error { background: #e5484d; }
+.pw-process-block-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.pw-process-block-dur { font-size: 10px; color: var(--muted); font-family: var(--font-mono, monospace); }
+.pw-process-open { font-size: 10px; color: var(--accent, #2f6feb); flex-shrink: 0; }
+
+/* 钻入视图（与聊天 subagent 钻入同构） */
+.pw-drill { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pw-drill .messages { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.pw-drill-tokens { margin-left: 6px; font-family: var(--font-mono, monospace); font-size: 10px; color: var(--muted); }
+
+/* 右栏：详情 */
+.pw-detail { border-left: 1px solid var(--border); overflow-y: auto; padding: 12px; min-height: 0; }
+.pw-detail-inner h3 { font-size: 13px; font-family: var(--font-mono, monospace); margin: 0 0 10px; word-break: break-all; }
+.pw-detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; margin-bottom: 10px; }
+.pw-detail-grid span { color: var(--muted); }
+.pw-detail-grid b { font-weight: 500; }
+.pw-drill-btn { width: 100%; font-size: 12px; padding: 7px; border-radius: var(--radius-sm); border: 1px solid var(--accent, #2f6feb); color: var(--accent, #2f6feb); background: transparent; cursor: pointer; margin-bottom: 10px; }
+.pw-drill-btn:hover { background: color-mix(in oklab, var(--accent, #2f6feb), transparent 90%); }
+.pw-detail details { margin-bottom: 8px; }
+.pw-detail summary { font-size: 11px; color: var(--muted); cursor: pointer; padding: 4px 0; }
+.pw-detail pre { font-size: 11px; max-height: 260px; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; white-space: pre-wrap; word-break: break-word; }
+.pw-warnings { font-size: 11px; color: #f5a524; background: #f5a52414; border-radius: var(--radius-sm); padding: 6px 8px; margin-bottom: 8px; }
+.pw-error { font-size: 11px; color: #e5484d; background: #e5484d14; border-radius: var(--radius-sm); padding: 6px 8px; margin-bottom: 8px; }
+
+/* run 徽标 & 历史行 */
+.pw-run-badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-family: var(--font-mono, monospace); flex-shrink: 0; }
+.rs-success, .rs-done { background: #30a46c22; color: #30a46c; }
+.rs-failed, .rs-error { background: #e5484d22; color: #e5484d; }
+.rs-running { background: #2f6feb22; color: #2f6feb; }
+.rs-aborted { background: #f5a52422; color: #f5a524; }
+.pw-hist-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 12px; }
+.pw-hist-row:hover { border-color: var(--accent, #2f6feb); }
+.pw-hist-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.pw-hist-time, .pw-hist-calls { font-size: 10px; color: var(--muted); font-family: var(--font-mono, monospace); }
+
+/* 空态 */
+.pw-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 40px 20px; line-height: 2; }
+.pw-empty span { font-size: 11px; opacity: 0.7; }
+.pw-empty.small { padding: 20px 12px; font-size: 11px; }
+
+/* ══════════════════════════════════════════════════════
+   ReactFlow 画布（PipelineCanvas B1）
+   ══════════════════════════════════════════════════════ */
+.pwf-root { position: relative; flex: 1; min-height: 0; }
+.pwf-node { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--surface); font-size: 12px; min-width: 120px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }
+.pwf-icon { font-size: 11px; opacity: 0.8; }
+.pwf-label { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+.pwf-verdict { font-size: 9px; padding: 0 4px; border-radius: 3px; }
+.pwf-verdict.v-pass, .pwf-verdict.v-small { background: #30a46c22; color: #30a46c; }
+.pwf-verdict.v-fail, .pwf-verdict.v-complex { background: #e5484d22; color: #e5484d; }
+.pwf-verdict.v-unknown { background: #f5a52422; color: #f5a524; }
+.pwf-live { width: 6px; height: 6px; border-radius: 50%; background: #2f6feb; animation: pipeline-pulse 1.2s infinite; flex-shrink: 0; }
+/* 节点实时状态描边 */
+.pwf-node.st-running { border-color: #2f6feb; box-shadow: 0 0 0 2px #2f6feb22; }
+.pwf-node.st-success { border-color: #30a46c88; }
+.pwf-node.st-error { border-color: #e5484d; box-shadow: 0 0 0 2px #e5484d22; }
+.pwf-node.st-skipped { opacity: 0.5; }
+.pwf-node.st-waiting_input { border-color: #f5a524; }
+/* 容器类型微调 */
+.pwf-node.d-parallel { border-style: dashed; }
+.pwf-node.d-conditional { border-radius: 14px; }
+.pwf-node.d-loop { border-style: dashed; border-color: #e5484d55; }
+.pwf-node.d-foreach { border-style: dotted; }
+.pwf-node.d-sleep { opacity: 0.7; }
+.pwf-selected { box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, #2f6feb), transparent 55%) !important; }
+/* ReactFlow 深色适配 */
+.pwf-root .react-flow__edge-text { font-size: 10px; fill: var(--muted); }
+.pwf-root .react-flow__controls { box-shadow: 0 1px 4px rgb(0 0 0 / 12%); }
+.pwf-root .react-flow__controls-button { background: var(--surface); border-color: var(--border); color: var(--fg); }
+.pwf-root .react-flow__controls-button:hover { background: var(--border); }
+.pwf-root .react-flow__minimap { background: var(--surface) !important; border: 1px solid var(--border); border-radius: 6px; }
+
+/* ══════════════════════════════════════════════════════
+   侧栏流水线列表
+   ══════════════════════════════════════════════════════ */
+.pw-sidebar-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 6px 6px 10px; min-height: 0; }
+.pw-sidebar-group { display: flex; flex-direction: column; gap: 2px; }
+.pw-sidebar-head { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 6px; }
+.pw-sidebar-prow { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: var(--radius-sm); font-size: 12px; }
+.pw-sidebar-prow:hover { background: var(--surface); }
+.pw-sidebar-picon { font-size: 13px; flex-shrink: 0; }
+.pw-sidebar-pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-sidebar-run { width: 20px; height: 20px; border: none; border-radius: 4px; background: transparent; color: var(--accent, #2f6feb); cursor: pointer; font-size: 10px; flex-shrink: 0; }
+.pw-sidebar-run:hover { background: color-mix(in oklab, var(--accent, #2f6feb), transparent 85%); }
+.pw-sidebar-run:disabled { opacity: 0.5; }
+.pw-sidebar-hrow { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border: none; background: transparent; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; text-align: left; width: 100%; }
+.pw-sidebar-hrow:hover { background: var(--surface); }
+.pw-sidebar-hname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-sidebar-htime { font-size: 9px; color: var(--muted); font-family: var(--font-mono, monospace); flex-shrink: 0; }
+.pw-sidebar-hrow .pw-run-badge { font-size: 9px; padding: 0 4px; }
+
+/* ══════════════════════════════════════════════════════
+   PipelineFlowEditor（workflowbuilder 画布编辑）
+   ══════════════════════════════════════════════════════ */
+.pfe-root { display: flex; flex-direction: column; flex: 1; min-height: 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+.pfe-head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.pfe-back { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--fg); cursor: pointer; }
+.pfe-back:hover { background: var(--border); }
+.pfe-title { font-size: 13px; font-weight: 600; flex: 1; }
+.pfe-status { display: flex; gap: 8px; font-size: 11px; }
+.pfe-saving { color: var(--muted); }
+.pfe-saved { color: #30a46c; }
+.pfe-issue-count { color: #e5484d; }
+.pfe-issues { max-height: 120px; overflow-y: auto; padding: 8px 12px; background: #f5a52414; font-size: 11px; color: #f5a524; border-bottom: 1px solid var(--border); }
+.pfe-editor { flex: 1; min-height: 480px; position: relative; }
+/* workflowbuilder 适配主题 */
+.pfe-editor { --wb-background-color: var(--bg); --wb-font-family: var(--font-body); }
+[data-theme="dark"] .pfe-editor { --wb-background-color: #1a1b26; }

@@ -24,6 +24,8 @@ export interface SpawnJobParams {
   jobInput: string;
   cwd?: string;
   maxTurns?: number;
+  /** 所属 run（subagent 事件命名空间 pipeline:<runId>，前端按 run 聚合钻入） */
+  runId?: string;
 }
 
 export interface SpawnJobResult {
@@ -51,7 +53,7 @@ export function createRealSpawnJob(): SpawnJobFn {
     const goal = `${sysPromptPrefix}${params.jobInput}`;
 
     const result = await runSubagent(
-      `pipeline-${params.stepId}`,           // parentSessionId（隔离命名空间）
+      `pipeline:${params.runId ?? params.stepId}`,  // parentSessionId（pipeline run 命名空间，前端按 run 订阅钻入）
       goal,
       undefined,                              // context（全部拼在 goal 里）
       {
@@ -67,6 +69,7 @@ export function createRealSpawnJob(): SpawnJobFn {
 
     return {
       output: (result.summary ?? "").slice(0, 8000),
+      subId: result.subId,
       error: result.error,
       durationMs: result.durationMs ?? 0,
     };

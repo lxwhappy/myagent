@@ -583,7 +583,7 @@ function ToolBlock({ tool }: { tool: ToolExecution }) {
 function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: SubagentState; onOpen: () => void }) {
   const running = sub.status === "running";
   const errored = sub.status === "error";
-  const summary = sub.goal || extractToolSummary(tool);
+  const goal = sub.goal || extractToolSummary(tool);
   return (
     <div className={`tl-item tl-subagent tl-${sub.status}`}>
       <button className="tl-header tl-clickable" onClick={onOpen}>
@@ -591,13 +591,15 @@ function SubagentBlock({ tool, sub, onOpen }: { tool: ToolExecution; sub: Subage
           {running ? <Spinner size={13} /> : errored ? <Icon name="i-x" size={13} /> : <Icon name="i-check" size={13} />}
         </span>
         <span className="tl-label">子 Agent</span>
-        <span className="tl-summary" title={summary}>{summary}</span>
         <span className="tl-status">
           {running ? (sub.currentTool ? `${sub.currentTool}…` : "思考中…") :
            !running && sub.durationMs ? `${(sub.durationMs / 1000).toFixed(1)}s` : ""}
         </span>
+        {sub.toolCount > 0 && <span className="sub-tool-count">{sub.toolCount} 次调用</span>}
         <span className="tl-enter">详情 →</span>
       </button>
+      {/* 任务目标：完整显示，不截断 */}
+      <div className="sub-goal" onClick={onOpen}>{goal}</div>
       {!running && sub.summary && (
         <div className="tl-sub-summary">{sub.summary.slice(0, 200)}{sub.summary.length > 200 ? "…" : ""}</div>
       )}

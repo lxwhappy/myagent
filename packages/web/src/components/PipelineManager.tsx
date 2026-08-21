@@ -4,10 +4,9 @@
 // JSON 视图与表单双向同步（透明原则）。
 
 import { useEffect, useState, useCallback } from "react";
-import {
-  usePipelinesStore, type PipelineDef, type StepNode,
-} from "../stores/pipelines";
+import { usePipelinesStore, type PipelineDef, type StepNode } from "../stores/pipelines";
 import { useAgentsStore } from "../stores/agents";
+import { PipelineFlowEditor } from "./PipelineFlowEditor";
 
 interface EditState {
   isNew: boolean;
@@ -32,6 +31,9 @@ export function PipelineManagerSection() {
   const [saving, setSaving] = useState(false);
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonText, setJsonText] = useState("");
+  // 路线A：workflowbuilder 画布编辑模式（编辑整个 DAG）
+  const [flowEditingId, setFlowEditingId] = useState<string | null>(null);
+  const flowDef = pipelines.find((p) => p.id === flowEditingId) ?? null;
 
   useEffect(() => { usePipelinesStore.getState().load(); }, []);
 
@@ -131,7 +133,16 @@ export function PipelineManagerSection() {
         </div>
       )}
 
-      {editing ? (
+      {/* 路线A：workflowbuilder 画布编辑（全屏接管设置页内容区） */}
+      {flowDef ? (
+        <PipelineFlowEditor
+          def={flowDef}
+          onClose={async () => {
+            setFlowEditingId(null);
+            await usePipelinesStore.getState().load(); // 拉最新（含编译出的 steps）
+          }}
+        />
+      ) : editing ? (
         <div className="pipeline-editor">
           <div className="pipeline-editor-head">
             <input className="pipeline-icon-input" value={editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} maxLength={4} />
@@ -174,7 +185,8 @@ export function PipelineManagerSection() {
                 </div>
                 <div className="agent-mgr-actions" onClick={(e) => e.stopPropagation()}>
                   <button className="agent-mgr-edit" onClick={() => handleRun(p)} title="运行">▶</button>
-                  <button className="agent-mgr-edit" onClick={() => startEdit(p)} title="编辑">✎</button>
+                  <button className="agent-mgr-edit" onClick={() => startEdit(p)} title="表单编辑">✎</button>
+                  <button className="agent-mgr-edit" onClick={() => setFlowEditingId(p.id)} title="画布编辑">⛭</button>
                   <button className="agent-mgr-del" onClick={() => handleDelete(p)} title="删除">🗑</button>
                 </div>
               </div>
