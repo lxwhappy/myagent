@@ -10,7 +10,8 @@
     "declaration": true,
     "sourceMap": true,
     "resolveJsonModule": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
   "include": ["index.ts", "src/**/*.ts"]
 }

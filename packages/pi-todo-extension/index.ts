@@ -20,5 +20,5 @@ export { todoExtension, default } from "./src/extension.ts";
 
 // ── 核心导出（库模式）──
 export { TodoStore, formatSnapshot } from "./src/store.ts";
-export type { TodoItem, TodoStatus, TodoPriority, TodoStoreOptions, TodoChangeCallback } from "./src/store.ts";
+export type { TodoItem, TodoStatus, TodoPriority, TodoStoreConfig } from "./src/store.ts";
 export { createTodoTool } from "./src/tool.ts";

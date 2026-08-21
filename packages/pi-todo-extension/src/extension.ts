@@ -19,10 +19,10 @@ export const todoExtension: ExtensionFactory = (pi: ExtensionAPI) => {
   const todoTool = createTodoTool(store, currentSessionId || "default");
   pi.registerTool({
     ...todoTool,
-    async execute(toolCallId: string, params: any) {
+    async execute(toolCallId: string, params: any, signal: AbortSignal | undefined, onUpdate: any, ctx: any) {
       const sid = currentSessionId || "default";
       const dynTool = createTodoTool(store, sid);
-      return dynTool.execute(toolCallId, params);
+      return dynTool.execute(toolCallId, params, signal, onUpdate, ctx);
     },
   });
 };

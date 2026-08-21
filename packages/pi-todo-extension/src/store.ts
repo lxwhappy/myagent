@@ -23,7 +23,7 @@ export interface TodoItem {
   updatedAt: number;
 }
 
-interface TodoStoreConfig {
+export interface TodoStoreConfig {
   filePath?: string;
   onChange?: (sessionId: string, todos: TodoItem[]) => void;
 }
